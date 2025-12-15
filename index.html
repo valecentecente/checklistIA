@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CheckListIA</title>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+        "vite": "https://aistudiocdn.com/vite@^7.2.4",
+        "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+      }
+    }
+    </script>
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='white'/%3E%3Cpolyline points='17 8 10 16 6 12' fill='none' stroke='%232563EB' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#121212" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <style>
+      :root {
+        /* --- TEMA CLARO (Creme) --- */
+        --color-primary: #F97316; 
+        --color-primary-hover: #EA580C;
+        --color-bg: #FAF3E0; /* Tom Creme (Cream/Beige Suave) */
+        --color-surface: #FEF3C7; /* Areia Mais Forte (Amber 100) para Rodapé/Cartões */
+        --color-text-main: #44403C; /* Warm Stone */
+        
+        /* Estampa de Comida (Laranja Queimado Suave) */
+        --bg-image: url("data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23EA580C' stroke-width='1.5' opacity='0.12'%3E%3Cpath d='M8 16c-2 0-3 2-3 4s2 4 4 4 4-2 4-4-1-4-3-4z'/%3E%3Cpath d='M32 10l6 12h-12z'/%3E%3Ccircle cx='50' cy='50' r='6'/%3E%3Cpath d='M10 48l8-8'/%3E%3Cpath d='M48 16l-8 8'/%3E%3C/g%3E%3C/svg%3E");
+      }
+
+      html.christmas {
+        /* --- TEMA DE NATAL --- */
+        --color-primary: #D32F2F; /* Vermelho Noel Vibrante */
+        --color-primary-hover: #B91C1C;
+        --color-bg: #FEF2F2; /* Vermelho muito pálido */
+        --color-surface: #FFFFFF; /* Superfícies brancas no Natal */
+        --color-text-main: #7F1D1D;
+        
+        --bg-image: repeating-linear-gradient(
+          45deg,
+          #FEF2F2,
+          #FEF2F2 20px,
+          #FFE4E6 20px,
+          #FFE4E6 40px
+        );
+      }
+      
+      html.newyear {
+        /* --- TEMA ANO NOVO (2026) --- */
+        --color-primary: #F59E0B; /* Ouro/Amber */
+        --color-primary-hover: #D97706;
+        --color-bg: #0F172A; /* Midnight Blue */
+        --color-surface: #1E293B; /* Slate 800 */
+        --color-text-main: #F1F5F9; /* Slate 100 */
+        
+        /* Pattern de Estrelas/Brilhos */
+        --bg-image: radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 3px), radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 2px), radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 3px);
+        background-size: 550px 550px, 350px 350px, 250px 250px !important;
+        background-position: 0 0, 40px 60px, 130px 270px !important;
+      }
+
+      html.dark {
+        /* --- TEMA ESCURO --- */
+        --color-primary: #F97316; 
+        --color-primary-hover: #EA580C;
+        --color-bg: #18181B;
+        --color-surface: #27272A; /* Superfície padrão escura */
+        --color-text-main: #F8FAFC;
+        --bg-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2352525B' stroke-width='1' opacity='0.15'%3E%3Cpath d='M10 15c-2 0-3 2-3 4s2 4 4 4 4-2 4-4-1-4-3-4z'/%3E%3Cpath d='M30 10l10 20h-20z'/%3E%3C/g%3E%3C/svg%3E");
+      }
+
+      html {
+        font-size: 18px;
+        background-color: var(--color-bg);
+      }
+      
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24
+      }
+      
+      /* BACKGROUND PRINCIPAL */
+      body {
+        font-family: 'Work Sans', 'sans-serif';
+        min-height: 100vh;
+        min-height: 100dvh;
+        
+        /* Cor de fundo dinâmica baseada no tema */
+        background-color: var(--color-bg);
+        transition: background-color 0.3s ease;
+      }
+
+      /* Apenas no tema escuro aplicamos a imagem de fundo escura */
+      html.dark body {
+        background-color: #121212;
+        background-image: url('/img/fundo-escuro.jpeg');
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center center;
+      }
+
+      /* Animação de Neve */
+      .snowflake {
+        color: #fff;
+        font-size: 1.5em;
+        font-family: Arial, sans-serif;
+        text-shadow: 0 0 5px #000;
+        position: fixed;
+        top: -10%;
+        z-index: 9999;
+        user-select: none;
+        pointer-events: none; /* CRUCIAL: Permite clicar através da neve */
+        cursor: default;
+        animation-name: snowflakes-fall, snowflakes-shake;
+        animation-duration: 10s, 3s;
+        animation-timing-function: linear, ease-in-out;
+        animation-iteration-count: infinite, infinite;
+        animation-play-state: running, running;
+        opacity: 0.7;
+      }
+      @keyframes snowflakes-fall {
+        0% { top: -10%; }
+        100% { top: 100%; }
+      }
+      @keyframes snowflakes-shake {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(80px); }
+      }
+      .snowflake:nth-of-type(0) { left: 1%; animation-delay: 0s, 0s; }
+      .snowflake:nth-of-type(1) { left: 10%; animation-delay: 1s, 1s; }
+      .snowflake:nth-of-type(2) { left: 20%; animation-delay: 6s, .5s; }
+      .snowflake:nth-of-type(3) { left: 30%; animation-delay: 4s, 2s; }
+      .snowflake:nth-of-type(4) { left: 40%; animation-delay: 2s, 2s; }
+      .snowflake:nth-of-type(5) { left: 50%; animation-delay: 8s, 3s; }
+      .snowflake:nth-of-type(6) { left: 60%; animation-delay: 6s, 2s; }
+      .snowflake:nth-of-type(7) { left: 70%; animation-delay: 2.5s, 1s; }
+      .snowflake:nth-of-type(8) { left: 80%; animation-delay: 1s, 0s; }
+      .snowflake:nth-of-type(9) { left: 90%; animation-delay: 3s, 1.5s; }
+
+      /* Animação de Fogos de Artifício (Ano Novo) */
+      @keyframes firework-explosion {
+          0% { transform: scale(0); opacity: 1; }
+          100% { transform: scale(1.5); opacity: 0; }
+      }
+      
+      .firework-particle {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        animation: firework-explosion 1.5s ease-out infinite;
+      }
+
+      /* PULSO DE COR PARA ÍCONE IA (Laranja <-> Azul) */
+      @keyframes colorPulse {
+        0%, 100% { color: #F97316; transform: scale(1); }
+        50% { color: #2563EB; transform: scale(1.15); }
+      }
+      .animate-color-pulse {
+        animation: colorPulse 2s infinite ease-in-out;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: 'var(--color-primary)',
+              'primary-hover': 'var(--color-primary-hover)',
+              'background-light': 'var(--color-bg)',
+              'background-dark': '#18181B',
+              'surface-light': 'var(--color-surface)',
+              'surface-dark': 'var(--color-surface)',
+              'text-primary-light': 'var(--color-text-main)',
+              'text-primary-dark': '#F8FAFC',
+              'text-secondary-light': '#57534E', // Warm gray for secondary
+              'text-secondary-dark': '#A1A1AA',
+              'text-muted-light': '#A8A29E',
+              'text-muted-dark': '#71717A',
+              'border-light': '#E7E5E4',
+              'border-dark': '#3F3F46',
+            },
+            backgroundImage: {
+              'food-pattern-light': 'var(--bg-image)',
+              'food-pattern-dark': 'var(--bg-image)', 
+            },
+            fontFamily: {
+              sans: ['Work Sans', 'sans-serif'],
+              display: ['Work Sans', 'sans-serif'],
+            },
+            animation: {
+              fadeIn: 'fadeIn 0.3s ease-out',
+              slideUp: 'slideUp 0.3s ease-out',
+              bounce: 'bounce 1s infinite',
+              'bounce-y': 'bounceY 2s infinite',
+              pulse: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              goldGlow: 'goldGlow 2s infinite',
+              heartbeat: 'heartbeat 2s infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(20px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              },
+              bounceY: {
+                '0%, 100%': { transform: 'translateY(-10%)' },
+                '50%': { transform: 'translateY(10%)' },
+              },
+              goldGlow: {
+                '0%, 100%': { boxShadow: '0 0 5px #F59E0B', borderColor: '#F59E0B' },
+                '50%': { boxShadow: '0 0 20px #F59E0B', borderColor: '#FCD34D' },
+              },
+              heartbeat: {
+                '0%, 100%': { transform: 'scale(1)' },
+                '50%': { transform: 'scale(1.1)' },
+              }
+            },
+          },
+        },
+      }
+    </script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body class="text-text-primary-light dark:text-text-primary-dark transition-colors duration-300">
+    <div id="root">
+        <!-- CUSTOM SPLASH SCREEN (Renderizada imediatamente antes do React carregar) -->
+        <div style="position: fixed; inset: 0; background-color: #121212; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Work Sans', sans-serif; z-index: 9999;">
+            <!-- Ícone (Check Azul em Círculo Branco) -->
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='white'/%3E%3Cpolyline points='17 8 10 16 6 12' fill='none' stroke='%232563EB' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" alt="ChecklistIA Logo" style="width: 96px; height: 96px; margin-bottom: 24px; animation: pulse 2s infinite;" />
+            
+            <!-- Título Estilizado -->
+            <h1 style="font-size: 2rem; font-weight: 700; color: white; margin: 0; letter-spacing: -0.02em;">
+                Checklist<span style="color: #2563EB;">IA</span>
+            </h1>
+            
+            <!-- Subtítulo Fino ATUALIZADO -->
+            <p style="font-size: 1rem; font-weight: 300; color: #E5E7EB; margin-top: 8px; opacity: 0.9; text-align: center; max-width: 80%;">
+                Soma, quantidade e pesagem. Simples.
+            </p>
+        </div>
+    </div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

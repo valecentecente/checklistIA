@@ -1,0 +1,19 @@
+
+{
+  "name": "ChecklistIA - Compras Inteligentes",
+  "short_name": "ChecklistIA",
+  "description": "App simples para ajudar na hora da compra: soma, quantidade e pesagem de produtos. Inteligente e organizado.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#121212",
+  "theme_color": "#121212"
+}

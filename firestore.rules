@@ -1,0 +1,97 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Funções auxiliares
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    // Verifica se é Admin Nível 1 (Super) ou Nível 2 (Editor)
+    function isAdmin() {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin_l1', 'admin_l2']
+      );
+    }
+    // Apenas Super Admin
+    function isSuperAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin_l1';
+    }
+
+    // --- COLEÇÕES DE USUÁRIO (Dados Privados) ---
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /items/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /history/{purchaseId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /received_lists/{listId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /favorites/{recipeId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // --- DADOS PÚBLICOS DE USUÁRIOS (Para busca de amigos e verificação de username) ---
+    match /users_public/{email} {
+      allow read: if true; // PERMITIR LEITURA PÚBLICA (Necessário para cadastro)
+      allow write: if isOwner(request.resource.data.uid); 
+    }
+
+    // --- OFERTAS E PRODUTOS (Catálogo) ---
+    match /offers/{offerId} {
+      allow read: if true; // Público pode ver
+      allow write: if isAdmin(); // Apenas Staff pode criar/editar
+    }
+
+    // --- RECEITAS GLOBAIS (Acervo IA) ---
+    match /global_recipes/{recipeId} {
+      allow read: if true;
+      allow create: if isSignedIn(); // Usuários podem contribuir gerando com IA
+      allow update, delete: if isAdmin(); // Apenas Staff modera
+    }
+
+    // --- AVALIAÇÕES (Reviews) ---
+    match /reviews/{reviewId} {
+      allow read: if true;
+      // Usuário pode criar, mas NÃO pode definir a própria data (serverTimestamp obrigatório)
+      allow create: if isSignedIn() 
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.rating >= 1 
+                    && request.resource.data.rating <= 5;
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // --- CONVITES DE ADMIN ---
+    match /admin_invites/{inviteId} {
+      allow read: if isSignedIn() && (resource.data.toUsername == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username || resource.data.fromUid == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isSignedIn(); // Para aceitar/recusar
+    }
+
+    // --- LOGS DE ADMIN ---
+    match /admin_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin(); // O front cria o log ao fazer a ação
+      allow update, delete: if false; // Logs são imutáveis
+    }
+    
+    // --- LISTAS COMPARTILHADAS (Link público) ---
+    match /shared_lists/{listId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+    }
+    
+    // --- FEEDBACK ---
+    match /feedbacks/{feedbackId} {
+      allow create: if true;
+    }
+  }
+}
