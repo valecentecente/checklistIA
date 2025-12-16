@@ -281,7 +281,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const errorCode = error.code || '';
             const errorMessage = error.message || '';
             
-            if (errorCode.includes('api-key-not-valid') || errorMessage.includes('api-key-not-valid')) {
+            if (errorMessage.includes('identity-toolkit-api-has-not-been-used')) {
+                setAuthErrorCode('CONFIG_ERROR');
+                setAuthError(`A API de Autenticação não está ativada no Firebase.`);
+            } else if (errorCode.includes('api-key-not-valid') || errorMessage.includes('api-key-not-valid')) {
                 setAuthErrorCode('API_KEY_ERROR');
                 const keyDebug = getApiKeyDebugInfo();
                 setAuthError(`Chave Recusada (${keyDebug}). O navegador pode estar usando uma versão antiga.`);
@@ -347,7 +350,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const errorCode = error.code || '';
             const errorMessage = error.message || '';
 
-            if (errorCode.includes('api-key-not-valid')) {
+            if (errorMessage.includes('identity-toolkit-api-has-not-been-used')) {
+                setAuthErrorCode('CONFIG_ERROR');
+                setAuthError(`A API de Autenticação não está ativada no Firebase.`);
+            } else if (errorCode.includes('api-key-not-valid')) {
                 setAuthErrorCode('API_KEY_ERROR');
                 setAuthError(`Chave Recusada. Verifique se confere com o Firebase.`);
             } else if (errorCode === 'auth/email-already-in-use') {
@@ -557,7 +563,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             
             if (errorCode === 'auth/popup-closed-by-user') return;
             
-            if (errorCode.includes('api-key-not-valid')) {
+            if (errorMessage.includes('identity-toolkit-api-has-not-been-used')) {
+                setAuthErrorCode('CONFIG_ERROR');
+                setAuthError(`A API de Autenticação não está ativada no Firebase.`);
+            } else if (errorCode.includes('api-key-not-valid')) {
                 setAuthErrorCode('API_KEY_ERROR');
                 setAuthError(`Chave Recusada. Verifique se confere com o painel.`);
             } else if (errorCode === 'auth/unauthorized-domain') {

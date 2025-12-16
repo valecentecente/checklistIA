@@ -106,11 +106,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
         return () => clearTimeout(timer);
     }, [username, mode, isOpen, checkUsernameUniqueness]);
 
-    // Auto-dismiss error after 5 seconds (DISABLE for DOMAIN_ERROR)
+    // Auto-dismiss error after 5 seconds (DISABLE for DOMAIN_ERROR and CONFIG_ERROR)
     useEffect(() => {
         if (error) {
             // Disable auto-dismiss for domain error so user has time to copy
-            if (authErrorCode === 'DOMAIN_ERROR') return;
+            if (authErrorCode === 'DOMAIN_ERROR' || authErrorCode === 'CONFIG_ERROR') return;
             
             const timer = setTimeout(() => {
                 clearAuthError();
@@ -237,6 +237,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
                                             <span className="material-symbols-outlined text-sm">refresh</span>
                                             Recarregar Página
                                         </button>
+                                    </div>
+                                ) : authErrorCode === 'CONFIG_ERROR' ? (
+                                    <div className="bg-zinc-900 border-2 border-yellow-500/50 text-white p-4 rounded-xl shadow-2xl flex flex-col gap-3 relative">
+                                        <button onClick={clearAuthError} className="absolute top-2 right-2 text-gray-400 hover:text-white p-1">
+                                            <span className="material-symbols-outlined text-sm">close</span>
+                                        </button>
+                                        <div className="flex items-center gap-2 text-yellow-400">
+                                            <span className="material-symbols-outlined">settings_alert</span>
+                                            <span className="font-bold text-sm uppercase tracking-wide">Configuração Pendente</span>
+                                        </div>
+                                        <p className="text-xs text-gray-300 leading-relaxed">
+                                            O serviço de Autenticação ainda não foi ativado no Firebase.
+                                        </p>
+                                        
+                                        <a 
+                                            href="https://console.firebase.google.com/project/_/authentication/providers"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="mt-1 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs uppercase transition-colors flex items-center justify-center gap-2 no-underline"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                            Ativar no Console
+                                        </a>
+                                        <p className="text-[10px] text-gray-500 text-center">Clique em "Get Started" na aba Authentication.</p>
                                     </div>
                                 ) : (
                                     <div className="bg-red-500/95 backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-xl border border-white/10 flex items-center gap-3">
