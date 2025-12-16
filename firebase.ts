@@ -4,15 +4,16 @@ import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore';
 
 // --- CONFIGURAÇÃO DO NOVO PROJETO: ChecklistIA ---
+// Atualizado com as credenciais fornecidas pelo usuário
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDSX3VGZ_CZq2n2gmVaUONE7bSiO1f-vns",
+  apiKey: "AIzaSyA5JGHsJUjJhoxeShn2282rQ0yfeGJ4-OA",
   authDomain: "checklistiaweb.firebaseapp.com",
   projectId: "checklistiaweb",
   storageBucket: "checklistiaweb.firebasestorage.app",
   messagingSenderId: "259212383030",
-  appId: "1:259212383030:web:27581b56f3db4ae5a69997",
-  measurementId: "G-HMMZ1QMFQ0"
+  appId: "1:259212383030:web:89244290bd528fe3a69997",
+  measurementId: "G-HX3K038HY9"
 };
 
 // Verifica se a configuração foi feita
