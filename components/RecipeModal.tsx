@@ -11,16 +11,19 @@ interface RecipeModalProps {
   onImageGenerated: (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => void;
 }
 
-// Skeleton Loader com animação de Shimmer
-const ImageSkeleton: React.FC = () => (
-    <div className="w-full h-full bg-gray-200 dark:bg-gray-800 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 gap-3">
-            <span className="material-symbols-outlined text-4xl animate-pulse">restaurant_menu</span>
-            <span className="text-xs font-medium uppercase tracking-widest opacity-70">Preparando imagem...</span>
-        </div>
-    </div>
-);
+// Coleção de Chefs Diversificados para o Placeholder
+const CHEF_PLACEHOLDERS = [
+    "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=800&q=80", // Chef Mulher
+    "https://images.unsplash.com/photo-1583394293214-28ded15ee548?auto=format&fit=crop&w=800&q=80", // Chef Homem Negro
+    "https://images.unsplash.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=800&q=80", // Chef Mulher Asiática
+    "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?auto=format&fit=crop&w=800&q=80", // Chef Homem Jovem
+    "https://images.unsplash.com/photo-1654922207993-2952fec3276f?auto=format&fit=crop&w=800&q=80", // Chef Mulher Focada
+    "https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&w=800&q=80", // Chef Italiano
+    "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&w=800&q=80", // Chef Confeiteira
+    "https://images.unsplash.com/photo-1512485800893-b08ec1ea59b1?auto=format&fit=crop&w=800&q=80", // Mãos trabalhando (neutro)
+    "https://images.unsplash.com/photo-1556910103-1c02745a30bf?auto=format&fit=crop&w=800&q=80", // Equipe diversa
+    "https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&w=800&q=80"  // Chef sorrindo
+];
 
 export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => {
   const { addRecipeToShoppingList, openModal, currentMarketName, setPendingExploreRecipe, fetchRecipeDetails, isRecipeLoading } = useApp();
@@ -29,19 +32,21 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   
   const [isAdding, setIsAdding] = useState(false);
   const imageUrl = recipe.imageUrl;
-  const isImageLoading = !imageUrl && !!recipe.imageQuery;
+  // Se não tem URL mas tem query, significa que estamos esperando a IA (background)
+  const isGeneratingInBackground = !imageUrl && !!recipe.imageQuery;
   const isFromCache = recipe.imageSource === 'cache';
   
   const isSaved = isFavorite(recipe.name);
   
-  // Considera lista ativa se tiver itens OU se o nome do mercado já estiver definido (Sessão iniciada)
+  // Seleciona um Chef aleatório apenas UMA vez quando o componente monta
+  const randomChefImage = useMemo(() => {
+      const randomIndex = Math.floor(Math.random() * CHEF_PLACEHOLDERS.length);
+      return CHEF_PLACEHOLDERS[randomIndex];
+  }, []); // Dependência vazia = roda 1 vez por montagem
+
   const hasActiveList = items.length > 0 || !!currentMarketName;
-  
-  // GARANTIA DE ARRAYS (Evita erro de tela escura/branca se vier undefined do banco)
   const safeIngredients = recipe.ingredients || [];
   const safeInstructions = recipe.instructions || [];
-  
-  // Verifica se a receita está quebrada (sem dados essenciais)
   const isBroken = safeIngredients.length === 0 || safeInstructions.length === 0;
   
   const difficultyMap: Record<'Fácil' | 'Médio' | 'Difícil', string> = {
@@ -51,15 +56,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   };
 
   const handleAddRequest = async () => {
-      // Se NÃO tiver lista ativa, redireciona para o fluxo de "Iniciar Compra" primeiro
       if (!hasActiveList) {
-          setPendingExploreRecipe(recipe.name); // Salva a receita para reabrir depois
-          onClose(); // Fecha este modal
-          openModal('startShopping'); // Abre o modal de configuração
+          setPendingExploreRecipe(recipe.name); 
+          onClose(); 
+          openModal('startShopping'); 
           return;
       }
-
-      // Se já tiver lista ativa, adiciona direto
       setIsAdding(true);
       await addRecipeToShoppingList(recipe);
       setIsAdding(false);
@@ -76,42 +78,23 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   };
 
   const handleRegenerateDetails = async () => {
-      // Chama a função de gerar receita passando apenas o nome.
-      // O AppContext foi atualizado para preservar a imagem atual se o nome bater.
       await fetchRecipeDetails(recipe.name, undefined, false);
   };
 
-  // Lógica de Contextual Commerce (Atualizada com Tags e Proteção)
   const relatedOffers = useMemo(() => {
       if (!offers || offers.length === 0) return [];
-      
-      const fullText = (
-          recipe.name + ' ' + 
-          safeIngredients.map(i => i.simplifiedName).join(' ') + ' ' + 
-          safeInstructions.join(' ')
-      ).toLowerCase();
-
+      const fullText = (recipe.name + ' ' + safeIngredients.map(i => i.simplifiedName).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
       return offers.filter(offer => {
-          // 1. Verifica pelo nome do produto (primeira palavra)
           const firstKeyword = offer.name.trim().split(' ')[0].toLowerCase();
-          
           let matches = false;
-
-          // Ignora palavras muito curtas para evitar falsos positivos no nome
-          if (firstKeyword.length >= 4 && fullText.includes(firstKeyword)) {
-              matches = true;
-          }
-
-          // 2. Verifica pelas Tags cadastradas (Lógica nova)
+          if (firstKeyword.length >= 4 && fullText.includes(firstKeyword)) matches = true;
           if (!matches && offer.tags && offer.tags.length > 0) {
-              // Se ALGUMA tag estiver contida no texto da receita, é um match
               const tagMatch = offer.tags.some(tag => {
                   const cleanTag = tag.trim().toLowerCase();
                   return cleanTag.length > 2 && fullText.includes(cleanTag);
               });
               if (tagMatch) matches = true;
           }
-
           return matches;
       });
   }, [offers, recipe, safeIngredients, safeInstructions]);
@@ -119,7 +102,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   return (
     <div className="fixed inset-0 flex h-full w-full flex-col justify-end items-stretch bg-black/60 z-[130] animate-fadeIn backdrop-blur-sm" onClick={onClose}>
         <div className="flex flex-col items-stretch bg-[#F7F7F7] dark:bg-[#1a1a1a] rounded-t-2xl max-h-[95vh] animate-slideUp overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
-            {/* Drag Handle */}
             <div className="flex-shrink-0 absolute top-0 left-0 right-0 z-20 flex justify-center pt-3 pb-1 pointer-events-none">
                 <div className="h-1.5 w-12 rounded-full bg-white/50 backdrop-blur-md shadow-sm"></div>
             </div>
@@ -128,19 +110,41 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 <span className="material-symbols-outlined text-lg">close</span>
             </button>
 
-            {/* Content Container with Bottom Padding for Button */}
             <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide relative">
-                {/* Image Header */}
-                <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] flex-shrink-0">
+                
+                {/* --- ÁREA DA IMAGEM (Smart Placeholder Logic) --- */}
+                <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] flex-shrink-0 overflow-hidden bg-gray-200 dark:bg-gray-800">
+                    
+                    {/* Imagem REAL (Se existir) com Fade-In */}
                     <div 
-                        className="w-full h-full bg-center bg-no-repeat bg-cover bg-gray-200 dark:bg-gray-800"
+                        className={`absolute inset-0 bg-center bg-no-repeat bg-cover transition-opacity duration-1000 ${imageUrl ? 'opacity-100' : 'opacity-0'}`}
                         style={{backgroundImage: imageUrl ? `url(${imageUrl})` : 'none'}}
-                    >
-                     {isImageLoading && <ImageSkeleton />}
+                    ></div>
+
+                    {/* Placeholder do CHEF (Se estiver carregando ou sem imagem) */}
+                    {!imageUrl && (
+                        <div className="absolute inset-0">
+                            {/* Foto do Chef */}
+                            <div 
+                                className="absolute inset-0 bg-center bg-cover filter blur-[1px] scale-105"
+                                style={{backgroundImage: `url(${randomChefImage})`}}
+                            ></div>
+                            
+                            {/* Overlay Escuro Elegante */}
+                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-3 p-6 text-center">
+                                <div className="bg-white/20 p-4 rounded-full backdrop-blur-md animate-pulse">
+                                    <span className="material-symbols-outlined text-4xl">restaurant_menu</span>
+                                </div>
+                                <div>
+                                    <p className="font-bold text-lg drop-shadow-md">O Chef IA está trabalhando...</p>
+                                    <p className="text-xs font-medium uppercase tracking-widest opacity-80 mt-1">Preparando a foto do seu prato</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                      
-                     {/* Container de Badges (Top Left) - Stacked */}
+                     {/* Badges e Botões Sobrepostos */}
                      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 items-start pointer-events-none">
-                         {/* Overlay de Crédito se for do Acervo (Cache) */}
                          {imageUrl && isFromCache && (
                              <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10 shadow-sm">
                                  <span className="material-symbols-outlined text-[16px] text-orange-400 leading-none">photo_camera</span>
@@ -166,16 +170,15 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                              </span>
                          </button>
                      </div>
-                    </div>
-                    {/* Gradient Fade Bottom */}
-                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F7F7F7] dark:from-[#1a1a1a] to-transparent pointer-events-none"></div>
+                     
+                     {/* Gradient Fade Bottom */}
+                     <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F7F7F7] dark:from-[#1a1a1a] to-transparent pointer-events-none"></div>
                 </div>
 
                 <div className="relative px-5 -mt-8">
                      <h1 className="text-text-main dark:text-gray-50 tracking-tight text-[28px] font-bold leading-none font-display capitalize drop-shadow-sm pr-12">{recipe.name}</h1>
                 </div>
                 
-                {/* Meta Info Chips */}
                 <div className="flex gap-2 p-5 pt-4 flex-wrap">
                     {recipe.prepTimeInMinutes > 0 && (
                         <div className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 shadow-sm">
@@ -228,7 +231,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     </div>
                 </div>
 
-                {/* --- CONTEXTUAL COMMERCE SECTION (Ofertas Relacionadas) --- */}
                 {relatedOffers.length > 0 && (
                     <div className="pl-5 mt-6 animate-fadeIn">
                         <h3 className="text-gray-800 dark:text-gray-100 text-base font-bold leading-tight pb-2 font-display flex items-center gap-2">
@@ -295,7 +297,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     </div>
                 </div>
                 
-                {/* Loading Overlay when regenerating */}
                 {isRecipeLoading && (
                     <div className="absolute inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-40 flex flex-col items-center justify-center">
                         <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -304,11 +305,10 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 )}
             </div>
 
-            {/* Bottom Action Bar (Contextual) */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 z-50">
                 <button 
                     onClick={handleAddRequest}
-                    disabled={isAdding || isBroken} // Desabilita se estiver quebrado e não consertado
+                    disabled={isAdding || isBroken} 
                     className="w-full h-14 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isAdding ? (

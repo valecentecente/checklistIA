@@ -543,8 +543,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
                     ctx.drawImage(img, 0, 0, width, height);
-                    // Qualidade reduzida para 0.6 para arquivos menores
-                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    // Qualidade reduzida para 0.5 para arquivos ainda menores
+                    resolve(canvas.toDataURL('image/jpeg', 0.5));
                 } else {
                     resolve(base64Str);
                 }
@@ -555,25 +555,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const generateRecipeImageBackground = async (recipe: FullRecipe) => {
         if (!apiKey) return;
+        
+        // --- BACKGROUND FIRE AND FORGET ---
+        // Não esperamos o processamento nem bloqueamos a UI
+        // A função roda em segundo plano e atualiza o estado quando terminar
+        
         try {
              const ai = new GoogleGenAI({ apiKey });
              
-             const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
+             // Promessa de geração real
+             const response: any = await callGenAIWithRetry(() => ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
                  contents: {
-                     parts: [{ text: `Uma foto profissional, realista e apetitosa de: ${recipe.imageQuery}. Estilo fotografia de culinária (comida ou bebida).` }]
+                     parts: [{ text: `Foto profissional e apetitosa de: ${recipe.imageQuery}. Fotografia de comida.` }]
                  },
                  config: {
                      responseModalities: [Modality.IMAGE],
                  },
-             }));
-             
+             }), 2); // Reduzido para 2 retries para falhar mais rápido se estiver congestionado
+
              const part = response.candidates?.[0]?.content?.parts?.[0];
              if (part?.inlineData) {
                  const base64ImageBytes = part.inlineData.data;
                  const mimeType = part.inlineData.mimeType || 'image/jpeg';
                  const generatedUrl = `data:${mimeType};base64,${base64ImageBytes}`;
                  
+                 // Processamento e salvamento
                  handleRecipeImageGenerated(recipe.name, generatedUrl, 'genai');
 
                  if (db) {
@@ -595,7 +602,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  }
              }
         } catch (error) {
-            console.error("Erro ao gerar imagem em segundo plano:", error);
+            console.warn("Imagem não gerada (Erro ou Timeout):", error);
+            
+            // Falha silenciosa: remove apenas o placeholder de "carregando" se necessário,
+            // ou deixa sem imagem. O modal já vai ter tratado a UX.
+            const stopLoadingState = (prev: Record<string, FullRecipe>) => {
+                if (prev[recipe.name]) {
+                    const updated = { ...prev[recipe.name] };
+                    updated.imageQuery = ""; 
+                    return { ...prev, [recipe.name]: updated };
+                }
+                return prev;
+            };
+
+            setFullRecipes(prev => stopLoadingState(prev));
+            setSelectedRecipe(prev => {
+                if (prev?.name === recipe.name) {
+                    const updated = { ...prev };
+                    updated.imageQuery = "";
+                    return updated;
+                }
+                return prev;
+            });
         }
     };
 
@@ -704,16 +732,21 @@ O formato deve ser EXATAMENTE este:
                 imageSource: existingSource
             };
             
+            // 1. Atualiza o estado da receita COM A IMAGEM ATUAL (se tiver)
             setFullRecipes(prev => ({...prev, [finalRecipeName]: fullRecipeData}));
             setSelectedRecipe(fullRecipeData);
+            
+            // 2. Fecha o modal de "Carregando"
             closeModal('recipeAssistant');
 
             if (autoAdd) {
                 await addRecipeToShoppingList(fullRecipeData);
             }
 
+            // 3. Dispara a geração da imagem em SEGUNDO PLANO (sem await)
             if (recipeDetails.imageQuery && !existingImage) {
-                generateRecipeImageBackground(fullRecipeData);
+                // Não usamos await aqui para não bloquear a UI
+                generateRecipeImageBackground(fullRecipeData).catch(err => console.error("Background Gen Error:", err));
             } else if (db && existingImage) {
                 try {
                      const docId = finalRecipeName.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
