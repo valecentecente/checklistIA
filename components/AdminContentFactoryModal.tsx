@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import type { FullRecipe } from '../types';
@@ -18,7 +18,7 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     const categories = [
         "Sobremesas", "Massas", "Fit / Saudável", "Vegano", "Drinks", 
-        "Bolos", "Carnes", "Aves", "Peixes", "Lanches", "Sopas"
+        "Bolos", "Carnes", "Aves", "Peixes", "Lanches", "Sopas", "Brasileira Clássica"
     ];
 
     const apiKey = process.env.API_KEY as string;
@@ -47,8 +47,10 @@ export const AdminContentFactoryModal: React.FC = () => {
             const ai = new GoogleGenAI({ apiKey });
 
             // 1. Obter lista de nomes
-            addLog("Solicitando lista de nomes à IA...");
-            const listPrompt = `Gere uma lista JSON com ${quantity} nomes criativos e distintos de receitas brasileiras populares da categoria "${category}". 
+            // AJUSTE: Foco em popularidade e tradição para preencher a base com o essencial primeiro
+            addLog("Solicitando lista de nomes populares à IA...");
+            const listPrompt = `Gere uma lista JSON com ${quantity} nomes das receitas mais populares, tradicionais e buscadas no Brasil da categoria "${category}".
+            Evite variações muito exóticas, foque no que as pessoas comem no dia a dia.
             Retorne apenas o JSON: ["Nome 1", "Nome 2", ...]`;
 
             const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -68,6 +70,27 @@ export const AdminContentFactoryModal: React.FC = () => {
                 }
 
                 const name = recipeNames[i];
+                
+                // --- TRAVA DE SEGURANÇA (VERIFICAÇÃO DE DUPLICIDADE) ---
+                // Calcula o ID exatamente como seria salvo
+                const docId = name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
+                
+                if (db) {
+                    try {
+                        const docRef = doc(db, 'global_recipes', docId);
+                        const docSnap = await getDoc(docRef);
+                        
+                        if (docSnap.exists()) {
+                            addLog(`[${i+1}/${recipeNames.length}] ${name}: JÁ EXISTE NO ACERVO. Pulando... (Economia: 100%)`);
+                            setProgress(((i + 1) / recipeNames.length) * 100);
+                            continue; // PULA PARA O PRÓXIMO ITEM DO LOOP
+                        }
+                    } catch (e) {
+                        console.warn("Erro ao verificar duplicidade, tentando gerar mesmo assim...", e);
+                    }
+                }
+                
+                // Se chegou aqui, é novo. Prossegue com a geração.
                 addLog(`[${i+1}/${recipeNames.length}] Gerando: ${name}...`);
 
                 try {
@@ -103,17 +126,12 @@ export const AdminContentFactoryModal: React.FC = () => {
                         imageUrl = `data:${mime};base64,${base64}`;
                     }
 
-                    // Comprime imagem (simulado aqui, idealmente usar a função do AppContext se exposta, ou salvar direto)
-                    // Para simplificar, salvaremos direto, o AppContext já tem lógica de compressão, mas aqui estamos no modal.
-                    // Vamos salvar direto no Firestore.
-
-                    const docId = name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
                     const keywords = generateKeywords(name);
                     const tags = [category.toLowerCase(), 'factory_generated'];
 
                     const fullRecipe: FullRecipe = {
                         ...recipeData,
-                        imageUrl: imageUrl, // Atenção: Imagem full size pode ser grande para o Firestore.
+                        imageUrl: imageUrl, 
                         imageSource: 'genai',
                         keywords,
                         tags
@@ -124,7 +142,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             ...fullRecipe,
                             createdAt: serverTimestamp()
                         }, { merge: true });
-                        addLog(`   > Salvo no DB!`);
+                        addLog(`   > Salvo no DB com sucesso!`);
                     }
 
                     setProgress(((i + 1) / recipeNames.length) * 100);
