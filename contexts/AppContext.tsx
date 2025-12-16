@@ -162,20 +162,21 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Helper for retry logic specifically optimized for Free Tier Limits (429)
-// EXPORTED so other components (like Arcade) can use it
+// Automatically retries the function if it hits a rate limit
 export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 3): Promise<any> => {
     try {
         return await fn();
     } catch (error: any) {
+        // Verifica erros comuns de limite de cota
         const isQuotaError = error?.status === 429 || 
                              error?.message?.includes('429') || 
                              error?.toString().includes('429') ||
                              error?.message?.includes('quota') ||
-                             error?.message?.includes('Too Many Requests');
+                             error?.message?.includes('Too Many Requests') ||
+                             error?.status === 503;
                              
         if (retries > 0 && isQuotaError) {
-            // Aumenta o tempo de espera a cada tentativa (Backoff Exponencial)
-            // 1ª: ~2s, 2ª: ~4s, 3ª: ~8s
+            // Backoff exponencial: espera 2s, 4s, 6s...
             const delay = (2000 * (4 - retries)) + Math.random() * 1000; 
             console.warn(`Limite do plano grátis atingido (429). Retentando em ${Math.round(delay)}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -262,7 +263,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const apiKey = process.env.API_KEY as string;
     
-    // Validar Admin baseado no Role do Firebase (Segurança)
+    // Validar Admin
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
@@ -545,7 +546,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
              const ai = new GoogleGenAI({ apiKey });
              
-             // Wrap in retry to handle free tier limits (429)
              const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
                  contents: {
@@ -649,6 +649,7 @@ O formato deve ser EXATAMENTE este:
             }
             parts.push({ text: systemPrompt });
 
+            // WRAPPED IN RETRY
             const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash', 
                 contents: { parts },
@@ -658,7 +659,6 @@ O formato deve ser EXATAMENTE este:
             }));
 
             let textResponse = response.text || "";
-            // Regex insensível a maiúsculas para remover markdown
             textResponse = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
             
             const firstBrace = textResponse.indexOf('{');
@@ -711,8 +711,10 @@ O formato deve ser EXATAMENTE este:
             console.error("Error fetching recipe:", e);
             if (e?.status === 429 || e?.message?.includes('quota') || e?.message?.includes('429')) {
                 setRecipeError("Muitos pedidos no plano grátis. Aguarde um momento e tente novamente.");
+            } else if (e?.message?.includes('API key') || e?.status === 400 || e?.status === 403) {
+                 setRecipeError("Erro de Permissão: Chave de API inválida ou domínio não autorizado.");
             } else {
-                setRecipeError("Não foi possível gerar esta receita. Verifique sua conexão ou tente outro prato.");
+                setRecipeError(`Erro na IA: ${e?.message || "Tente novamente."}`);
             }
         } finally {
             setIsRecipeLoading(false);
@@ -748,6 +750,7 @@ O formato deve ser EXATAMENTE este:
                 const ai = new GoogleGenAI({ apiKey });
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue e Peixaria", "🧀 Frios e Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene Pessoal", "🐾 Pets", "🏠 Utilidades Domésticas", "❓ Outros" ];
                 
+                // WRAPPED IN RETRY
                 const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Use APENAS estas categorias: ${categories.join(', ')}. Retorne JSON array: [{"itemName": "Nome", "category": "Categoria"}]`,
@@ -769,9 +772,13 @@ O formato deve ser EXATAMENTE este:
                 });
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
-            } catch (error) { 
+            } catch (error: any) { 
                 console.error("Error organizing items:", error);
-                showToast("Erro ao organizar. Limite do plano grátis atingido?"); 
+                if (error?.message?.includes('API key')) {
+                    showToast("Erro: Chave de API inválida no Vercel.");
+                } else {
+                    showToast("Erro ao organizar. Limite do plano grátis atingido?"); 
+                }
             }
             finally { setIsOrganizing(false); }
         } else {
