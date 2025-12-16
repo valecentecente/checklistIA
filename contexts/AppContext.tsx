@@ -545,8 +545,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
              const ai = new GoogleGenAI({ apiKey });
              
+             // Wrap in retry to handle free tier limits (429)
              const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                 model: 'gemini-2.5-flash-image', // Uso explícito do modelo grátis
+                 model: 'gemini-2.5-flash-image',
                  contents: {
                      parts: [{ text: `Uma foto profissional, realista e apetitosa de: ${recipe.imageQuery}. Estilo fotografia de culinária (comida ou bebida).` }]
                  },
@@ -619,7 +620,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setRecipeError(null);
         try {
             const ai = new GoogleGenAI({ apiKey });
-            let systemPrompt = `Você é um assistente culinário especialista. Gere uma receita completa e detalhada em JSON válido.`;
+            let systemPrompt = `Você é um assistente culinário especialista. Gere uma receita completa e detalhada em Português do Brasil no formato JSON.`;
             
             if (recipeName && !imageBase64) {
                  systemPrompt += ` para o prato: "${recipeName}".`;
@@ -649,7 +650,7 @@ O formato deve ser EXATAMENTE este:
             parts.push({ text: systemPrompt });
 
             const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-2.5-flash', // Uso explícito do modelo grátis
+                model: 'gemini-2.5-flash', 
                 contents: { parts },
                 config: {
                     responseMimeType: "application/json",
@@ -657,7 +658,9 @@ O formato deve ser EXATAMENTE este:
             }));
 
             let textResponse = response.text || "";
+            // Regex insensível a maiúsculas para remover markdown
             textResponse = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+            
             const firstBrace = textResponse.indexOf('{');
             const lastBrace = textResponse.lastIndexOf('}');
             if (firstBrace !== -1 && lastBrace !== -1) {
