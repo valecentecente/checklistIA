@@ -104,28 +104,6 @@ export const RecipeSelectionModal: React.FC = () => {
                             {/* Gradient Overlay */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90"></div>
 
-                            {/* --- ACTION BUTTONS (TOP RIGHT) --- */}
-                            <div className="absolute top-4 right-4 z-20 flex flex-col gap-3">
-                                <button 
-                                    onClick={(e) => handleToggleFavorite(e, recipe)}
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 shadow-lg transition-all ${
-                                        isSaved 
-                                        ? 'bg-red-600 text-white scale-110 border-red-500' 
-                                        : 'bg-black/40 text-white hover:bg-white hover:text-red-500'
-                                    }`}
-                                >
-                                    <span className={`material-symbols-outlined text-xl ${isSaved ? 'font-variation-FILL-1' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
-                                        favorite
-                                    </span>
-                                </button>
-                                <button 
-                                    onClick={(e) => handleShare(e, recipe)}
-                                    className="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-white backdrop-blur-md border border-white/10 shadow-lg hover:bg-white hover:text-blue-600 transition-all"
-                                >
-                                    <span className="material-symbols-outlined text-xl">share</span>
-                                </button>
-                            </div>
-
                             {/* Content */}
                             <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-start text-white">
                                 
@@ -157,10 +135,43 @@ export const RecipeSelectionModal: React.FC = () => {
                                     <span>{recipe.ingredients?.length || 0} ingredientes</span>
                                 </div>
                                 
-                                <button className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 shadow-lg">
-                                    Escolher esta
-                                    <span className="material-symbols-outlined">arrow_forward</span>
-                                </button>
+                                {/* --- BOTTOM ACTION BAR (ZONA DO DEDÃO) --- */}
+                                <div className="flex items-center justify-between w-full mt-2">
+                                    <div className="flex gap-3">
+                                        {/* Botão Favoritar */}
+                                        <button 
+                                            onClick={(e) => handleToggleFavorite(e, recipe)}
+                                            className={`h-14 w-14 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 shadow-lg transition-all active:scale-90 ${
+                                                isSaved 
+                                                ? 'bg-red-600 text-white border-red-500' 
+                                                : 'bg-black/30 text-white hover:bg-white/20'
+                                            }`}
+                                        >
+                                            <span className={`material-symbols-outlined text-2xl ${isSaved ? 'font-variation-FILL-1' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
+                                                favorite
+                                            </span>
+                                        </button>
+
+                                        {/* Botão Compartilhar */}
+                                        <button 
+                                            onClick={(e) => handleShare(e, recipe)}
+                                            className="h-14 w-14 rounded-full flex items-center justify-center bg-black/30 text-white backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all active:scale-90"
+                                        >
+                                            <span className="material-symbols-outlined text-2xl">share</span>
+                                        </button>
+                                    </div>
+
+                                    {/* THE BIG BLUE CHECK BUTTON */}
+                                    <button 
+                                        className="h-16 w-16 rounded-full bg-white text-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 hover:shadow-[0_0_40px_rgba(37,99,235,0.8)] transition-all duration-300 active:scale-95 group relative"
+                                        onClick={() => handleSelect(recipe)}
+                                    >
+                                        <span className="material-symbols-outlined text-4xl font-bold">check</span>
+                                        {/* Pulse Effect Ring */}
+                                        <div className="absolute inset-0 rounded-full border-2 border-blue-400 opacity-0 group-hover:animate-ping"></div>
+                                    </button>
+                                </div>
+
                             </div>
                         </div>
                     );
