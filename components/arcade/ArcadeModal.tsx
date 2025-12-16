@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp, callGenAIWithRetry } from '../../contexts/AppContext'; // Imported retry logic
 import { GoogleGenAI } from "@google/genai";
 import type { FullRecipe } from '../../types';
 
@@ -34,11 +34,12 @@ const ChefQuizGame: React.FC<{ onExit: () => void }> = ({ onExit }) => {
             A pergunta deve ser curiosa ou sobre ingredientes/preparo.
             Retorne JSON PURO: { "question": "texto", "options": ["errada", "certa", "errada", "errada"], "answerIndex": 1 }`;
 
-            const response = await ai.models.generateContent({
+            // Wrapped in retry logic for free tier stability
+            const response = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
                 config: { responseMimeType: "application/json" }
-            });
+            }));
             
             const data = JSON.parse(response.text || "{}");
             if (!data.question) throw new Error("Inválido");
@@ -46,7 +47,7 @@ const ChefQuizGame: React.FC<{ onExit: () => void }> = ({ onExit }) => {
             setQuestionData(data);
         } catch (e) {
             console.error(e);
-            // Fallback simples se falhar
+            // Fallback simples se falhar (ex: sem internet ou erro persistente)
             setQuestionData({
                 question: "Qual ingrediente é essencial no Pão de Queijo?",
                 options: ["Farinha de Trigo", "Polvilho", "Fermento Biológico", "Aveia"],
@@ -68,7 +69,7 @@ const ChefQuizGame: React.FC<{ onExit: () => void }> = ({ onExit }) => {
         
         setTimeout(() => {
             if (correct) generateQuestion();
-            else { /* Game Over logic could go here, but infinite play is better for lines */ }
+            else { /* Game Over logic could go here */ }
         }, 2000);
     };
 
@@ -95,7 +96,7 @@ const ChefQuizGame: React.FC<{ onExit: () => void }> = ({ onExit }) => {
             {loading ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-4 animate-pulse">
                     <div className="w-16 h-16 rounded-full border-4 border-yellow-400 border-t-transparent animate-spin"></div>
-                    <p>O Chef está pensando...</p>
+                    <p className="text-indigo-200 text-sm">O Chef está pensando... (IA)</p>
                 </div>
             ) : (
                 // Scrollable Content Area
@@ -307,7 +308,7 @@ const SlidingPuzzleGame: React.FC<{ onExit: () => void }> = ({ onExit }) => {
 // GAME 3: ROLETA DO DESTINO
 // ==========================================
 const RouletteGame: React.FC<{ onExit: () => void }> = ({ onExit }) => {
-    const { getCategoryRecipes, showRecipe, closeModal, openModal, showToast, addRecipeToShoppingList } = useApp();
+    const { getCategoryRecipes, showRecipe, closeModal, showToast } = useApp();
     const [recipes, setRecipes] = useState<FullRecipe[]>([]);
     const [isSpinning, setIsSpinning] = useState(false);
     const [rotation, setRotation] = useState(0);

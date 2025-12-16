@@ -6,7 +6,7 @@ import { getFirestore } from 'firebase/firestore';
 // --- CONFIGURAÇÃO DO NOVO PROJETO: ChecklistIA ---
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA5JGHsJUjJhoxeShn2282rQ0yfeGJ4-OA",
+  apiKey: "AIzaSyDSX3VGZ_CZq2n2gmVaUONE7bSiO1f-vns",
   authDomain: "checklistiaweb.firebaseapp.com",
   projectId: "checklistiaweb",
   storageBucket: "checklistiaweb.firebasestorage.app",

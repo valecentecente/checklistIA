@@ -46,8 +46,12 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
         <p className={textClasses}>
             {item.name}
         </p>
-         {/* Detalhes ocultos no mobile (padrão) e visíveis apenas em telas grandes (lg:block) */}
-         {showDetails && <p className="text-sm text-slate-500 hidden lg:block">{item.details}</p>}
+         {/* Detalhes (Peso/Qtd) agora visíveis sempre, com estilo refinado */}
+         {showDetails && (
+             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                {item.details}
+             </p>
+         )}
       </div>
 
       {item.isPurchased ? (
@@ -67,7 +71,7 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
         <div className="w-8 h-8 flex-shrink-0"></div> // Placeholder to prevent layout shift
       )}
 
-      <span className="text-sm text-text-muted-light dark:text-text-muted-dark w-24 text-right">{item.displayPrice}</span>
+      <span className="text-sm text-text-muted-light dark:text-text-muted-dark w-24 text-right font-medium">{item.displayPrice}</span>
     </label>
   );
 };

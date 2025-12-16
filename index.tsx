@@ -17,7 +17,7 @@ import { ToolsGridModal } from './components/modals/ToolsGridModal'; // Needed f
 import { AppModals } from './components/modals/AppModals';
 
 // ... SlideToFinish ...
-const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
+const SlideToFinish: React.FC<{ total: string; count: number; onFinish: () => void; }> = ({ total, count, onFinish }) => {
     // ... logic ...
     const [sliderX, setSliderX] = React.useState(0);
     const [isDragging, setIsDragging] = React.useState(false);
@@ -67,8 +67,9 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
     return (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 animate-fadeIn" ref={containerRef}>
             <div className="relative h-16 w-64 rounded-full bg-surface-light dark:bg-surface-dark border border-primary/20 dark:border-primary/50 shadow-lg flex items-center p-2 overflow-hidden">
-                <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-12 w-24 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none" style={{ transform: `translateX(${sliderX}px)` }}>
-                    <span className="font-bold">{total}</span>
+                <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-12 w-24 bg-primary rounded-full flex flex-col items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none shadow-md leading-none" style={{ transform: `translateX(${sliderX}px)` }}>
+                    <span className="font-bold text-sm">{total}</span>
+                    <span className="text-[9px] opacity-90 font-medium mt-[1px]">{count} it.</span>
                 </div>
                 <div className="absolute w-full text-right pr-4 text-primary dark:text-orange-300 font-semibold text-sm animate-pulse" style={{ opacity: isDragging ? 0 : 1, transition: 'opacity 0.2s' }}>
                     &gt;&gt;Finalizar
@@ -771,7 +772,7 @@ const AppContent: React.FC = () => {
                 )}
 
                 {/* Elementos Absolutos Presos Dentro do App */}
-                {(!showHomeView) && <SlideToFinish total={formattedTotal} onFinish={() => app.openModal('savePurchase')} />}
+                {(!showHomeView) && <SlideToFinish total={formattedTotal} count={purchasedItemsCount} onFinish={() => app.openModal('savePurchase')} />}
 
                 {/* --- RODAPÉ ESTILO APP (FIXO BOTTOM BAR) --- */}
                 {/* Oculto em Desktop pois a navegação está na sidebar esquerda */}

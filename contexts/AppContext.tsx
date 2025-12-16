@@ -161,19 +161,23 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper for retry logic
-const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 2): Promise<any> => {
+// Helper for retry logic specifically optimized for Free Tier Limits (429)
+// EXPORTED so other components (like Arcade) can use it
+export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 3): Promise<any> => {
     try {
         return await fn();
     } catch (error: any) {
         const isQuotaError = error?.status === 429 || 
                              error?.message?.includes('429') || 
                              error?.toString().includes('429') ||
-                             error?.message?.includes('quota');
+                             error?.message?.includes('quota') ||
+                             error?.message?.includes('Too Many Requests');
                              
         if (retries > 0 && isQuotaError) {
-            const delay = 2000 + Math.random() * 1000; // ~2-3s delay
-            console.warn(`AI Quota hit. Retrying in ${delay}ms...`);
+            // Aumenta o tempo de espera a cada tentativa (Backoff Exponencial)
+            // 1ª: ~2s, 2ª: ~4s, 3ª: ~8s
+            const delay = (2000 * (4 - retries)) + Math.random() * 1000; 
+            console.warn(`Limite do plano grátis atingido (429). Retentando em ${Math.round(delay)}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return callGenAIWithRetry(fn, retries - 1);
         }
@@ -484,12 +488,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         const recipeName = typeof input === 'string' ? input : input.name;
-        
         const cachedBroken = getCachedRecipe(recipeName);
         const existingImage = (typeof input !== 'string' ? input.imageUrl : undefined) || cachedBroken?.imageUrl;
         
         showToast(existingImage ? "Restaurando receita..." : "Criando receita com IA...");
-        
         fetchRecipeDetails(recipeName, undefined, false);
     };
 
@@ -544,7 +546,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              const ai = new GoogleGenAI({ apiKey });
              
              const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                 model: 'gemini-2.5-flash-image',
+                 model: 'gemini-2.5-flash-image', // Uso explícito do modelo grátis
                  contents: {
                      parts: [{ text: `Uma foto profissional, realista e apetitosa de: ${recipe.imageQuery}. Estilo fotografia de culinária (comida ou bebida).` }]
                  },
@@ -647,7 +649,7 @@ O formato deve ser EXATAMENTE este:
             parts.push({ text: systemPrompt });
 
             const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.5-flash', // Uso explícito do modelo grátis
                 contents: { parts },
                 config: {
                     responseMimeType: "application/json",
@@ -704,8 +706,8 @@ O formato deve ser EXATAMENTE este:
 
         } catch (e: any) {
             console.error("Error fetching recipe:", e);
-            if (e?.status === 429 || e?.message?.includes('quota')) {
-                setRecipeError("O servidor está ocupado. Aguarde e tente novamente.");
+            if (e?.status === 429 || e?.message?.includes('quota') || e?.message?.includes('429')) {
+                setRecipeError("Muitos pedidos no plano grátis. Aguarde um momento e tente novamente.");
             } else {
                 setRecipeError("Não foi possível gerar esta receita. Verifique sua conexão ou tente outro prato.");
             }
@@ -766,7 +768,7 @@ O formato deve ser EXATAMENTE este:
                 setGroupingMode('aisle');
             } catch (error) { 
                 console.error("Error organizing items:", error);
-                showToast("Erro ao organizar (Tente novamente em instantes)."); 
+                showToast("Erro ao organizar. Limite do plano grátis atingido?"); 
             }
             finally { setIsOrganizing(false); }
         } else {
