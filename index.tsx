@@ -1,5 +1,4 @@
-
-import React, { useMemo, useCallback, useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
 import type { ShoppingItem } from './types';
@@ -8,23 +7,20 @@ import { AppProvider, useApp } from './contexts/AppContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShoppingListProvider, useShoppingList } from './contexts/ShoppingListContext';
 import { Logo } from './components/Logo';
-
-// Extracted Components Imports
 import { WebSidebarLeft } from './components/layout/WebSidebarLeft';
 import { WebSidebarRight } from './components/layout/WebSidebarRight';
 import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
-import { ToolsGridModal } from './components/modals/ToolsGridModal'; 
 import { AppModals } from './components/modals/AppModals';
 
 // ... SlideToFinish ...
 const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
-    const [sliderX, setSliderX] = React.useState(0);
-    const [isDragging, setIsDragging] = React.useState(false);
-    const sliderRef = React.useRef<HTMLDivElement>(null);
-    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [sliderX, setSliderX] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const sliderRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const handleInteractionStart = () => { if (sliderRef.current) { setIsDragging(true); sliderRef.current.style.transition = 'none'; } };
-    const handleInteractionMove = React.useCallback((clientX: number) => {
+    const handleInteractionMove = useCallback((clientX: number) => {
         if (!isDragging || !sliderRef.current || !containerRef.current) return;
         const cRect = containerRef.current.getBoundingClientRect();
         const sWidth = sliderRef.current.offsetWidth;
@@ -39,14 +35,14 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
             setSliderX(0);
         }
     }, [isDragging, onFinish]);
-    const handleInteractionEnd = React.useCallback(() => {
+    const handleInteractionEnd = useCallback(() => {
         if (!isDragging || !sliderRef.current) return;
         setIsDragging(false);
         sliderRef.current.style.transition = 'transform 0.3s ease';
         setSliderX(0);
     }, [isDragging]);
     
-    React.useEffect(() => {
+    useEffect(() => {
         const move = (e: MouseEvent) => handleInteractionMove(e.clientX);
         const touchMove = (e: TouchEvent) => handleInteractionMove(e.touches[0].clientX);
         if (isDragging) {
@@ -108,14 +104,11 @@ const NewYearFireworks: React.FC = () => {
     );
 };
 
-// ... AppContent ...
 const AppContent: React.FC = () => {
-    // ... hooks ...
     const { user } = useAuth();
     const { items, formatCurrency, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, addItem, findDuplicate, importSharedList, addIngredientsBatch, saveReceivedListToHistory } = useShoppingList();
     const app = useApp();
   
-    // ... (rest of logic: sharedList, badge, orientation) ...
     const [sharedListData, setSharedListData] = useState<{ marketName: string; items: any[]; author?: any } | null>(null);
     const [isImportingShare, setIsImportingShare] = useState(false);
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
@@ -157,13 +150,13 @@ const AppContent: React.FC = () => {
 
     // --- LÓGICA DE ABERTURA DOS NOVOS MENUS ---
     const handleProfileClick = () => {
-        // Ao clicar no perfil (topo), abre o menu de opções (Caixa Vermelha)
+        // Ao clicar no perfil (topo), abre o menu de opções e reseta badge
         setLastSeenNotificationCount(app.unreadNotificationCount);
         app.toggleAppOptionsMenu();
     };
     
     const handleBottomMenuClick = () => {
-        // Ao clicar no botão Menu (rodapé), abre o grid de ferramentas (Caixa Verde)
+        // Ao clicar no botão Menu (rodapé), abre o grid de ferramentas
         app.openModal('tools');
     }
 
@@ -197,7 +190,7 @@ const AppContent: React.FC = () => {
 
     const handleImportSharedList = async () => {
         if (sharedListData) {
-            await addIngredientsBatch(sharedListData.items.map(i => ({
+            await addIngredientsBatch(sharedListData.items.map((i: any) => ({
                 name: i.name,
                 calculatedPrice: 0,
                 details: i.details || '',
@@ -227,7 +220,6 @@ const AppContent: React.FC = () => {
 
     React.useEffect(() => {
         if (user) {
-            // Se houver uma ação pendente (clique em ferramenta antes do login), executa e fecha o modal de auth
             if (app.pendingAction) {
                 if (app.isAuthModalOpen) app.closeModal('auth');
                 
@@ -240,7 +232,6 @@ const AppContent: React.FC = () => {
                     app.setPendingAction(null);
                 }, 300);
             } else if (app.isAuthModalOpen) {
-                // Fechar auth modal se estiver aberto e logado (fluxo padrão)
                 if (!app.pendingExploreRecipe) {
                     app.closeModal('auth');
                     app.showToast(`Bem-vindo, ${user.displayName || 'Usuário'}!`);
@@ -256,7 +247,6 @@ const AppContent: React.FC = () => {
         }
     }, [user, app]);
 
-    // ... (Add Item Handler) ...
     const handleAddItem = useCallback(async (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => {
         const duplicate = findDuplicate(item.name, items);
         const performAddItem = async () => {
@@ -276,14 +266,12 @@ const AppContent: React.FC = () => {
         }
     }, [items, addItem, app, findDuplicate]);
 
-    // ... (Memos for totals) ...
     const editingItem = useMemo(() => items.find(item => item.id === app.editingItemId) || null, [items, app.editingItemId]);
     const rawTotal = useMemo(() => items.filter(i => i.isPurchased).reduce((acc, item) => acc + item.calculatedPrice, 0), [items]);
     const purchasedItemsCount = useMemo(() => items.filter(item => item.isPurchased).length, [items]);
     const formattedTotal = useMemo(() => formatCurrency(rawTotal), [rawTotal, formatCurrency]);
     const budgetProgress = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.min((rawTotal / app.budget) * 100, 100), [rawTotal, app.budget]);
 
-    // ... (Grouped Items Memo) ...
     const groupedItems = useMemo(() => {
         const groups: Record<string, ShoppingItem[]> = {};
         if (app.groupingMode === 'aisle') {
@@ -319,21 +307,17 @@ const AppContent: React.FC = () => {
         return sortedGroups;
     }, [items, app.groupingMode, app.itemCategories]);
 
-    // ... (Handlers) ...
     const handleSavePurchase = useCallback(async (marketName: string) => {
-        const finalMarketName = marketName || app.currentMarketName; // Usa o nome passado (editado ou não)
+        const finalMarketName = marketName || app.currentMarketName; 
         await savePurchase(finalMarketName);
         app.setCurrentMarketName(null);
         app.setIsSharedSession(false);
-        app.setFocusMode(false); // Reset focus mode
+        app.setFocusMode(false); 
         app.closeModal('savePurchase');
         
-        // Redireciona para a Home para começar novo ciclo
         app.setHomeViewActive(true);
-        
         app.showToast("Sua compra foi salva e a lista reiniciada!");
 
-        // Contextual PWA Offer
         if (app.installPromptEvent && !sessionStorage.getItem('pwa_offered_contextual')) {
             sessionStorage.setItem('pwa_offered_contextual', 'true');
             app.showPWAInstallPromptIfAvailable();
@@ -344,12 +328,9 @@ const AppContent: React.FC = () => {
         await finishWithoutSaving();
         app.setCurrentMarketName(null);
         app.setIsSharedSession(false);
-        app.setFocusMode(false); // Reset focus mode
+        app.setFocusMode(false); 
         app.closeModal('savePurchase');
-        
-        // Redireciona para a Home para começar novo ciclo
         app.setHomeViewActive(true);
-        
         app.showToast("Lista limpa para uma nova compra.");
     }, [finishWithoutSaving, app]);
   
@@ -381,17 +362,15 @@ const AppContent: React.FC = () => {
             try {
                 await navigator.share({
                     title: 'ChecklistIA',
-                    text: 'Confira este assistente de compras inteligente! Crie listas a partir de receitas e organize suas compras.',
+                    text: 'Confira este assistente de compras inteligente!',
                     url: shareUrl,
                 });
             } catch (error) {
-                console.error('Erro ao compartilhar', error);
                 if ((error as any).name !== 'AbortError') {
                      app.showToast("Ocorreu um erro ao compartilhar. Tente copiar o link.");
                 }
             }
         } else {
-            // Fallback for browsers without share API
             try {
                 await navigator.clipboard.writeText(displayUrl);
                 app.showToast("Link copiado para a área de transferência!");
@@ -402,33 +381,26 @@ const AppContent: React.FC = () => {
     };
   
     const handleStartShopping = async (marketName: string) => {
-        // Detect if we are in "Edit Mode" (renaming) based on whether a name was already set
         const isRenaming = !!app.currentMarketName;
 
         app.setCurrentMarketName(marketName);
-        app.setHomeViewActive(false); // Make sure we show the list view
+        app.setHomeViewActive(false); 
         app.closeModal('startShopping');
         
-        // AUTO-ADD LOGIC: If a recipe was pending, find it and add it automatically.
         if (app.pendingExploreRecipe) {
             const recipeName = app.pendingExploreRecipe;
             const recipe = app.getCachedRecipe(recipeName);
 
             if (recipe) {
-                // Recipe object found synchronously
                 await app.addRecipeToShoppingList(recipe);
                 app.setPendingExploreRecipe(null);
-                // The toast is handled inside addRecipeToShoppingList
             } else {
-                // Fallback: If not found in cache (rare), reopen modal to fetch
                 setTimeout(() => {
                     app.showRecipe(recipeName);
                     app.setPendingExploreRecipe(null);
                 }, 300);
             }
         } else {
-            // If just starting a generic list, prompt to add first item
-            // BUT NOT if we are just renaming the market
             if (!isRenaming) {
                 app.openModal('addItem');
             }
@@ -448,7 +420,6 @@ const AppContent: React.FC = () => {
         app.openModal('shareList'); 
     }
 
-    // UPDATED Handlers for Recipe Decision
     const handleAddToCurrentList = () => {
         app.closeModal('recipeDecision');
         if (app.pendingExploreRecipe) {
@@ -464,10 +435,9 @@ const AppContent: React.FC = () => {
     };
 
     const handleStartNewListForRecipe = async () => {
-        await handleFinishWithoutSaving(); // Clears list
+        await handleFinishWithoutSaving(); 
         app.closeModal('recipeDecision');
         if (app.pendingExploreRecipe) {
-            // Start fresh -> Show list view -> Add Recipe
             app.setHomeViewActive(false);
             const recipe = app.getCachedRecipe(app.pendingExploreRecipe);
             if (recipe) {
@@ -480,13 +450,10 @@ const AppContent: React.FC = () => {
         }
     };
 
-    // Logic to switch between list and empty state view
     const showHomeView = (items.length === 0 && !app.currentMarketName) || app.isHomeViewActive;
     
-    // VISIBILITY FLAG FOR SESSION BAR
     const showSessionBar = ((items.length > 0 || app.currentMarketName) && !app.isHomeViewActive);
 
-    // Componente de Botão da Barra de Navegação
     const NavButton: React.FC<{ 
         icon: string | React.ReactNode; 
         label?: string; 
@@ -531,29 +498,16 @@ const AppContent: React.FC = () => {
     return (
         <div className="w-full h-[100dvh] bg-background-light dark:bg-background-dark lg:bg-[#121212] lg:dark:bg-[#121212] lg:flex overflow-hidden">
         
-            {/* Coluna 1: Web Sidebar Left */}
             <WebSidebarLeft />
 
-            {/* Colunas 2 e 3: O Aplicativo (50% da tela) */}
             <div className="relative w-full lg:flex-1 lg:min-w-0 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu" style={{contain: 'strict'}}>
                 
-                {/* Snowflakes for Christmas Theme */}
                 {app.theme === 'christmas' && (
                     <div aria-hidden="true" className="pointer-events-none">
-                        <div className="snowflake">❅</div>
-                        <div className="snowflake">❆</div>
-                        <div className="snowflake">❅</div>
-                        <div className="snowflake">❆</div>
-                        <div className="snowflake">❅</div>
-                        <div className="snowflake">❆</div>
-                        <div className="snowflake">❅</div>
-                        <div className="snowflake">❆</div>
-                        <div className="snowflake">❅</div>
-                        <div className="snowflake">❆</div>
+                        {[...Array(10)].map((_, i) => <div key={i} className="snowflake">❅</div>)}
                     </div>
                 )}
 
-                {/* Fireworks for New Year Theme */}
                 {app.theme === 'newyear' && <NewYearFireworks />}
 
                 {app.toastMessage && (
@@ -563,13 +517,9 @@ const AppContent: React.FC = () => {
                     </div>
                 )}
                 
-                {/* Cabeçalho - Oculto no Desktop (pois já tem a sidebar) e no Modo Foco 
-                    MUDANÇA: absolute top-0 para sobrepor o scroll da main
-                */}
                 <header className={`absolute top-0 left-0 right-0 z-[115] flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'hidden' : 'block'} bg-white/70 dark:bg-black/60 backdrop-blur-xl border-b border-white/20 dark:border-white/10 shadow-sm`}>
                     <div className="relative z-10 flex h-24 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
-                            {/* Logo SVG (Checkmark) - White BG, Blue Check, No Border (Simple) */}
                             <div 
                                 onClick={() => app.setHomeViewActive(true)}
                                 className="h-12 w-12 shrink-0 rounded-full shadow-md overflow-hidden bg-white flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
@@ -578,8 +528,7 @@ const AppContent: React.FC = () => {
                                 <Logo className="w-8 h-8 text-blue-600" />
                             </div>
                             <div className="flex flex-col justify-center items-start">
-                            {/* APLICADO font-display AQUI */}
-                            <h1 translate="no" className={`text-xl font-bold tracking-tight leading-none drop-shadow-md flex items-baseline font-display ${app.theme === 'christmas' || app.theme === 'newyear' ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' : 'text-slate-800 dark:text-white'}`}>
+                            <h1 translate="no" className={`text-xl font-bold tracking-tight leading-none drop-shadow-md flex items-baseline ${app.theme === 'christmas' || app.theme === 'newyear' ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' : 'text-slate-800 dark:text-white'}`}>
                                 {app.theme === 'newyear' ? 'Feliz 2026!' : (
                                     <>
                                         <span>Checklist</span>
@@ -591,18 +540,16 @@ const AppContent: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                             {/* 1. ÍCONE DE HUB SOCIAL (Chef's Hat/Restaurant) - VISÍVEL APENAS PARA ADMIN POR ENQUANTO */}
                             {app.isAdmin && (
                                 <button 
                                     onClick={() => app.openModal('recipeAssistant')} 
                                     className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-gray-700"
-                                    title="Hub Social / Receitas da Comunidade"
+                                    title="Hub Social"
                                 >
                                     <span className="material-symbols-outlined !text-2xl text-primary dark:text-orange-400">restaurant</span>
                                 </button>
                             )}
 
-                            {/* USER PROFILE / APP OPTIONS TRIGGER */}
                             <div className="relative">
                                 <button onClick={handleProfileClick} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-gray-700 overflow-hidden border-2 border-white shadow-sm">
                                     {user?.photoURL ? (
@@ -612,7 +559,6 @@ const AppContent: React.FC = () => {
                                     )}
                                 </button>
                                 
-                                {/* NOTIFICATION BADGE ON PROFILE */}
                                 {showProfileBadge && (
                                     <button 
                                         onClick={handleProfileClick}
@@ -628,14 +574,11 @@ const AppContent: React.FC = () => {
                     </div>
                 </header>
 
-                {/* BARRA DE SESSÃO ATIVA (SUB-TOPO) - VISÍVEL APENAS QUANDO HÁ ITENS OU NOME DEFINIDO (E NÃO ESTÁ NA HOME) 
-                    MUDANÇA: Lógica dinâmica para topo (Mobile Normal vs Focus vs Desktop)
-                */}
                 {showSessionBar && (
                     <div className={`absolute left-0 right-0 z-[112] w-full bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm animate-slideUp overflow-visible transition-all duration-300 ${app.isFocusMode ? 'top-0' : 'top-24 lg:top-0'}`}>
                        <div 
                          className="flex flex-col cursor-pointer flex-1 min-w-0"
-                         onClick={() => app.openModal('startShopping')} // Reabre para editar nome
+                         onClick={() => app.openModal('startShopping')}
                        >
                           <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-0.5">Local de Compra</span>
                           <div className="flex items-center gap-2 group">
@@ -646,10 +589,8 @@ const AppContent: React.FC = () => {
                           </div>
                        </div>
 
-                       {/* Right Action Icons */}
                        <div className="flex items-center justify-end pl-2 gap-2">
                           
-                          {/* 1. CART BUTTON (New Location) */}
                           <button
                             onClick={() => app.showCartTooltip()}
                             className="relative h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-400 transition-colors"
@@ -663,7 +604,6 @@ const AppContent: React.FC = () => {
                             )}
                           </button>
 
-                          {/* 2. Share/Sync Button */}
                           {app.isSharedSession ? (
                              <div className="flex -space-x-3 items-center relative animate-fadeIn" title="Sincronizado">
                                 <div className="relative z-10 rounded-full ring-2 ring-background-light dark:ring-background-dark">
@@ -699,14 +639,13 @@ const AppContent: React.FC = () => {
                              </button>
                           )}
                             
-                            {/* 3. Focus Mode Button (Mobile Only via lg:hidden) */}
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     app.setFocusMode(!app.isFocusMode);
                                 }}
                                 className="h-10 w-10 flex lg:hidden items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 transition-colors"
-                                title={app.isFocusMode ? "Sair do modo foco" : "Modo foco (tela cheia)"}
+                                title={app.isFocusMode ? "Sair do modo foco" : "Modo foco"}
                             >
                                 <span className="material-symbols-outlined">
                                     {app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}
@@ -716,7 +655,6 @@ const AppContent: React.FC = () => {
                     </div>
                 )}
 
-                {/* --- TOOLTIP DE ITENS COMPRADOS (REPOSICIONADO PARA O TOPO) --- */}
                 {app.isCartTooltipVisible && showSessionBar && (
                     <div className={`absolute right-4 z-[130] w-auto max-w-[200px] bg-zinc-800/95 backdrop-blur-md border border-white/10 text-white rounded-xl shadow-2xl animate-fadeIn p-3 pointer-events-none transition-all duration-300 ${app.isFocusMode ? 'top-16' : 'top-40 lg:top-16'}`}>
                         <div className="flex items-center gap-2 mb-1">
@@ -726,18 +664,10 @@ const AppContent: React.FC = () => {
                         <p className="text-[10px] text-gray-300 leading-tight">
                             Seus itens marcados estão salvos. Finalize a compra para limpar a lista.
                         </p>
-                        {/* Seta do tooltip apontando para cima (para o botão) */}
                         <div className="absolute w-3 h-3 bg-zinc-800/95 rotate-45 border-l border-t border-white/10 -top-1.5 right-14"></div>
                     </div>
                 )}
 
-                {/* Conteúdo Rolável 
-                    MUDANÇA: Padding dinâmico complexo para lidar com:
-                    1. Mobile Normal (Header + SessionBar) -> pt-40
-                    2. Mobile Focus (SessionBar only) -> pt-20
-                    3. Desktop (SessionBar only) -> pt-20
-                    4. No SessionBar scenarios
-                */}
                 <main className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300 ${
                     showSessionBar 
                         ? (app.isFocusMode ? 'pt-20' : 'pt-40 lg:pt-20') 
@@ -761,8 +691,6 @@ const AppContent: React.FC = () => {
                     </div>
                 </main>
 
-                {/* Desktop Floating Add Button - Only visible when not on home */}
-                {/* MOVED OUTSIDE <main> TO PREVENT SCROLLING */}
                 {!showHomeView && (
                     <button 
                         onClick={() => app.openModal('addItem')}
@@ -773,15 +701,11 @@ const AppContent: React.FC = () => {
                     </button>
                 )}
 
-                {/* Elementos Absolutos Presos Dentro do App */}
-                {(!showHomeView) && <SlideToFinish total={formattedTotal} count={purchasedItemsCount} onFinish={() => app.openModal('savePurchase')} />}
+                {(!showHomeView) && <SlideToFinish total={formattedTotal} onFinish={() => app.openModal('savePurchase')} />}
 
-                {/* --- RODAPÉ ESTILO APP (FIXO BOTTOM BAR) --- */}
-                {/* Oculto em Desktop pois a navegação está na sidebar esquerda */}
                 <footer className="fixed lg:hidden bottom-0 w-full z-[100] bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-t border-white/20 dark:border-white/10 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] pb-safe-area transition-all duration-300">
                     <div className="flex items-end justify-between px-2 h-16 w-full max-w-full">
                         
-                        {/* 1. HOME (Verde - Início) */}
                         <div className="flex-1 h-full flex items-center justify-center">
                             <NavButton 
                                 icon="home" 
@@ -791,7 +715,6 @@ const AppContent: React.FC = () => {
                             />
                         </div>
 
-                        {/* 2. FAVORITOS (Substitui Ofertas nesta posição) */}
                         <div className="flex-1 h-full flex items-center justify-center">
                             <NavButton 
                                 icon="favorite" 
@@ -808,21 +731,16 @@ const AppContent: React.FC = () => {
                             />
                         </div>
 
-                        {/* 3. AÇÃO CENTRAL: ADICIONAR (+) OU IR PARA LISTA (CART) */}
                         <div className="flex-1 h-full flex items-center justify-center relative">
                             <button 
                                 onClick={() => {
                                     if (app.isHomeViewActive) {
-                                        // SE ESTIVER NA HOME: Verifica se existe lista ativa
-                                        // Se tiver itens ou nome de mercado, vai para lista
                                         if (items.length > 0 || app.currentMarketName) {
                                             app.setHomeViewActive(false);
                                         } else {
-                                            // Se não, abre modal para começar
                                             app.openModal('startShopping');
                                         }
                                     } else {
-                                        // SE ESTIVER NA LISTA: Ação é "Adicionar Item"
                                         if (items.length === 0) app.openModal('startShopping');
                                         else app.openModal('addItem');
                                     }
@@ -838,20 +756,17 @@ const AppContent: React.FC = () => {
                             </button>
                         </div>
 
-                        {/* 4. OFERTAS (Movido para cá, onde estava o Histórico) */}
                         <div className="flex-1 h-full flex items-center justify-center">
                             <NavButton 
-                                icon="local_offer" // Changed from redeem
+                                icon="local_offer" 
                                 label="Ofertas" 
                                 onClick={() => app.openModal('offers')}
                                 active={app.isOffersModalOpen}
                             />
                         </div>
 
-                        {/* 5. FERRAMENTAS / MENU */}
                         <div className="flex-1 h-full flex items-center justify-center">
                             <div className="relative">
-                                {/* GATILHO PARA A CAIXA VERDE (GRID DE FERRAMENTAS) */}
                                 <NavButton 
                                     icon={<span className="material-symbols-outlined text-[28px] animate-color-pulse">auto_awesome</span>}
                                     label="Menu" 
@@ -863,7 +778,6 @@ const AppContent: React.FC = () => {
                     </div>
                 </footer>
 
-                {/* MODALS RENDERED HERE VIA APP MODALS COMPONENT */}
                 <AppModals 
                     sharedListData={sharedListData}
                     isImportingShare={isImportingShare}
@@ -884,13 +798,11 @@ const AppContent: React.FC = () => {
                 />
             </div>
 
-            {/* Coluna 4: Web Sidebar Right */}
             <WebSidebarRight />
         </div>
     );
 };
 
-// Renderização Principal do App
 const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(

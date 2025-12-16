@@ -8,8 +8,8 @@ export const AboutContent: React.FC = () => {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white border-2 border-blue-100 text-blue-600 shadow-sm">
                <Logo className="w-10 h-10"/>
             </div>
-            {/* APLICADO font-display AQUI */}
-            <div className="flex items-baseline justify-center gap-0.5 font-display">
+            {/* REMOVIDO font-display DAQUI */}
+            <div className="flex items-baseline justify-center gap-0.5">
                 <h2 className="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark">Checklist</h2>
                 <h2 className="text-2xl font-bold text-blue-600 dark:text-blue-400">IA</h2>
                 <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-orange-700 dark:bg-orange-900/60 dark:text-orange-200 font-sans">Beta</span>
