@@ -46,6 +46,7 @@ interface AppContextType {
     isToolsModalOpen: boolean;
     isProductDetailsModalOpen: boolean;
     isUnitConverterModalOpen: boolean; 
+    isContentFactoryModalOpen: boolean; // NOVO: Controle da Fábrica
     
     // Modal Controls
     openModal: (modal: string) => void;
@@ -103,6 +104,7 @@ interface AppContextType {
     getCategoryRecipes: (categoryKey: string) => FullRecipe[];
     getCachedRecipe: (name: string) => FullRecipe | undefined;
     getRandomCachedRecipe: () => FullRecipe | null;
+    generateKeywords: (text: string) => string[]; // NOVO: Helper exposto
 
     // Editing & Duplicates
     editingItemId: string | null;
@@ -195,6 +197,21 @@ const ignorePermissionError = (err: any) => {
     return false;
 };
 
+// Helper para gerar palavras-chave (Keywords) de busca
+export const generateKeywords = (text: string): string[] => {
+    if (!text) return [];
+    
+    // Lista de palavras irrelevantes para busca
+    const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero'];
+    
+    return text
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[^a-z0-9\s]/g, '') // Remove caracteres especiais
+        .split(/\s+/) // Divide por espaços
+        .filter(word => word.length > 2 && !stopWords.includes(word)); // Remove curtas e stop words
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
     const { user, pendingAdminInvite } = useAuth();
@@ -225,7 +242,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isThemeRecipesModalOpen: false,
         isToolsModalOpen: false,
         isProductDetailsModalOpen: false,
-        isUnitConverterModalOpen: false
+        isUnitConverterModalOpen: false,
+        isContentFactoryModalOpen: false // NOVO
     });
     
     const [theme, setThemeState] = useState<Theme>(() => {
@@ -305,6 +323,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!db) return;
         const loadData = async () => {
             try {
+                // Carrega destaque
                 const qFeatured = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(30));
                 const snapshotFeatured = await getDocs(qFeatured);
                 const recipesPool: FullRecipe[] = [];
@@ -323,7 +342,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 
                 setFeaturedRecipes(shuffled.slice(0, 5));
 
-                const qCache = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(150));
+                // Carrega Cache Global (Aumentado para 300 para melhor hit rate)
+                const qCache = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(300));
                 const snapshotCache = await getDocs(qCache);
                 const cachedRecipes: FullRecipe[] = [];
                 snapshotCache.forEach(doc => {
@@ -383,6 +403,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal !== 'auth') setAuthTrigger(null);
         
         let modalKey = `is${modal.charAt(0).toUpperCase() + modal.slice(1)}ModalOpen`;
+        // Mapping manual para casos especiais
         if (modal === 'admin') modalKey = 'isAdminModalOpen';
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
@@ -396,6 +417,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'tools') modalKey = 'isToolsModalOpen';
         if (modal === 'productDetails') modalKey = 'isProductDetailsModalOpen';
         if (modal === 'converter') modalKey = 'isUnitConverterModalOpen';
+        if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
         
         setModalStates(prev => ({...prev, [modalKey]: true}));
     };
@@ -415,6 +437,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'tools') modalKey = 'isToolsModalOpen';
         if (modal === 'productDetails') modalKey = 'isProductDetailsModalOpen';
         if (modal === 'converter') modalKey = 'isUnitConverterModalOpen';
+        if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
 
          if (modal.toLowerCase() === 'tour') {
             localStorage.setItem('hasSeenOnboardingTour', 'true');
@@ -486,6 +509,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         
         if (recipeToDisplay) {
+            // Se já tem a receita completa em cache/memória, exibe imediatamente
+            // Verificação simples de integridade
             const isHealthy = Array.isArray(recipeToDisplay.ingredients) && recipeToDisplay.ingredients.length > 0;
 
             if (isHealthy) {
@@ -497,11 +522,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
 
+        // Se não achou ou está quebrada, busca
         const recipeName = typeof input === 'string' ? input : input.name;
+        // Tenta recuperar imagem do cache mesmo se a receita estiver quebrada
         const cachedBroken = getCachedRecipe(recipeName);
         const existingImage = (typeof input !== 'string' ? input.imageUrl : undefined) || cachedBroken?.imageUrl;
         
-        showToast(existingImage ? "Restaurando receita..." : "Criando receita com IA...");
+        // Feedback visual
+        if (!existingImage) {
+            // Se não tem imagem, é provável que vá gerar uma nova
+            showToast("O Chef IA está procurando no livro de receitas...");
+        } else {
+            showToast("Restaurando receita...");
+        }
+
         fetchRecipeDetails(recipeName, undefined, false);
     };
 
@@ -557,15 +591,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!apiKey) return;
         
         // --- BACKGROUND FIRE AND FORGET (PERSISTENT) ---
-        // Removido o timeout de 20s. Agora tentamos até conseguir.
-        // A UX (Placeholder do Chef) cuida da espera. O Acervo é prioridade.
         
         try {
              const ai = new GoogleGenAI({ apiKey });
-             
-             // Usa callGenAIWithRetry com 3 tentativas (padrão)
-             // Se falhar por cota, o backoff vai cuidar. Se falhar muito, falha silenciosamente no console,
-             // mas não cancelamos a intenção no banco (o modal vai mostrar o chef).
              
              const response: any = await callGenAIWithRetry(() => ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
@@ -606,30 +634,67 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              }
         } catch (error) {
             console.warn("Imagem não gerada (Erro na API):", error);
-            // Não limpamos o state aqui. Deixamos o placeholder do Chef.
-            // O usuário pode tentar novamente abrindo a receita depois.
         }
     };
 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
         if (!db || !queryStr || queryStr.length < 2) return [];
         try {
+            // Normalização básica para busca de prefixo (legado, mantido para fallback)
             const normalizedQuery = queryStr.charAt(0).toUpperCase() + queryStr.slice(1).toLowerCase();
-            const q = query(
+            
+            // BUSCA INTELIGENTE POR KEYWORDS
+            // 1. Gera keywords da busca
+            const searchKeywords = generateKeywords(queryStr);
+            
+            if (searchKeywords.length > 0) {
+                // 2. Busca no Firestore por array-contains-any (limite 10 keywords)
+                // Pega até 5 resultados
+                const q = query(
+                    collection(db, 'global_recipes'),
+                    where('keywords', 'array-contains-any', searchKeywords.slice(0, 10)),
+                    limit(10)
+                );
+                
+                const snapshot = await getDocs(q);
+                
+                if (!snapshot.empty) {
+                    const results: FullRecipe[] = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data() as FullRecipe;
+                        if (data.name) {
+                            results.push({ ...data, imageSource: 'cache' });
+                        }
+                    });
+                    
+                    // Client-side Ranking: Ordena por número de keywords coincidentes
+                    results.sort((a, b) => {
+                        const countMatches = (r: FullRecipe) => {
+                            if (!r.keywords) return 0;
+                            return r.keywords.filter(k => searchKeywords.includes(k)).length;
+                        };
+                        return countMatches(b) - countMatches(a);
+                    });
+                    
+                    return results.slice(0, 5); // Retorna top 5
+                }
+            }
+
+            // Fallback para busca por prefixo (se keywords falhar ou for antiga)
+            const qFallback = query(
                 collection(db, 'global_recipes'),
                 where('name', '>=', normalizedQuery),
                 where('name', '<=', normalizedQuery + '\uf8ff'),
                 limit(5)
             );
-            const snapshot = await getDocs(q);
-            const results: FullRecipe[] = [];
-            snapshot.forEach(doc => {
+            const snapshotFallback = await getDocs(qFallback);
+            const fallbackResults: FullRecipe[] = [];
+            snapshotFallback.forEach(doc => {
                 const data = doc.data() as FullRecipe;
-                if (data.name) {
-                    results.push({ ...data, imageSource: 'cache' });
-                }
+                if (data.name) fallbackResults.push({ ...data, imageSource: 'cache' });
             });
-            return results;
+            return fallbackResults;
+
         } catch (error) {
             console.error("Erro ao buscar receitas globais:", error);
             return [];
@@ -637,8 +702,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, []);
 
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
+        // --- ETAPA 1: BUSCA GULOSA NO ACERVO (GREEDY DB SEARCH) ---
+        // Se temos um nome e não é upload de imagem, tenta achar no DB antes de gastar token
+        if (recipeName && !imageBase64) {
+            setIsRecipeLoading(true);
+            try {
+                // 1. Tenta cache local primeiro (instantâneo)
+                const localMatch = getCachedRecipe(recipeName);
+                if (localMatch && localMatch.ingredients && localMatch.ingredients.length > 0) {
+                    console.log("DB Hit (Local Cache):", localMatch.name);
+                    setSelectedRecipe(localMatch);
+                    setFullRecipes(prev => ({...prev, [localMatch.name]: localMatch}));
+                    closeModal('recipeAssistant');
+                    setIsRecipeLoading(false);
+                    if (autoAdd) addRecipeToShoppingList(localMatch);
+                    return;
+                }
+
+                // 2. Tenta busca no DB (rápida)
+                const dbMatches = await searchGlobalRecipes(recipeName);
+                if (dbMatches.length > 0) {
+                    // Pega o melhor match (primeiro da lista rankeada)
+                    const bestMatch = dbMatches[0];
+                    console.log("DB Hit (Firestore):", bestMatch.name);
+                    
+                    // Valida se é realmente o que o usuário quer (match fuzzy simples)
+                    // Ex: Usuário pede "Bolo", retorna "Bolo de Cenoura" -> Aceitável.
+                    // Ex: Usuário pede "Feijoada", retorna "Feijoada Completa" -> Aceitável.
+                    
+                    setSelectedRecipe(bestMatch);
+                    setFullRecipes(prev => ({...prev, [bestMatch.name]: bestMatch}));
+                    closeModal('recipeAssistant');
+                    setIsRecipeLoading(false);
+                    if (autoAdd) addRecipeToShoppingList(bestMatch);
+                    return;
+                }
+            } catch (e) {
+                console.warn("Falha na busca preliminar, seguindo para IA:", e);
+                // Continua para a geração se der erro no DB
+            }
+        }
+
+        // --- ETAPA 2: GERAÇÃO COM IA (Se não achou nada) ---
         if (!apiKey) {
             setRecipeError("Chave de IA não configurada. Verifique se o projeto tem acesso.");
+            setIsRecipeLoading(false);
             return;
         }
 
@@ -709,11 +817,15 @@ O formato deve ser EXATAMENTE este:
             const existingImage = currentRecipe?.imageUrl || cachedRecipe?.imageUrl;
             const existingSource = currentRecipe?.imageSource || cachedRecipe?.imageSource;
 
+            // Gera Keywords para indexação futura
+            const keywords = generateKeywords(finalRecipeName);
+
             const fullRecipeData: FullRecipe = { 
                 name: finalRecipeName, 
                 ...recipeDetails,
                 imageUrl: existingImage, 
-                imageSource: existingSource
+                imageSource: existingSource,
+                keywords: keywords // Salva keywords
             };
             
             // 1. Atualiza o estado da receita COM A IMAGEM ATUAL (se tiver)
@@ -731,7 +843,8 @@ O formato deve ser EXATAMENTE este:
             if (recipeDetails.imageQuery && !existingImage) {
                 // Não usamos await aqui para não bloquear a UI
                 generateRecipeImageBackground(fullRecipeData).catch(err => console.error("Background Gen Error:", err));
-            } else if (db && existingImage) {
+            } else if (db) {
+                // Se já tinha imagem (restaurada), apenas atualiza o DB com os novos dados (ex: keywords novas)
                 try {
                      const docId = finalRecipeName.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
                      await setDoc(doc(db, 'global_recipes', docId), fullRecipeData, { merge: true });
@@ -754,7 +867,7 @@ O formato deve ser EXATAMENTE este:
         } finally {
             setIsRecipeLoading(false);
         }
-    }, [items, findDuplicate, addIngredientsBatch, showToast, closeModal, apiKey, selectedRecipe, fullRecipes, globalRecipeCache]); 
+    }, [items, findDuplicate, addIngredientsBatch, showToast, closeModal, apiKey, selectedRecipe, fullRecipes, globalRecipeCache, getCachedRecipe, searchGlobalRecipes]); 
     
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const currentItemsCopy = [...items];
@@ -976,6 +1089,7 @@ O formato deve ser EXATAMENTE este:
         getCategoryRecipes,
         getCachedRecipe, 
         getRandomCachedRecipe,
+        generateKeywords, // EXPOSTO PARA USO NA FÁBRICA
         pendingAction, setPendingAction,
         selectedProduct,
         openProductDetails

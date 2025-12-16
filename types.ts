@@ -53,8 +53,10 @@ export interface FullRecipe {
   difficulty: 'Fácil' | 'Médio' | 'Difícil';
   cost: 'Baixo' | 'Médio' | 'Alto';
   imageUrl?: string;
-  imageSource?: 'cache' | 'genai'; // NOVO: Identifica a origem da imagem
+  imageSource?: 'cache' | 'genai';
   description?: string;
+  keywords?: string[]; // Indexação para busca rápida
+  tags?: string[]; // Categorização (ex: sobremesa, fit, vegano)
 }
 
 export interface RecipeSuggestion {

@@ -94,9 +94,13 @@ export const AppOptionsMenu: React.FC = () => {
                                     {/* Super Admin (Nível 1) vê tudo */}
                                     {app.isSuperAdmin && (
                                         <>
+                                            <button onClick={() => handleOptionClick('contentFactory')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-green-700 dark:text-green-300 pl-8 font-bold border-l-4 border-green-500 bg-green-50 dark:bg-green-900/20">
+                                                <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">factory</span>
+                                                Fábrica de Conteúdo
+                                            </button>
                                             <button onClick={() => handleOptionClick('adminRecipes')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors text-yellow-700 dark:text-yellow-300 pl-8 font-medium">
                                                 <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">menu_book</span>
-                                                Admin Receitas
+                                                Acervo de Receitas
                                             </button>
                                             <button onClick={() => handleOptionClick('adminReviews')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors text-yellow-700 dark:text-yellow-300 pl-8 font-medium">
                                                 <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">rate_review</span>
