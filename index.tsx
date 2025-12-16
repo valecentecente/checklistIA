@@ -13,12 +13,11 @@ import { Logo } from './components/Logo';
 import { WebSidebarLeft } from './components/layout/WebSidebarLeft';
 import { WebSidebarRight } from './components/layout/WebSidebarRight';
 import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
-import { ToolsGridModal } from './components/modals/ToolsGridModal'; // Needed for mobile triggering logic if kept, but also inside AppModals
+import { ToolsGridModal } from './components/modals/ToolsGridModal'; 
 import { AppModals } from './components/modals/AppModals';
 
 // ... SlideToFinish ...
-const SlideToFinish: React.FC<{ total: string; count: number; onFinish: () => void; }> = ({ total, count, onFinish }) => {
-    // ... logic ...
+const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
     const [sliderX, setSliderX] = React.useState(0);
     const [isDragging, setIsDragging] = React.useState(false);
     const sliderRef = React.useRef<HTMLDivElement>(null);
@@ -67,9 +66,8 @@ const SlideToFinish: React.FC<{ total: string; count: number; onFinish: () => vo
     return (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 animate-fadeIn" ref={containerRef}>
             <div className="relative h-16 w-64 rounded-full bg-surface-light dark:bg-surface-dark border border-primary/20 dark:border-primary/50 shadow-lg flex items-center p-2 overflow-hidden">
-                <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-12 w-24 bg-primary rounded-full flex flex-col items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none shadow-md leading-none" style={{ transform: `translateX(${sliderX}px)` }}>
-                    <span className="font-bold text-sm">{total}</span>
-                    <span className="text-[9px] opacity-90 font-medium mt-[1px]">{count} it.</span>
+                <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-12 w-24 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none" style={{ transform: `translateX(${sliderX}px)` }}>
+                    <span className="font-bold">{total}</span>
                 </div>
                 <div className="absolute w-full text-right pr-4 text-primary dark:text-orange-300 font-semibold text-sm animate-pulse" style={{ opacity: isDragging ? 0 : 1, transition: 'opacity 0.2s' }}>
                     &gt;&gt;Finalizar
@@ -112,19 +110,18 @@ const NewYearFireworks: React.FC = () => {
 
 // ... AppContent ...
 const AppContent: React.FC = () => {
-    // ... all contexts hooks ...
+    // ... hooks ...
     const { user } = useAuth();
     const { items, formatCurrency, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, addItem, findDuplicate, importSharedList, addIngredientsBatch, saveReceivedListToHistory } = useShoppingList();
     const app = useApp();
   
-    // ... shared list logic ...
+    // ... (rest of logic: sharedList, badge, orientation) ...
     const [sharedListData, setSharedListData] = useState<{ marketName: string; items: any[]; author?: any } | null>(null);
     const [isImportingShare, setIsImportingShare] = useState(false);
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
     const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
 
     // NOTIFICATION BADGE LOGIC
-    // Armazena a contagem de notificações que o usuário "já viu" ao abrir o menu
     const [lastSeenNotificationCount, setLastSeenNotificationCount] = useState(0);
     
     // Mostra o badge apenas se houver notificações E a contagem atual for maior que a última vista
@@ -259,6 +256,7 @@ const AppContent: React.FC = () => {
         }
     }, [user, app]);
 
+    // ... (Add Item Handler) ...
     const handleAddItem = useCallback(async (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => {
         const duplicate = findDuplicate(item.name, items);
         const performAddItem = async () => {
@@ -278,12 +276,14 @@ const AppContent: React.FC = () => {
         }
     }, [items, addItem, app, findDuplicate]);
 
+    // ... (Memos for totals) ...
     const editingItem = useMemo(() => items.find(item => item.id === app.editingItemId) || null, [items, app.editingItemId]);
     const rawTotal = useMemo(() => items.filter(i => i.isPurchased).reduce((acc, item) => acc + item.calculatedPrice, 0), [items]);
     const purchasedItemsCount = useMemo(() => items.filter(item => item.isPurchased).length, [items]);
     const formattedTotal = useMemo(() => formatCurrency(rawTotal), [rawTotal, formatCurrency]);
     const budgetProgress = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.min((rawTotal / app.budget) * 100, 100), [rawTotal, app.budget]);
 
+    // ... (Grouped Items Memo) ...
     const groupedItems = useMemo(() => {
         const groups: Record<string, ShoppingItem[]> = {};
         if (app.groupingMode === 'aisle') {
@@ -319,6 +319,7 @@ const AppContent: React.FC = () => {
         return sortedGroups;
     }, [items, app.groupingMode, app.itemCategories]);
 
+    // ... (Handlers) ...
     const handleSavePurchase = useCallback(async (marketName: string) => {
         const finalMarketName = marketName || app.currentMarketName; // Usa o nome passado (editado ou não)
         await savePurchase(finalMarketName);
@@ -577,7 +578,8 @@ const AppContent: React.FC = () => {
                                 <Logo className="w-8 h-8 text-blue-600" />
                             </div>
                             <div className="flex flex-col justify-center items-start">
-                            <h1 translate="no" className={`text-xl font-bold tracking-tight leading-none drop-shadow-md flex items-baseline ${app.theme === 'christmas' || app.theme === 'newyear' ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' : 'text-slate-800 dark:text-white'}`}>
+                            {/* APLICADO font-display AQUI */}
+                            <h1 translate="no" className={`text-xl font-bold tracking-tight leading-none drop-shadow-md flex items-baseline font-display ${app.theme === 'christmas' || app.theme === 'newyear' ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' : 'text-slate-800 dark:text-white'}`}>
                                 {app.theme === 'newyear' ? 'Feliz 2026!' : (
                                     <>
                                         <span>Checklist</span>

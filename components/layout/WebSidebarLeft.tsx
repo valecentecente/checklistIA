@@ -107,7 +107,8 @@ export const WebSidebarLeft: React.FC = () => {
                     <Logo className="w-6 h-6" />
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-white leading-none">Checklist<span className="text-blue-500">IA</span></h1>
+                    {/* APLICADO font-display AQUI */}
+                    <h1 className="text-xl font-bold text-white leading-none font-display">Checklist<span className="text-blue-500">IA</span></h1>
                     <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Web Beta</span>
                 </div>
             </div>
