@@ -186,6 +186,15 @@ export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 3): P
     }
 };
 
+// Helper to ignore permission errors
+const ignorePermissionError = (err: any) => {
+    if (err.code === 'permission-denied' || err.message?.includes('Missing or insufficient permissions')) {
+        console.warn('Salvamento no acervo ignorado: Sem permissão (apenas Admin pode sobrescrever).');
+        return true;
+    }
+    return false;
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
     const { user, pendingAdminInvite } = useAuth();
@@ -578,8 +587,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                              imageSource: 'genai', 
                              createdAt: serverTimestamp()
                          }, { merge: true });
-                     } catch (err) {
-                         console.error("Erro ao salvar no acervo:", err);
+                     } catch (err: any) {
+                         if (!ignorePermissionError(err)) {
+                             console.error("Erro ao salvar no acervo:", err);
+                         }
                      }
                  }
              }
@@ -707,7 +718,11 @@ O formato deve ser EXATAMENTE este:
                 try {
                      const docId = finalRecipeName.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
                      await setDoc(doc(db, 'global_recipes', docId), fullRecipeData, { merge: true });
-                } catch(e) { console.error('Erro ao atualizar receita reparada no DB', e); }
+                } catch(e: any) { 
+                    if (!ignorePermissionError(e)) {
+                        console.error('Erro ao atualizar receita reparada no DB', e); 
+                    }
+                }
             }
 
         } catch (e: any) {
