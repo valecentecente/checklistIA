@@ -8,8 +8,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
   
   // No Vercel, as variáveis de sistema (Settings) estão em process.env
-  // Priorizamos a do sistema (Vercel) e fallback para o .env local
-  const apiKey = process.env.API_KEY || env.API_KEY;
+  // Prioridade: Vercel System Env -> .env local -> Hardcoded Fallback (Nova Chave)
+  const apiKey = process.env.API_KEY || env.API_KEY || "AIzaSyCMFoiE0lEg8mYhabQQF6JkwYbAp05rnFc";
 
   return {
     plugins: [react()],

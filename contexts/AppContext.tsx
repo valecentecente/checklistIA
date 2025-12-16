@@ -518,7 +518,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             img.src = base64Str;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; 
+                // OTIMIZAÇÃO DE PERFORMANCE:
+                // Reduzido para 512px para upload mais rápido em redes móveis
+                const MAX_WIDTH = 512; 
                 let width = img.width;
                 let height = img.height;
 
@@ -532,7 +534,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
                     ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    // Qualidade reduzida para 0.6 para arquivos menores
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
                 } else {
                     resolve(base64Str);
                 }
