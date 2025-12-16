@@ -46,7 +46,8 @@ interface AppContextType {
     isToolsModalOpen: boolean;
     isProductDetailsModalOpen: boolean;
     isUnitConverterModalOpen: boolean; 
-    isContentFactoryModalOpen: boolean; // NOVO: Controle da Fábrica
+    isContentFactoryModalOpen: boolean;
+    isRecipeSelectionModalOpen: boolean;
     
     // Modal Controls
     openModal: (modal: string) => void;
@@ -104,7 +105,12 @@ interface AppContextType {
     getCategoryRecipes: (categoryKey: string) => FullRecipe[];
     getCachedRecipe: (name: string) => FullRecipe | undefined;
     getRandomCachedRecipe: () => FullRecipe | null;
-    generateKeywords: (text: string) => string[]; // NOVO: Helper exposto
+    generateKeywords: (text: string) => string[];
+
+    // Recipe Search & Selection
+    recipeSearchResults: FullRecipe[];
+    currentSearchTerm: string;
+    handleRecipeSearch: (term: string) => Promise<void>;
 
     // Editing & Duplicates
     editingItemId: string | null;
@@ -164,7 +170,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Helper for retry logic specifically optimized for Free Tier Limits (429)
-// Automatically retries the function if it hits a rate limit
 export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 3): Promise<any> => {
     try {
         return await fn();
@@ -200,16 +205,13 @@ const ignorePermissionError = (err: any) => {
 // Helper para gerar palavras-chave (Keywords) de busca
 export const generateKeywords = (text: string): string[] => {
     if (!text) return [];
-    
-    // Lista de palavras irrelevantes para busca
     const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero'];
-    
     return text
         .toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-        .replace(/[^a-z0-9\s]/g, '') // Remove caracteres especiais
-        .split(/\s+/) // Divide por espaços
-        .filter(word => word.length > 2 && !stopWords.includes(word)); // Remove curtas e stop words
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+        .replace(/[^a-z0-9\s]/g, '') 
+        .split(/\s+/) 
+        .filter(word => word.length > 2 && !stopWords.includes(word)); 
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -243,7 +245,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isToolsModalOpen: false,
         isProductDetailsModalOpen: false,
         isUnitConverterModalOpen: false,
-        isContentFactoryModalOpen: false // NOVO
+        isContentFactoryModalOpen: false,
+        isRecipeSelectionModalOpen: false
     });
     
     const [theme, setThemeState] = useState<Theme>(() => {
@@ -288,9 +291,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
     const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>([]);
 
+    const [recipeSearchResults, setRecipeSearchResults] = useState<FullRecipe[]>([]);
+    const [currentSearchTerm, setCurrentSearchTerm] = useState('');
+
     const apiKey = process.env.API_KEY as string;
     
-    // Validar Admin
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
@@ -403,7 +408,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal !== 'auth') setAuthTrigger(null);
         
         let modalKey = `is${modal.charAt(0).toUpperCase() + modal.slice(1)}ModalOpen`;
-        // Mapping manual para casos especiais
         if (modal === 'admin') modalKey = 'isAdminModalOpen';
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
@@ -418,6 +422,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'productDetails') modalKey = 'isProductDetailsModalOpen';
         if (modal === 'converter') modalKey = 'isUnitConverterModalOpen';
         if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
+        if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
         
         setModalStates(prev => ({...prev, [modalKey]: true}));
     };
@@ -438,6 +443,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'productDetails') modalKey = 'isProductDetailsModalOpen';
         if (modal === 'converter') modalKey = 'isUnitConverterModalOpen';
         if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
+        if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
 
          if (modal.toLowerCase() === 'tour') {
             localStorage.setItem('hasSeenOnboardingTour', 'true');
@@ -509,8 +515,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         
         if (recipeToDisplay) {
-            // Se já tem a receita completa em cache/memória, exibe imediatamente
-            // Verificação simples de integridade
             const isHealthy = Array.isArray(recipeToDisplay.ingredients) && recipeToDisplay.ingredients.length > 0;
 
             if (isHealthy) {
@@ -522,15 +526,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
 
-        // Se não achou ou está quebrada, busca
         const recipeName = typeof input === 'string' ? input : input.name;
-        // Tenta recuperar imagem do cache mesmo se a receita estiver quebrada
         const cachedBroken = getCachedRecipe(recipeName);
         const existingImage = (typeof input !== 'string' ? input.imageUrl : undefined) || cachedBroken?.imageUrl;
         
-        // Feedback visual
         if (!existingImage) {
-            // Se não tem imagem, é provável que vá gerar uma nova
             showToast("O Chef IA está procurando no livro de receitas...");
         } else {
             showToast("Restaurando receita...");
@@ -561,8 +561,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             img.src = base64Str;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                // OTIMIZAÇÃO DE PERFORMANCE:
-                // Reduzido para 512px para upload mais rápido em redes móveis
                 const MAX_WIDTH = 512; 
                 let width = img.width;
                 let height = img.height;
@@ -577,7 +575,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
                     ctx.drawImage(img, 0, 0, width, height);
-                    // Qualidade reduzida para 0.5 para arquivos ainda menores
                     resolve(canvas.toDataURL('image/jpeg', 0.5));
                 } else {
                     resolve(base64Str);
@@ -589,20 +586,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const generateRecipeImageBackground = async (recipe: FullRecipe) => {
         if (!apiKey) return;
-        
-        // --- BACKGROUND FIRE AND FORGET (PERSISTENT) ---
-        
         try {
              const ai = new GoogleGenAI({ apiKey });
-             
              const response: any = await callGenAIWithRetry(() => ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
                  contents: {
                      parts: [{ text: `Foto profissional e apetitosa de: ${recipe.imageQuery}. Fotografia de comida.` }]
                  },
-                 config: {
-                     responseModalities: [Modality.IMAGE],
-                 },
+                 config: { responseModalities: [Modality.IMAGE] },
              }), 3);
 
              const part = response.candidates?.[0]?.content?.parts?.[0];
@@ -611,7 +602,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  const mimeType = part.inlineData.mimeType || 'image/jpeg';
                  const generatedUrl = `data:${mimeType};base64,${base64ImageBytes}`;
                  
-                 // Processamento e salvamento
                  handleRecipeImageGenerated(recipe.name, generatedUrl, 'genai');
 
                  if (db) {
@@ -640,24 +630,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
         if (!db || !queryStr || queryStr.length < 2) return [];
         try {
-            // Normalização básica para busca de prefixo (legado, mantido para fallback)
             const normalizedQuery = queryStr.charAt(0).toUpperCase() + queryStr.slice(1).toLowerCase();
-            
-            // BUSCA INTELIGENTE POR KEYWORDS
-            // 1. Gera keywords da busca
             const searchKeywords = generateKeywords(queryStr);
             
             if (searchKeywords.length > 0) {
-                // 2. Busca no Firestore por array-contains-any (limite 10 keywords)
-                // Pega até 5 resultados
                 const q = query(
                     collection(db, 'global_recipes'),
                     where('keywords', 'array-contains-any', searchKeywords.slice(0, 10)),
-                    limit(10)
+                    limit(15) 
                 );
-                
                 const snapshot = await getDocs(q);
-                
                 if (!snapshot.empty) {
                     const results: FullRecipe[] = [];
                     snapshot.forEach(doc => {
@@ -666,8 +648,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                             results.push({ ...data, imageSource: 'cache' });
                         }
                     });
-                    
-                    // Client-side Ranking: Ordena por número de keywords coincidentes
                     results.sort((a, b) => {
                         const countMatches = (r: FullRecipe) => {
                             if (!r.keywords) return 0;
@@ -675,12 +655,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         };
                         return countMatches(b) - countMatches(a);
                     });
-                    
-                    return results.slice(0, 5); // Retorna top 5
+                    return results; 
                 }
             }
 
-            // Fallback para busca por prefixo (se keywords falhar ou for antiga)
             const qFallback = query(
                 collection(db, 'global_recipes'),
                 where('name', '>=', normalizedQuery),
@@ -701,16 +679,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, []);
 
+    const handleRecipeSearch = async (term: string) => {
+        setIsRecipeLoading(true); 
+        try {
+            const results = await searchGlobalRecipes(term);
+            
+            if (results.length > 0) {
+                setRecipeSearchResults(results);
+                setCurrentSearchTerm(term);
+                closeModal('recipeAssistant'); 
+                openModal('recipeSelection'); 
+            } else {
+                fetchRecipeDetails(term);
+            }
+        } catch (error) {
+            console.error("Erro na busca handleRecipeSearch:", error);
+            fetchRecipeDetails(term); 
+        } finally {
+            setIsRecipeLoading(false);
+        }
+    };
+
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
-        // --- ETAPA 1: BUSCA GULOSA NO ACERVO (GREEDY DB SEARCH) ---
-        // Se temos um nome e não é upload de imagem, tenta achar no DB antes de gastar token
         if (recipeName && !imageBase64) {
             setIsRecipeLoading(true);
             try {
-                // 1. Tenta cache local primeiro (instantâneo)
                 const localMatch = getCachedRecipe(recipeName);
                 if (localMatch && localMatch.ingredients && localMatch.ingredients.length > 0) {
-                    console.log("DB Hit (Local Cache):", localMatch.name);
                     setSelectedRecipe(localMatch);
                     setFullRecipes(prev => ({...prev, [localMatch.name]: localMatch}));
                     closeModal('recipeAssistant');
@@ -719,17 +714,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     return;
                 }
 
-                // 2. Tenta busca no DB (rápida)
                 const dbMatches = await searchGlobalRecipes(recipeName);
                 if (dbMatches.length > 0) {
-                    // Pega o melhor match (primeiro da lista rankeada)
                     const bestMatch = dbMatches[0];
-                    console.log("DB Hit (Firestore):", bestMatch.name);
-                    
-                    // Valida se é realmente o que o usuário quer (match fuzzy simples)
-                    // Ex: Usuário pede "Bolo", retorna "Bolo de Cenoura" -> Aceitável.
-                    // Ex: Usuário pede "Feijoada", retorna "Feijoada Completa" -> Aceitável.
-                    
                     setSelectedRecipe(bestMatch);
                     setFullRecipes(prev => ({...prev, [bestMatch.name]: bestMatch}));
                     closeModal('recipeAssistant');
@@ -739,11 +726,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             } catch (e) {
                 console.warn("Falha na busca preliminar, seguindo para IA:", e);
-                // Continua para a geração se der erro no DB
             }
         }
 
-        // --- ETAPA 2: GERAÇÃO COM IA (Se não achou nada) ---
         if (!apiKey) {
             setRecipeError("Chave de IA não configurada. Verifique se o projeto tem acesso.");
             setIsRecipeLoading(false);
@@ -762,7 +747,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  systemPrompt += ` Analise a imagem fornecida, identifique o prato (se houver input de texto "${recipeName}", use-o como contexto) e gere a receita para ele.`;
             }
 
-            systemPrompt += `\nIMPORTANTE: Retorne APENAS o objeto JSON puro, sem markdown (sem \`\`\`json), sem comentários e sem texto adicional. Certifique-se de que todas as listas e objetos estejam corretamente fechados com vírgulas onde necessário.
+            systemPrompt += `\nIMPORTANTE: Retorne APENAS o objeto JSON puro.
 O formato deve ser EXATAMENTE este:
 {
   "name": "Nome Identificado do Prato",
@@ -785,18 +770,14 @@ O formato deve ser EXATAMENTE este:
             }
             parts.push({ text: systemPrompt });
 
-            // WRAPPED IN RETRY
             const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash', 
                 contents: { parts },
-                config: {
-                    responseMimeType: "application/json",
-                }
+                config: { responseMimeType: "application/json" }
             }));
 
             let textResponse = response.text || "";
             textResponse = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-            
             const firstBrace = textResponse.indexOf('{');
             const lastBrace = textResponse.lastIndexOf('}');
             if (firstBrace !== -1 && lastBrace !== -1) {
@@ -805,21 +786,14 @@ O formato deve ser EXATAMENTE este:
 
             const recipeDetails = JSON.parse(textResponse);
             
-            if (!recipeDetails.ingredients || !Array.isArray(recipeDetails.ingredients)) {
-                recipeDetails.ingredients = [];
-            }
-            if (!recipeDetails.instructions || !Array.isArray(recipeDetails.instructions)) {
-                 recipeDetails.instructions = [];
-            }
+            if (!recipeDetails.ingredients || !Array.isArray(recipeDetails.ingredients)) recipeDetails.ingredients = [];
+            if (!recipeDetails.instructions || !Array.isArray(recipeDetails.instructions)) recipeDetails.instructions = [];
 
             const finalRecipeName = recipeDetails.name || recipeName || "Receita Identificada";
-            
             const cachedRecipe = getCachedRecipe(recipeName);
             const currentRecipe = selectedRecipe?.name === recipeName ? selectedRecipe : fullRecipes[recipeName];
             const existingImage = currentRecipe?.imageUrl || cachedRecipe?.imageUrl;
             const existingSource = currentRecipe?.imageSource || cachedRecipe?.imageSource;
-
-            // Gera Keywords para indexação futura
             const keywords = generateKeywords(finalRecipeName);
 
             const fullRecipeData: FullRecipe = { 
@@ -827,26 +801,21 @@ O formato deve ser EXATAMENTE este:
                 ...recipeDetails,
                 imageUrl: existingImage, 
                 imageSource: existingSource,
-                keywords: keywords // Salva keywords
+                keywords: keywords 
             };
             
-            // 1. Atualiza o estado da receita COM A IMAGEM ATUAL (se tiver)
             setFullRecipes(prev => ({...prev, [finalRecipeName]: fullRecipeData}));
             setSelectedRecipe(fullRecipeData);
             
-            // 2. Fecha o modal de "Carregando"
             closeModal('recipeAssistant');
 
             if (autoAdd) {
                 await addRecipeToShoppingList(fullRecipeData);
             }
 
-            // 3. Dispara a geração da imagem em SEGUNDO PLANO (sem await)
             if (recipeDetails.imageQuery && !existingImage) {
-                // Não usamos await aqui para não bloquear a UI
                 generateRecipeImageBackground(fullRecipeData).catch(err => console.error("Background Gen Error:", err));
             } else if (db) {
-                // Se já tinha imagem (restaurada), apenas atualiza o DB com os novos dados (ex: keywords novas)
                 try {
                      const docId = finalRecipeName.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
                      await setDoc(doc(db, 'global_recipes', docId), fullRecipeData, { merge: true });
@@ -900,7 +869,6 @@ O formato deve ser EXATAMENTE este:
                 const ai = new GoogleGenAI({ apiKey });
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue e Peixaria", "🧀 Frios e Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene Pessoal", "🐾 Pets", "🏠 Utilidades Domésticas", "❓ Outros" ];
                 
-                // WRAPPED IN RETRY
                 const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Use APENAS estas categorias: ${categories.join(', ')}. Retorne JSON array: [{"itemName": "Nome", "category": "Categoria"}]`,
@@ -945,62 +913,43 @@ O formato deve ser EXATAMENTE este:
         showRecipe(recipe);
     };
 
-    const shuffleArray = (array: FullRecipe[]) => {
-        const shuffled = [...array];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        return shuffled;
-    };
-
-    const getCategoryRecipes = (categoryKey: string): FullRecipe[] => {
-        if (globalRecipeCache.length === 0) return [];
-
-        let filtered: FullRecipe[] = [];
-
-        switch(categoryKey) {
-            case 'top10':
-                filtered = globalRecipeCache.slice(0, 10);
-                break;
-            case 'fast':
-                filtered = globalRecipeCache.filter(r => r.prepTimeInMinutes && r.prepTimeInMinutes <= 30);
-                break;
-            case 'new':
-                filtered = globalRecipeCache.slice(0, 15);
-                break;
-            case 'cheap':
-                filtered = globalRecipeCache.filter(r => r.cost === 'Baixo');
-                break;
-            case 'healthy':
-                filtered = globalRecipeCache.filter(r => 
-                    /salada|fit|saudável|legumes|vegetais|grelhado|frango|peixe/i.test(r.name) ||
-                    (r.ingredients && r.ingredients.some(i => /alface|couve|brócolis|espinafre/i.test(i.simplifiedName)))
-                );
-                break;
-            case 'dessert':
-                filtered = globalRecipeCache.filter(r => 
-                    /bolo|doce|chocolate|pudim|torta|mousse|sorvete|sobremesa|brigadeiro/i.test(r.name)
-                );
-                break;
-            case 'random':
-                filtered = shuffleArray(globalRecipeCache).slice(0, 10);
-                break;
-            default:
-                filtered = globalRecipeCache.filter(r => r.name.toLowerCase().includes(categoryKey.toLowerCase()));
-        }
+    const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
+        const pool = globalRecipeCache.length > 0 ? globalRecipeCache : featuredRecipes;
         
-        return filtered;
-    };
+        const matches = (r: FullRecipe, terms: string[]) => {
+            const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
+            return terms.some(t => text.includes(t));
+        };
 
-    const getCategoryCount = (categoryKey: string): number => {
+        switch (categoryKey) {
+            case 'top10':
+                return pool.slice(0, 15);
+            case 'fast':
+                return pool.filter(r => (r.prepTimeInMinutes && r.prepTimeInMinutes <= 20) || matches(r, ['rápido', 'minutos', 'fácil', 'express']));
+            case 'new':
+                return pool.slice(0, 15);
+            case 'cheap':
+                return pool.filter(r => r.cost === 'Baixo' || matches(r, ['econômico', 'barato', 'simples', 'custo']));
+            case 'healthy':
+                return pool.filter(r => matches(r, ['fit', 'saudável', 'legumes', 'salada', 'integral', 'low carb', 'vegetariano', 'vegano', 'light']));
+            case 'dessert':
+                return pool.filter(r => matches(r, ['doce', 'sobremesa', 'bolo', 'torta', 'chocolate', 'pudim', 'mousse', 'açúcar']));
+            case 'random':
+                return [...pool].sort(() => 0.5 - Math.random()).slice(0, 10);
+            default:
+                return pool.slice(0, 10);
+        }
+    }, [globalRecipeCache, featuredRecipes]);
+
+    const getCategoryCount = useCallback((categoryKey: string) => {
         return getCategoryRecipes(categoryKey).length;
-    };
+    }, [getCategoryRecipes]);
 
-    const getCategoryCover = (categoryKey: string): string | undefined => {
+    const getCategoryCover = useCallback((categoryKey: string) => {
         const recipes = getCategoryRecipes(categoryKey);
-        return recipes.length > 0 ? recipes[0].imageUrl : undefined;
-    }
+        const withImage = recipes.find(r => r.imageUrl);
+        return withImage?.imageUrl;
+    }, [getCategoryRecipes]);
 
     const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
         const titles: Record<string, string> = {
@@ -1091,10 +1040,11 @@ O formato deve ser EXATAMENTE este:
         getCategoryRecipes,
         getCachedRecipe, 
         getRandomCachedRecipe,
-        generateKeywords, // EXPOSTO PARA USO NA FÁBRICA
+        generateKeywords, 
         pendingAction, setPendingAction,
         selectedProduct,
-        openProductDetails
+        openProductDetails,
+        recipeSearchResults, currentSearchTerm, handleRecipeSearch // EXPOSTOS
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

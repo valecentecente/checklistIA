@@ -19,7 +19,7 @@ const LoadingSpinner: React.FC = () => (
 
 
 export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails, isLoading, error, onClose }) => {
-  const { searchGlobalRecipes, handleRecipeImageGenerated, setFullRecipes, setSelectedRecipe, getRandomCachedRecipe } = useApp();
+  const { searchGlobalRecipes, handleRecipeImageGenerated, setFullRecipes, setSelectedRecipe, getRandomCachedRecipe, handleRecipeSearch } = useApp();
   const [recipeName, setRecipeName] = useState('');
   
   // Autocomplete States
@@ -32,9 +32,7 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
   const [currentSuggestion, setCurrentSuggestion] = useState<FullRecipe | null>(null);
   const [placeholderText, setPlaceholderText] = useState("Ex: Lasanha à bolonhesa");
 
-  // Rotação de sugestões do cache
   useEffect(() => {
-      // Pega uma inicial
       const initial = getRandomCachedRecipe();
       if (initial) {
           setCurrentSuggestion(initial);
@@ -47,19 +45,11 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
               setCurrentSuggestion(next);
               setPlaceholderText(`Ex: ${next.name}`);
           }
-      }, 4000); // Troca a cada 4 segundos
+      }, 4000); 
 
       return () => clearInterval(interval);
   }, [getRandomCachedRecipe]);
 
-  // Reset form when error occurs to allow retrying
-  useEffect(() => {
-     if (error) {
-         // Optional: Auto-focus or similar actions could go here
-     }
-  }, [error]);
-
-  // Click outside to close suggestions
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
           if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
@@ -70,7 +60,6 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
       return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Debounced Search Effect
   useEffect(() => {
       const timer = setTimeout(async () => {
           if (recipeName.length >= 3) {
@@ -83,28 +72,20 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
               setSuggestions([]);
               setShowSuggestions(false);
           }
-      }, 300); // 300ms debounce
+      }, 300); 
 
       return () => clearTimeout(timer);
   }, [recipeName, searchGlobalRecipes]);
 
   const handleSuggestionClick = (recipe: FullRecipe) => {
-      // 1. Salva no cache local para não perder
       setFullRecipes(prev => ({...prev, [recipe.name]: recipe}));
-      
-      // 2. Define como a receita selecionada ATUAL para abrir o modal imediatamente
-      // Isso pula a chamada de IA (onFetchDetails)
       setSelectedRecipe(recipe);
-      
-      // 3. Fecha o assistente
       onClose();
   };
 
   const handleDiceClick = () => {
       if (currentSuggestion) {
-          // Preenche o input
           setRecipeName(currentSuggestion.name);
-          // Abre diretamente a receita
           handleSuggestionClick(currentSuggestion);
       }
   };
@@ -114,28 +95,8 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
     const trimmedInput = recipeName.trim();
 
     if (trimmedInput && !isLoading) {
-      // TENTA ENCONTRAR NO ACERVO PRIMEIRO (PRIORIDADE TOTAL)
-      // Mesmo que o usuário não tenha clicado na sugestão, se ele der Enter
-      // e existir uma receita igual ou muito parecida, abrimos a do acervo.
-      
-      // Usa os resultados já carregados se disponíveis, ou busca novamente para garantir
-      let potentialMatches = suggestions;
-      if (potentialMatches.length === 0) {
-          potentialMatches = await searchGlobalRecipes(trimmedInput);
-      }
-
-      // Procura match exato (case insensitive)
-      const exactMatch = potentialMatches.find(r => r.name.toLowerCase() === trimmedInput.toLowerCase());
-
-      if (exactMatch) {
-          handleSuggestionClick(exactMatch);
-      } else {
-          // Se não achou exato, verifica se o primeiro resultado é muito forte
-          // Ex: Usuário digitou "Caipirinha", achou "Caipirinha de Limão". 
-          // Se for muito parecido, poderiamos usar, mas para segurança, se não for exato, chamamos a IA
-          // para garantir que o usuário tenha exatamente o que pediu.
-          onFetchDetails(trimmedInput);
-      }
+      // --- MUDANÇA CRÍTICA: AGORA CHAMA O FLUXO DA VITRINE PRIMEIRO ---
+      await handleRecipeSearch(trimmedInput);
     }
   };
 
@@ -163,7 +124,7 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
                 {/* Body Text */}
                 <div className="p-4 pb-2">
                     <p className="pb-3 pt-1 text-center text-base font-normal leading-normal text-[#1b140d] dark:text-gray-300">
-                        Digite o nome do prato, e a IA criará a lista de compras para você.
+                        Digite o nome do prato, e nós buscamos no acervo ou criamos para você.
                     </p>
                 </div>
 
@@ -196,7 +157,6 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
                                     </svg>
                                 </div>
                             ) : (
-                                /* Se tem texto, mostra X. Se não, mostra o Dado/Sorteio */
                                 recipeName ? (
                                     <button 
                                         type="button" 
@@ -241,7 +201,6 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
                                             onClick={() => handleSuggestionClick(recipe)}
                                             className="w-full text-left px-4 py-3 hover:bg-orange-50 dark:hover:bg-white/10 transition-colors flex items-center gap-3 group"
                                         >
-                                            {/* Thumbnail Placeholder or Image */}
                                             <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-black/20 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200 dark:border-gray-700">
                                                 {recipe.imageUrl ? (
                                                     <img src={recipe.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -296,10 +255,10 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
                         {isLoading ? (
                             <>
                             <LoadingSpinner />
-                            Gerando...
+                            Buscando...
                             </>
                         ) : (
-                            error ? 'Tentar Novamente' : 'Gerar Nova'
+                            'Continuar'
                         )}
                     </button>
                 </div>

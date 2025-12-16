@@ -41,7 +41,8 @@ import { AdminInviteModal } from './AdminInviteModal';
 import { TeamReportsModal } from './TeamReportsModal';
 import { ArcadeModal } from '../arcade/ArcadeModal'; 
 import { UnitConverterModal } from '../UnitConverterModal';
-import { AdminContentFactoryModal } from '../AdminContentFactoryModal'; // NOVO
+import { AdminContentFactoryModal } from '../AdminContentFactoryModal';
+import { RecipeSelectionModal } from '../RecipeSelectionModal'; // NOVO
 
 interface AppModalsProps {
     sharedListData: any;
@@ -101,6 +102,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <CalculatorModal isOpen={app.isCalculatorModalOpen} onClose={() => app.closeModal('calculator')} />
             <UnitConverterModal isOpen={app.isUnitConverterModalOpen} onClose={() => app.closeModal('converter')} /> 
             <ThemeRecipesModal />
+            <RecipeSelectionModal /> 
             <FavoriteRecipesModal isOpen={app.isFavoritesModalOpen} onClose={() => app.closeModal('favorites')} />
             <OffersModal isOpen={app.isOffersModalOpen} onClose={() => app.closeModal('offers')} />
             
