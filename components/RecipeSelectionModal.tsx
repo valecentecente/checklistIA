@@ -1,6 +1,8 @@
 
 import React from 'react';
 import { useApp } from '../contexts/AppContext';
+import { useShoppingList } from '../contexts/ShoppingListContext';
+import { useAuth } from '../contexts/AuthContext';
 import type { FullRecipe } from '../types';
 
 export const RecipeSelectionModal: React.FC = () => {
@@ -11,8 +13,12 @@ export const RecipeSelectionModal: React.FC = () => {
         currentSearchTerm,
         handleExploreRecipeClick,
         fetchRecipeDetails,
-        showToast
+        showToast,
+        openModal
     } = useApp();
+
+    const { toggleFavorite, isFavorite } = useShoppingList();
+    const { user } = useAuth();
 
     if (!isRecipeSelectionModalOpen) return null;
 
@@ -25,6 +31,27 @@ export const RecipeSelectionModal: React.FC = () => {
         showToast("Gerando nova receita com IA...");
         fetchRecipeDetails(currentSearchTerm);
         closeModal('recipeSelection');
+    };
+
+    const handleToggleFavorite = async (e: React.MouseEvent, recipe: FullRecipe) => {
+        e.stopPropagation();
+        if (!user) {
+            showToast("Faça login para salvar receitas.");
+            openModal('auth');
+            return;
+        }
+        await toggleFavorite(recipe);
+    };
+
+    const handleShare = async (e: React.MouseEvent, recipe: FullRecipe) => {
+        e.stopPropagation();
+        const text = `Confira a receita de ${recipe.name} no ChecklistIA!`;
+        if (navigator.share) {
+            try { await navigator.share({ title: recipe.name, text, url: window.location.href }); } catch {}
+        } else {
+            await navigator.clipboard.writeText(window.location.href);
+            showToast("Link copiado!");
+        }
     };
 
     return (
@@ -48,50 +75,96 @@ export const RecipeSelectionModal: React.FC = () => {
             <div className="w-full flex overflow-x-auto snap-x snap-mandatory gap-4 px-8 pb-8 pt-4 scrollbar-hide items-center h-[75vh]">
                 
                 {/* 1. Results Cards */}
-                {recipeSearchResults.map((recipe, idx) => (
-                    <div 
-                        key={idx} 
-                        onClick={() => handleSelect(recipe)}
-                        className="snap-center shrink-0 w-[85vw] sm:w-[350px] h-full relative rounded-3xl overflow-hidden shadow-2xl cursor-pointer group border border-white/10 transition-transform active:scale-95"
-                    >
-                        {/* Background Image */}
+                {recipeSearchResults.map((recipe, idx) => {
+                    const isSaved = isFavorite(recipe.name);
+                    // Simula uma nota alta para o visual "Instagram" (4.5 a 5.0)
+                    const fakeRating = (4.5 + (recipe.name.length % 5) / 10).toFixed(1);
+
+                    return (
                         <div 
-                            className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-                            style={{ 
-                                backgroundImage: recipe.imageUrl ? `url(${recipe.imageUrl})` : 'none',
-                                backgroundColor: '#222'
-                            }}
+                            key={idx} 
+                            onClick={() => handleSelect(recipe)}
+                            className="snap-center shrink-0 w-[85vw] sm:w-[350px] h-full relative rounded-3xl overflow-hidden shadow-2xl cursor-pointer group border border-white/10 transition-transform active:scale-95 bg-[#1a1a1a]"
                         >
-                            {!recipe.imageUrl && (
-                                <div className="w-full h-full flex items-center justify-center">
-                                    <span className="material-symbols-outlined text-6xl text-white/20">restaurant</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Gradient Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80"></div>
-
-                        {/* Content */}
-                        <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-start text-white">
-                            <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase mb-3">
-                                {recipe.prepTimeInMinutes ? `${recipe.prepTimeInMinutes} min` : 'Rápido'}
-                            </span>
-                            <h3 className="text-3xl font-bold leading-tight mb-2 font-display drop-shadow-lg">
-                                {recipe.name}
-                            </h3>
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
-                                <span className="material-symbols-outlined text-base">inventory_2</span>
-                                <span>{recipe.ingredients?.length || 0} ingredientes</span>
+                            {/* Background Image */}
+                            <div 
+                                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+                                style={{ 
+                                    backgroundImage: recipe.imageUrl ? `url(${recipe.imageUrl})` : 'none',
+                                    backgroundColor: '#222'
+                                }}
+                            >
+                                {!recipe.imageUrl && (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-6xl text-white/20">restaurant</span>
+                                    </div>
+                                )}
                             </div>
-                            
-                            <button className="mt-6 w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center gap-2">
-                                Escolher esta
-                                <span className="material-symbols-outlined">arrow_forward</span>
-                            </button>
+
+                            {/* Gradient Overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90"></div>
+
+                            {/* --- ACTION BUTTONS (TOP RIGHT) --- */}
+                            <div className="absolute top-4 right-4 z-20 flex flex-col gap-3">
+                                <button 
+                                    onClick={(e) => handleToggleFavorite(e, recipe)}
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 shadow-lg transition-all ${
+                                        isSaved 
+                                        ? 'bg-red-600 text-white scale-110 border-red-500' 
+                                        : 'bg-black/40 text-white hover:bg-white hover:text-red-500'
+                                    }`}
+                                >
+                                    <span className={`material-symbols-outlined text-xl ${isSaved ? 'font-variation-FILL-1' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
+                                        favorite
+                                    </span>
+                                </button>
+                                <button 
+                                    onClick={(e) => handleShare(e, recipe)}
+                                    className="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-white backdrop-blur-md border border-white/10 shadow-lg hover:bg-white hover:text-blue-600 transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-xl">share</span>
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-start text-white">
+                                
+                                {/* TAGS & RATING ROW */}
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                    {/* Rating Badge (Blue Checks) */}
+                                    <div className="flex items-center gap-1 bg-blue-600/20 backdrop-blur-md px-2 py-1 rounded-lg border border-blue-500/30">
+                                        <div className="flex text-blue-400 text-[10px] gap-[1px]">
+                                            {[1,2,3,4,5].map(i => (
+                                                <span key={i} className="material-symbols-outlined text-[12px] font-bold">check</span>
+                                            ))}
+                                        </div>
+                                        <span className="text-[10px] font-bold text-blue-100 ml-1">{fakeRating}</span>
+                                    </div>
+
+                                    {/* Prep Time Badge */}
+                                    <span className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[12px]">timer</span>
+                                        {recipe.prepTimeInMinutes ? `${recipe.prepTimeInMinutes} min` : 'Rápido'}
+                                    </span>
+                                </div>
+
+                                <h3 className="text-3xl font-bold leading-tight mb-2 font-display drop-shadow-lg line-clamp-2">
+                                    {recipe.name}
+                                </h3>
+                                
+                                <div className="flex items-center gap-2 text-sm text-gray-300 mb-6">
+                                    <span className="material-symbols-outlined text-base">inventory_2</span>
+                                    <span>{recipe.ingredients?.length || 0} ingredientes</span>
+                                </div>
+                                
+                                <button className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 shadow-lg">
+                                    Escolher esta
+                                    <span className="material-symbols-outlined">arrow_forward</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 {/* 2. The "Magic/AI" Card (Last Item) */}
                 <div 

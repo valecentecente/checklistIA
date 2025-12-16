@@ -94,9 +94,11 @@ export const AdminReviewsModal: React.FC<AdminReviewsModalProps> = ({ isOpen, on
                                                     {review.offerName || "Produto Desconhecido"}
                                                 </p>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="flex text-yellow-400 text-xs">
+                                                    <div className="flex text-blue-500 text-xs gap-0.5">
                                                         {[1,2,3,4,5].map(s => (
-                                                            <span key={s} className={`material-symbols-outlined text-[14px] ${s <= review.rating ? 'font-variation-FILL-1' : ''}`} style={s <= review.rating ? { fontVariationSettings: "'FILL' 1" } : {}}>star</span>
+                                                            <span key={s} className="material-symbols-outlined text-[14px]">
+                                                                {s <= review.rating ? 'check' : 'remove'}
+                                                            </span>
                                                         ))}
                                                     </div>
                                                     <span className="text-xs text-gray-400">• {review.createdAt?.toDate ? review.createdAt.toDate().toLocaleDateString() : 'Hoje'}</span>

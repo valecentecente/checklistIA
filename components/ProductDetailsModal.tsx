@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { Review } from '../types';
 
 export const ProductDetailsModal: React.FC = () => {
-    const { isProductDetailsModalOpen, closeModal, selectedProduct, openModal } = useApp();
+    const { isProductDetailsModalOpen, closeModal, selectedProduct, openModal, showToast } = useApp();
     const { addReview, getProductReviews } = useShoppingList();
     const { user } = useAuth();
 
@@ -54,6 +54,25 @@ export const ProductDetailsModal: React.FC = () => {
         setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
     };
 
+    const handleShare = async () => {
+        if (!product) return;
+        
+        const shareData = {
+            title: `ChecklistIA: ${product.name}`,
+            text: `Confira este produto no ChecklistIA!`,
+            url: product.link 
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {}
+        } else {
+            await navigator.clipboard.writeText(product.link);
+            showToast("Link copiado!");
+        }
+    };
+
     const handleSubmitReview = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) {
@@ -99,13 +118,22 @@ export const ProductDetailsModal: React.FC = () => {
         <div className="fixed inset-0 z-[170] bg-black/80 flex items-end sm:items-center justify-center animate-fadeIn backdrop-blur-sm" onClick={() => closeModal('productDetails')}>
             <div className="bg-white dark:bg-[#121212] w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl max-h-[95vh] h-[90vh] flex flex-col overflow-hidden animate-slideUp shadow-2xl relative" onClick={e => e.stopPropagation()}>
                 
-                {/* Close Button (Floating) */}
-                <button 
-                    onClick={() => closeModal('productDetails')}
-                    className="absolute top-4 right-4 z-20 h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"
-                >
-                    <span className="material-symbols-outlined">close</span>
-                </button>
+                {/* Header Action Buttons (Floating) */}
+                <div className="absolute top-4 right-4 z-20 flex gap-2">
+                    <button 
+                        onClick={handleShare}
+                        className="h-8 w-8 bg-white/80 hover:bg-white text-gray-700 rounded-full flex items-center justify-center backdrop-blur-md transition-colors shadow-sm"
+                        title="Compartilhar"
+                    >
+                        <span className="material-symbols-outlined text-sm">share</span>
+                    </button>
+                    <button 
+                        onClick={() => closeModal('productDetails')}
+                        className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-colors shadow-sm"
+                    >
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
 
                 {/* --- CAROUSEL --- */}
                 <div className="relative w-full aspect-square bg-white shrink-0">
@@ -154,10 +182,10 @@ export const ProductDetailsModal: React.FC = () => {
                             <div className="flex justify-between items-start gap-2">
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{product.store}</p>
                                 {product.averageRating ? (
-                                    <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded-full">
-                                        <span className="material-symbols-outlined text-sm text-yellow-600 dark:text-yellow-400 font-variation-FILL-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                                        <span className="text-xs font-bold text-yellow-800 dark:text-yellow-200">{product.averageRating.toFixed(1)}</span>
-                                        <span className="text-[10px] text-yellow-700 dark:text-yellow-300 opacity-70">({product.reviewCount})</span>
+                                    <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800">
+                                        <span className="material-symbols-outlined text-sm text-blue-600 dark:text-blue-400">check</span>
+                                        <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{product.averageRating.toFixed(1)}</span>
+                                        <span className="text-[10px] text-blue-700 dark:text-blue-300 opacity-70">({product.reviewCount})</span>
                                     </div>
                                 ) : null}
                             </div>
@@ -212,16 +240,18 @@ export const ProductDetailsModal: React.FC = () => {
                                         <span className="text-3xl font-bold text-gray-900 dark:text-white block">
                                             {product.averageRating ? product.averageRating.toFixed(1) : '0.0'}
                                         </span>
-                                        <div className="flex text-yellow-400 text-sm">
+                                        <div className="flex text-blue-500 text-sm gap-0.5 justify-center">
                                             {[1,2,3,4,5].map(s => (
-                                                <span key={s} className="material-symbols-outlined text-sm font-variation-FILL-1" style={{ fontVariationSettings: `'FILL' ${s <= (product.averageRating || 0) ? 1 : 0}` }}>star</span>
+                                                <span key={s} className="material-symbols-outlined text-sm font-bold">
+                                                    {s <= (product.averageRating || 0) ? 'check_circle' : 'radio_button_unchecked'}
+                                                </span>
                                             ))}
                                         </div>
                                     </div>
                                     <div className="h-8 w-[1px] bg-gray-200 dark:bg-gray-700"></div>
                                     <div className="flex-1">
                                         <p className="text-sm text-gray-600 dark:text-gray-300">
-                                            {reviews.length === 0 ? "Seja o primeiro a avaliar!" : `${reviews.length} opiniões de clientes`}
+                                            {reviews.length === 0 ? "Seja o primeiro a dar o check!" : `${reviews.length} checks da comunidade`}
                                         </p>
                                     </div>
                                 </div>
@@ -242,9 +272,11 @@ export const ProductDetailsModal: React.FC = () => {
                                                     </div>
                                                     <span className="text-xs text-gray-400">{review.createdAt?.toDate ? review.createdAt.toDate().toLocaleDateString() : 'Hoje'}</span>
                                                 </div>
-                                                <div className="flex text-yellow-400 text-xs mb-1">
+                                                <div className="flex text-blue-500 text-xs mb-1 gap-0.5">
                                                     {[1,2,3,4,5].map(s => (
-                                                        <span key={s} className={`material-symbols-outlined text-[14px] ${s <= review.rating ? 'font-variation-FILL-1' : ''}`} style={s <= review.rating ? { fontVariationSettings: "'FILL' 1" } : {}}>star</span>
+                                                        <span key={s} className="material-symbols-outlined text-[14px]">
+                                                            {s <= review.rating ? 'check' : 'remove'}
+                                                        </span>
                                                     ))}
                                                 </div>
                                                 <p className="text-sm text-gray-600 dark:text-gray-300 leading-snug">{review.comment}</p>
@@ -256,8 +288,8 @@ export const ProductDetailsModal: React.FC = () => {
                                 {/* Add Review Form */}
                                 {!reviewSuccess ? (
                                     <form onSubmit={handleSubmitReview} className="mt-4 bg-white dark:bg-surface-dark p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                                        <h4 className="font-bold text-sm mb-2 text-gray-800 dark:text-gray-200">Avaliar este produto</h4>
-                                        <div className="flex gap-2 mb-3">
+                                        <h4 className="font-bold text-sm mb-2 text-gray-800 dark:text-gray-200">Dar seu veredito (Checks)</h4>
+                                        <div className="flex gap-2 mb-3 justify-center">
                                             {[1, 2, 3, 4, 5].map((star) => (
                                                 <button
                                                     key={star}
@@ -265,33 +297,35 @@ export const ProductDetailsModal: React.FC = () => {
                                                     onMouseEnter={() => setHoverRating(star)}
                                                     onMouseLeave={() => setHoverRating(0)}
                                                     onClick={() => setNewRating(star)}
-                                                    className="focus:outline-none transition-transform active:scale-90"
+                                                    className="focus:outline-none transition-transform active:scale-90 p-1"
                                                 >
-                                                    <span className={`material-symbols-outlined text-2xl ${(hoverRating || newRating) >= star ? 'text-yellow-400 font-variation-FILL-1' : 'text-gray-300'}`} style={(hoverRating || newRating) >= star ? { fontVariationSettings: "'FILL' 1" } : {}}>
-                                                        star
+                                                    <span className={`material-symbols-outlined text-3xl ${(hoverRating || newRating) >= star ? 'text-blue-600 font-bold' : 'text-gray-300'}`}>
+                                                        {(hoverRating || newRating) >= star ? 'check_circle' : 'radio_button_unchecked'}
                                                     </span>
                                                 </button>
                                             ))}
                                         </div>
+                                        <p className="text-center text-xs text-gray-400 mb-3">
+                                            {newRating > 0 ? `${newRating} Checks` : 'Toque para avaliar'}
+                                        </p>
                                         <textarea
                                             className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm focus:ring-primary focus:border-primary resize-none mb-3 dark:text-white"
                                             rows={3}
-                                            placeholder="Escreva sua opinião..."
+                                            placeholder="O que achou do produto? (Opcional)"
                                             value={newComment}
                                             onChange={e => setNewComment(e.target.value)}
-                                            required
                                         ></textarea>
                                         <button 
                                             type="submit" 
                                             disabled={isSubmittingReview || newRating === 0}
-                                            className="w-full bg-gray-800 dark:bg-white text-white dark:text-black font-bold py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+                                            className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
                                         >
-                                            {isSubmittingReview ? 'Enviando...' : 'Enviar Avaliação'}
+                                            {isSubmittingReview ? 'Enviando...' : 'Confirmar Avaliação'}
                                         </button>
                                     </form>
                                 ) : (
                                     <div className="p-4 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-xl text-center text-sm font-bold border border-green-100 dark:border-green-800">
-                                        Obrigado pela sua avaliação!
+                                        Avaliação recebida! Obrigado.
                                     </div>
                                 )}
                             </div>

@@ -48,12 +48,34 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
         await toggleOfferSaved(product);
     };
 
-    // Renderiza estrelinhas (visual simplificado para o card)
-    const renderStars = (rating: number) => {
+    const handleShare = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        const shareData = {
+            title: `ChecklistIA: ${product.name}`,
+            text: `Olha esse achadinho que vi no ChecklistIA! ${product.price}`,
+            url: product.link // Idealmente seria um deep link para o app, mas usamos o link da loja por enquanto
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                // User cancelled or error
+            }
+        } else {
+            await navigator.clipboard.writeText(product.link);
+            showToast("Link copiado!");
+        }
+    };
+
+    // Renderiza CHECKS AZUIS (Branding) em vez de estrelas
+    const renderRating = (rating: number) => {
         if (!rating) return null;
         return (
-            <div className="flex items-center gap-0.5 bg-yellow-50 dark:bg-yellow-900/20 px-1.5 py-0.5 rounded text-[10px] font-bold text-yellow-700 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-800/30">
-                <span className="material-symbols-outlined text-[10px] font-variation-FILL-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+            <div className="flex items-center gap-0.5 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded text-[10px] font-bold text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/30">
+                <span className="material-symbols-outlined text-[12px] text-blue-600 dark:text-blue-400 font-bold">check</span>
                 {rating.toFixed(1)}
             </div>
         );
@@ -71,20 +93,32 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
                     </span>
                 )}
 
-                {/* BOTÃO CHECK AZUL (SALVAR) */}
-                <button 
-                    onClick={handleToggleCheck}
-                    className={`action-btn absolute top-2 right-2 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${
-                        isSaved 
-                        ? 'bg-blue-600 text-white scale-110' 
-                        : 'bg-white/80 dark:bg-black/40 text-gray-400 hover:text-blue-500 border border-gray-200 dark:border-gray-600 backdrop-blur-sm'
-                    }`}
-                    title={isSaved ? "Remover dos Meus Checks" : "Salvar nos Meus Checks"}
-                >
-                    <span className={`material-symbols-outlined text-lg ${isSaved ? 'animate-bounce' : ''}`}>
-                        {isSaved ? 'check_circle' : 'check_circle_outline'}
-                    </span>
-                </button>
+                {/* BOTÕES DE AÇÃO FLUTUANTES */}
+                <div className="absolute top-2 right-2 z-20 flex flex-col gap-2">
+                    {/* Botão Salvar (Coração) */}
+                    <button 
+                        onClick={handleToggleCheck}
+                        className={`action-btn w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${
+                            isSaved 
+                            ? 'bg-red-500 text-white scale-110' 
+                            : 'bg-white/90 dark:bg-black/40 text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 backdrop-blur-sm'
+                        }`}
+                        title={isSaved ? "Remover dos Favoritos" : "Salvar nos Favoritos"}
+                    >
+                        <span className={`material-symbols-outlined text-lg ${isSaved ? 'font-variation-FILL-1 animate-heartbeat' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
+                            favorite
+                        </span>
+                    </button>
+
+                    {/* Botão Compartilhar */}
+                    <button 
+                        onClick={handleShare}
+                        className="action-btn w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm bg-white/90 dark:bg-black/40 text-gray-400 hover:text-blue-500 border border-gray-200 dark:border-gray-600 backdrop-blur-sm"
+                        title="Compartilhar"
+                    >
+                        <span className="material-symbols-outlined text-lg">share</span>
+                    </button>
+                </div>
                 
                 {/* Image Carousel */}
                 {images.map((img, idx) => (
@@ -110,8 +144,8 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
             </div>
             <div className="p-3 flex flex-col flex-1">
                 <div className="flex justify-between items-start mb-1">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase">{product.store}</p>
-                    {product.averageRating ? renderStars(product.averageRating) : null}
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{product.store}</p>
+                    {product.averageRating ? renderRating(product.averageRating) : null}
                 </div>
                 
                 <h3 className="text-xs font-medium text-gray-800 dark:text-gray-200 line-clamp-2 leading-relaxed mb-2 flex-1">
@@ -134,14 +168,13 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
 export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose }) => {
     const { offers, savedOffers } = useShoppingList();
     const { openModal, showToast } = useApp();
-    const { user } = useAuth(); // CORREÇÃO AQUI: user vem de useAuth
+    const { user } = useAuth();
     
     const [viewMode, setViewMode] = useState<'explore' | 'saved'>('explore');
     const [activeCategory, setActiveCategory] = useState<string>('Todos');
 
     if (!isOpen) return null;
 
-    // Filtra ofertas com base no modo e categoria
     const listToRender = viewMode === 'saved' ? savedOffers : offers;
     const filteredProducts = activeCategory === 'Todos' 
         ? listToRender 
@@ -154,7 +187,6 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose }) => 
             return;
         }
         setViewMode(mode);
-        // Reseta categoria para Todos ao trocar de aba principal para não confundir
         setActiveCategory('Todos');
     };
 
@@ -165,7 +197,7 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose }) => 
                 {/* Header */}
                 <div className="p-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-surface-dark shrink-0">
                     <div>
-                        <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">verified</span>
                             Seleção Especial
                         </p>
@@ -178,13 +210,13 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose }) => 
                     </button>
                 </div>
 
-                {/* --- ABAS PRINCIPAIS (Explorar vs Meus Checks) --- */}
+                {/* --- ABAS PRINCIPAIS --- */}
                 <div className="bg-white dark:bg-surface-dark px-4 pb-0 pt-2 flex gap-4 shrink-0 border-b border-gray-100 dark:border-gray-800">
                     <button 
                         onClick={() => handleTabChange('explore')}
                         className={`flex-1 pb-3 text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition-all ${
                             viewMode === 'explore' 
-                            ? 'border-primary text-primary' 
+                            ? 'border-blue-600 text-blue-600 dark:text-blue-400' 
                             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700'
                         }`}
                     >
@@ -195,14 +227,14 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose }) => 
                         onClick={() => handleTabChange('saved')}
                         className={`flex-1 pb-3 text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition-all ${
                             viewMode === 'saved' 
-                            ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' 
+                            ? 'border-red-500 text-red-500' 
                             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700'
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">check_circle</span>
-                        Meus Checks
+                        <span className="material-symbols-outlined text-lg">favorite</span>
+                        Favoritos
                         {savedOffers.length > 0 && (
-                            <span className="bg-blue-100 text-blue-600 text-[10px] px-1.5 py-0.5 rounded-full ml-1">
+                            <span className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0.5 rounded-full ml-1">
                                 {savedOffers.length}
                             </span>
                         )}
@@ -234,14 +266,14 @@ export const OffersModal: React.FC<OffersModalProps> = ({ isOpen, onClose }) => 
                         <div className="flex flex-col items-center justify-center h-64 text-center">
                             {viewMode === 'saved' ? (
                                 <>
-                                    <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-3">
-                                        <span className="material-symbols-outlined text-3xl text-blue-400">playlist_add_check</span>
+                                    <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-3">
+                                        <span className="material-symbols-outlined text-3xl text-red-400">favorite_border</span>
                                     </div>
-                                    <p className="font-bold text-gray-700 dark:text-gray-200">Sua lista está vazia</p>
-                                    <p className="text-sm text-gray-500 mt-1 max-w-[200px]">Marque itens com o ícone de check na aba Explorar para vê-los aqui.</p>
+                                    <p className="font-bold text-gray-700 dark:text-gray-200">Sem favoritos ainda</p>
+                                    <p className="text-sm text-gray-500 mt-1 max-w-[200px]">Marque itens com o coração na aba Explorar para vê-los aqui.</p>
                                     <button 
                                         onClick={() => handleTabChange('explore')}
-                                        className="mt-4 text-primary font-bold text-sm hover:underline"
+                                        className="mt-4 text-blue-600 font-bold text-sm hover:underline"
                                     >
                                         Ir para Explorar
                                     </button>
