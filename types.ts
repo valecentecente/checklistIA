@@ -57,6 +57,7 @@ export interface FullRecipe {
   description?: string;
   keywords?: string[]; // Indexação para busca rápida
   tags?: string[]; // Categorização (ex: sobremesa, fit, vegano)
+  isAlcoholic?: boolean; // NOVO: Classificação +18
 }
 
 export interface RecipeSuggestion {

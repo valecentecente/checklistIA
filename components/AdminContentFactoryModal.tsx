@@ -74,9 +74,11 @@ export const AdminContentFactoryModal: React.FC = () => {
                     // Delay artificial para respeitar taxa (Rate Limit)
                     await new Promise(r => setTimeout(r, 2000)); // 2s de pausa
 
-                    // Gera Detalhes da Receita
+                    // Gera Detalhes da Receita (INCLUINDO isAlcoholic)
                     const detailPrompt = `Gere a receita completa para "${name}" em JSON.
-                    Formato: { "name": "${name}", "ingredients": [{"simplifiedName": "x", "detailedName": "y"}], "instructions": [], "imageQuery": "descrição visual", "prepTimeInMinutes": 30, "difficulty": "Fácil", "cost": "Médio" }`;
+                    Determine se é uma bebida alcoólica (para maiores de 18 anos).
+                    Formato: { "name": "${name}", "ingredients": [{"simplifiedName": "x", "detailedName": "y"}], "instructions": [], "imageQuery": "descrição visual", "prepTimeInMinutes": 30, "difficulty": "Fácil", "cost": "Médio", "isAlcoholic": boolean }
+                    (isAlcoholic: true se for bebida alcoólica, false caso contrário)`;
 
                     const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
                         model: 'gemini-2.5-flash',

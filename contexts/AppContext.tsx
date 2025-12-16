@@ -772,8 +772,10 @@ O formato deve ser EXATAMENTE este:
   "servings": "4 porções",
   "prepTimeInMinutes": 30,
   "difficulty": "Fácil",
-  "cost": "Baixo"
-}`;
+  "cost": "Baixo",
+  "isAlcoholic": false 
+}
+(isAlcoholic: true se for bebida alcoólica para maiores de 18 anos)`;
 
             const parts: any[] = [];
             if (imageBase64) {

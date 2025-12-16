@@ -38,6 +38,20 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   
   const isSaved = isFavorite(recipe.name);
   
+  // Lógica de Detecção de Conteúdo +18 (Híbrida: Flag da IA ou Tags)
+  const isAdultContent = useMemo(() => {
+      if (recipe.isAlcoholic) return true;
+      if (recipe.tags && recipe.tags.length > 0) {
+          const adultTags = ['drinks', 'drink', 'alcool', 'álcool', 'bebida alcoólica', 'coquetel', 'vodka', 'gin', 'whisky', 'cerveja'];
+          return recipe.tags.some(t => adultTags.includes(t.toLowerCase()));
+      }
+      // Fallback por nome se não tiver tags
+      const nameLower = recipe.name.toLowerCase();
+      if (nameLower.includes('caipirinha') || nameLower.includes('gin tônica') || nameLower.includes('mojito')) return true;
+      
+      return false;
+  }, [recipe]);
+  
   // Seleciona um Chef aleatório apenas UMA vez quando o componente monta
   const randomChefImage = useMemo(() => {
       const randomIndex = Math.floor(Math.random() * CHEF_PLACEHOLDERS.length);
@@ -150,6 +164,15 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                                  <span className="material-symbols-outlined text-[16px] text-orange-400 leading-none">photo_camera</span>
                                  <span className="text-[10px] font-bold text-white uppercase tracking-wider leading-none pt-[1px]">
                                     Acervo Checklist<span className="text-blue-400">IA</span>
+                                 </span>
+                             </div>
+                         )}
+                         
+                         {/* --- NOVO: SELO +18 --- */}
+                         {isAdultContent && (
+                             <div className="animate-bounce-y flex items-center gap-1.5 select-none bg-red-600 text-white px-3 py-1.5 rounded-lg shadow-lg border border-white/20">
+                                 <span className="text-xs font-black uppercase tracking-wider leading-none">
+                                    🔞 +18
                                  </span>
                              </div>
                          )}
