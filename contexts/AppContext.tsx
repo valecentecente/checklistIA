@@ -556,14 +556,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const generateRecipeImageBackground = async (recipe: FullRecipe) => {
         if (!apiKey) return;
         
-        // --- BACKGROUND FIRE AND FORGET ---
-        // Não esperamos o processamento nem bloqueamos a UI
-        // A função roda em segundo plano e atualiza o estado quando terminar
+        // --- BACKGROUND FIRE AND FORGET (PERSISTENT) ---
+        // Removido o timeout de 20s. Agora tentamos até conseguir.
+        // A UX (Placeholder do Chef) cuida da espera. O Acervo é prioridade.
         
         try {
              const ai = new GoogleGenAI({ apiKey });
              
-             // Promessa de geração real
+             // Usa callGenAIWithRetry com 3 tentativas (padrão)
+             // Se falhar por cota, o backoff vai cuidar. Se falhar muito, falha silenciosamente no console,
+             // mas não cancelamos a intenção no banco (o modal vai mostrar o chef).
+             
              const response: any = await callGenAIWithRetry(() => ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
                  contents: {
@@ -572,7 +575,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  config: {
                      responseModalities: [Modality.IMAGE],
                  },
-             }), 2); // Reduzido para 2 retries para falhar mais rápido se estiver congestionado
+             }), 3);
 
              const part = response.candidates?.[0]?.content?.parts?.[0];
              if (part?.inlineData) {
@@ -602,28 +605,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  }
              }
         } catch (error) {
-            console.warn("Imagem não gerada (Erro ou Timeout):", error);
-            
-            // Falha silenciosa: remove apenas o placeholder de "carregando" se necessário,
-            // ou deixa sem imagem. O modal já vai ter tratado a UX.
-            const stopLoadingState = (prev: Record<string, FullRecipe>) => {
-                if (prev[recipe.name]) {
-                    const updated = { ...prev[recipe.name] };
-                    updated.imageQuery = ""; 
-                    return { ...prev, [recipe.name]: updated };
-                }
-                return prev;
-            };
-
-            setFullRecipes(prev => stopLoadingState(prev));
-            setSelectedRecipe(prev => {
-                if (prev?.name === recipe.name) {
-                    const updated = { ...prev };
-                    updated.imageQuery = "";
-                    return updated;
-                }
-                return prev;
-            });
+            console.warn("Imagem não gerada (Erro na API):", error);
+            // Não limpamos o state aqui. Deixamos o placeholder do Chef.
+            // O usuário pode tentar novamente abrindo a receita depois.
         }
     };
 
