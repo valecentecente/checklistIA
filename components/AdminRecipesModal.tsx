@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
+import { callGenAIWithRetry, useApp } from '../contexts/AppContext';
 import { db } from '../firebase';
-import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import type { FullRecipe } from '../types';
 
 interface RecipeWithId extends FullRecipe {
@@ -90,9 +90,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         setEnrichLogs(["[SISTEMA] Iniciando varredura de tags...", "[SISTEMA] Modo seguro ativado (Pausa de 8s entre requisições)."]);
         setEnrichProgress(0);
 
-        // Criamos a instância apenas aqui para garantir que pegue a chave mais atual
-        const ai = new GoogleGenAI({ apiKey });
-
         for (let i = 0; i < targets.length; i++) {
             if (shouldStopEnrich) break;
 
@@ -101,6 +98,8 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
             setEnrichLogs(prev => [...prev, logMsg]);
 
             try {
+                // Inicializamos a IA dentro da iteração para garantir que use a chave mais recente do sistema
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const ingredientsText = r.ingredients?.map(ing => ing.detailedName).join(', ') || '';
                 const prompt = `Analise o prato "${r.name}" (Ingredientes: ${ingredientsText}). 
                 Gere exatamente 4 tags curtas para filtragem (ex: Massa, Fit, Jantar, Carne). 
@@ -122,30 +121,28 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                         keywords: generateKeywords(r.name)
                     });
                 }
-                setEnrichLogs(prev => [...prev, `> SUCESSO: ${suggestedTags.join(', ')}`]);
+                setEnrichLogs(prev => [...prev, `> SUCESSO: Tags aplicadas.`]);
 
             } catch (err: any) {
-                // Captura a mensagem de erro completa do Google para diagnóstico
-                let errorDetails = err.message || 'Erro desconhecido';
-                try {
-                    // Tenta extrair o JSON de erro se existir na mensagem
-                    if (errorDetails.includes('{')) {
-                        const jsonPart = errorDetails.substring(errorDetails.indexOf('{'));
-                        const parsed = JSON.parse(jsonPart);
-                        errorDetails = parsed.error?.message || errorDetails;
-                    }
-                } catch(e) {}
-
-                setEnrichLogs(prev => [...prev, `> ERRO CRÍTICO: ${errorDetails}`]);
+                let errorMessage = err.message || 'Erro desconhecido';
                 
-                if (errorDetails.includes('403') || errorDetails.includes('key')) {
-                    setEnrichLogs(prev => [...prev, "[ALERTA] Sua chave de API parece inválida ou foi cancelada pelo Google. Por favor, gere uma nova no AI Studio."]);
-                    setShouldStopEnrich(true);
-                    break;
+                if (errorMessage.includes('{')) {
+                    try {
+                        const jsonError = JSON.parse(errorMessage.substring(errorMessage.indexOf('{')));
+                        errorMessage = jsonError.error?.message || errorMessage;
+                    } catch(e) {}
                 }
 
-                if (errorDetails.includes('429')) {
-                    setEnrichLogs(prev => [...prev, `[COTA] Limite atingido. Aguardando 30s...`]);
+                setEnrichLogs(prev => [...prev, `> ERRO CRÍTICO: ${errorMessage}`]);
+                
+                if (errorMessage.includes('403') || errorMessage.includes('key')) {
+                    setEnrichLogs(prev => [...prev, "[ALERTA] Acesso Negado. Verifique se a chave de API é válida e se o modelo gemini-3-flash-preview está disponível no seu projeto do AI Studio."]);
+                    setShouldStopEnrich(true);
+                    break; 
+                }
+
+                if (errorMessage.includes('429')) {
+                    setEnrichLogs(prev => [...prev, "[COTA] Limite atingido. Aguardando 30s para resfriamento..."]);
                     await new Promise(res => setTimeout(res, 30000));
                 }
             }
@@ -153,6 +150,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
             setEnrichProgress(((i + 1) / targets.length) * 100);
             
             if (i < targets.length - 1 && !shouldStopEnrich) {
+                setEnrichLogs(prev => [...prev, `[SAFE] Cooldown de 8s...`]);
                 await new Promise(res => setTimeout(res, 8000));
             }
         }
@@ -211,7 +209,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                     <span className="material-symbols-outlined animate-spin text-blue-400">psychology</span>
                                     Enriquecimento de Dados
                                 </h3>
-                                <p className="text-xs text-blue-300">A IA está processando as receitas antigas.</p>
+                                <p className="text-xs text-blue-300">A IA está processando as receitas para organização automática.</p>
                             </div>
                             <button onClick={() => setShouldStopEnrich(true)} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-full transition-colors">PARAR PROCESSO</button>
                         </div>
@@ -225,7 +223,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             </div>
                             <div className="flex-1 bg-black rounded-xl p-5 font-mono text-[12px] text-green-400 overflow-y-auto border border-blue-500/20 shadow-inner">
                                 {enrichLogs.map((log, i) => (
-                                    <p key={i} className={`mb-1.5 ${log.startsWith('>') ? 'text-blue-300' : log.includes('ERRO') ? 'text-red-400 font-bold' : log.includes('ALERTA') ? 'text-yellow-400 bg-yellow-900/20 p-2 rounded' : ''}`}>
+                                    <p key={i} className={`mb-1.5 ${log.startsWith('>') ? 'text-blue-300' : log.includes('ERRO') ? 'text-red-400 font-bold' : log.includes('ALERTA') ? 'text-yellow-400 bg-yellow-900/20 p-2 rounded' : log.includes('SAFE') ? 'text-yellow-600/80 italic' : ''}`}>
                                         {log}
                                     </p>
                                 ))}
@@ -283,7 +281,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                             <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 z-50 p-3 flex flex-col animate-fadeIn">
                                                 <textarea className="flex-1 w-full bg-gray-50 dark:bg-black/20 border rounded p-2 text-xs mb-2 outline-none" value={newTags} onChange={e => setNewTags(e.target.value)} />
                                                 <div className="flex gap-2">
-                                                    <button onClick={handleSaveTags} className="flex-1 bg-green-600 text-white text-[10px] font-bold py-2 rounded">Salvar</button>
+                                                    <button onClick={() => handleSaveTags(recipe.id)} className="flex-1 bg-green-600 text-white text-[10px] font-bold py-2 rounded">Salvar</button>
                                                     <button onClick={() => setTaggingId(null)} className="px-2 bg-gray-200 text-gray-500 text-[10px] font-bold rounded">X</button>
                                                 </div>
                                             </div>
