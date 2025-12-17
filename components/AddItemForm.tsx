@@ -66,7 +66,6 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       resetForm();
-      // Força o blur em qualquer elemento ativo para garantir que o teclado não abra automaticamente
       if (document.activeElement instanceof HTMLElement) {
           document.activeElement.blur();
       }
@@ -92,10 +91,9 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
 
     let newItem: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased'>;
 
-    // Lógica para determinar se o item tem preço definido ou é apenas texto
     const hasPriceDetails = isWeightBased 
         ? (weight.trim() !== '' && priceInput.trim() !== '')
-        : (pricePerUnit.trim() !== ''); // Quantidade é opcional (assume 1)
+        : (pricePerUnit.trim() !== '');
 
     if (hasPriceDetails) {
       if (isWeightBased) {
@@ -103,31 +101,19 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
         const priceNum = parseFloat(priceInput.replace(/\./g, '').replace(',', '.'));
 
         if (isNaN(weightNum) || weightNum <= 0 || isNaN(priceNum) || priceNum < 0) {
-          setError("Peso e preço devem ser valores válidos.");
+          setError("Peso e preço devem ser válidos.");
           return;
-        }
-
-        let finalTotal = 0;
-        if (weightPriceMode === 'total') {
-            finalTotal = priceNum;
-        } else {
-            finalTotal = (priceNum / 1000) * weightNum;
         }
 
         newItem = {
           name: trimmedName,
-          calculatedPrice: finalTotal,
+          calculatedPrice: calculatedTotal,
           details: `${weightNum}g`,
         };
       } else {
         const quantityNum = parseInt(quantity, 10) || 1;
         const pricePerUnitNum = parseFloat(pricePerUnit.replace(/\./g, '').replace(',', '.'));
 
-        if (isNaN(quantityNum) || quantityNum <= 0 || isNaN(pricePerUnitNum) || pricePerUnitNum < 0) {
-          setError("Quantidade e preço devem ser valores válidos.");
-          return;
-        }
-        
         newItem = {
           name: trimmedName,
           calculatedPrice: quantityNum * pricePerUnitNum,
@@ -135,7 +121,6 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
         };
       }
     } else {
-      // Item simples sem preço
       newItem = {
           name: trimmedName,
           calculatedPrice: 0,
@@ -148,8 +133,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
         await onAddItem(newItem);
         handleClose();
     } catch (e) {
-        console.error(e);
-        setError("Erro ao salvar o item. Tente novamente.");
+        setError("Erro ao salvar.");
         setIsSubmitting(false);
     }
   };
@@ -159,156 +143,146 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
   return (
     <div className="fixed inset-0 z-[130] bg-black/50 dark:bg-black/60 transition-opacity animate-fadeIn" onClick={handleClose} aria-modal="true" role="dialog">
         <div className="absolute inset-x-0 bottom-0" onClick={(e) => e.stopPropagation()}>
-            <div className="flex flex-col items-stretch bg-surface-light dark:bg-surface-dark rounded-t-xl animate-slideUp">
-                <div className="flex h-5 w-full items-center justify-center pt-3 pb-1">
-                    <div className="h-1 w-9 rounded-full bg-border-light dark:bg-border-dark"></div>
+            <div className="flex flex-col items-stretch bg-surface-light dark:bg-surface-dark rounded-t-2xl animate-slideUp border-t border-white/10 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
+                <div className="flex h-6 w-full items-center justify-center pt-3">
+                    <div className="h-1.5 w-12 rounded-full bg-border-light dark:bg-border-dark opacity-50"></div>
                 </div>
-                <div className="flex items-center justify-between px-4 pt-4 pb-2">
-                    <h3 className="text-text-primary-light dark:text-text-primary-dark tracking-light text-xl font-bold leading-tight">Adicionar Novo Item</h3>
-                    <button onClick={handleClose} disabled={isSubmitting} aria-label="Fechar" className="flex items-center justify-center h-8 w-8 rounded-full text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50">
+                
+                <div className="flex items-center justify-between px-6 pt-4 pb-2">
+                    <div className="flex flex-col">
+                        <h3 className="text-text-primary-light dark:text-text-primary-dark text-xl font-bold leading-tight">Adicionar à Lista</h3>
+                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest">Soma & Pesagem Inteligente</p>
+                    </div>
+                    <button onClick={handleClose} disabled={isSubmitting} className="flex items-center justify-center h-10 w-10 rounded-full bg-gray-100 dark:bg-white/10 text-text-secondary-light dark:text-text-secondary-dark transition-colors">
                         <span className="material-symbols-outlined text-2xl">close</span>
                     </button>
                 </div>
-                <form onSubmit={handleSubmit} className="flex flex-col px-4 pt-4 pb-5 gap-4">
+
+                <form onSubmit={handleSubmit} className="flex flex-col px-6 pt-4 pb-8 gap-5">
+                    {/* INPUT DE NOME */}
                     <div>
                         <label className="flex flex-col w-full">
-                            <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal pb-2">Nome do item</p>
                             <input
-                                className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-primary-light dark:text-text-primary-dark bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 py-3 text-base font-normal leading-normal disabled:opacity-70"
-                                placeholder="Ex: Leite integral"
+                                className="form-input w-full rounded-xl text-text-primary-light dark:text-text-primary-dark bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 focus:border-primary focus:ring-primary h-14 placeholder:text-gray-400 px-4 py-3 text-lg font-bold shadow-inner"
+                                placeholder="O que você está levando?"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 disabled={isSubmitting}
-                                autoFocus={false}
                             />
                         </label>
-                        
-                        {/* WIDGET DE PREÇO CALCULADO EM TEMPO REAL */}
-                        <div className="flex w-full justify-center flex-col items-center gap-2 mt-3 empty:hidden transition-all duration-300">
-                             {calculatedTotal > 0 && (
-                                <div className="flex flex-col items-center animate-slideUp bg-primary/10 dark:bg-primary/20 px-4 py-2 rounded-xl w-full border border-primary/20 dark:border-primary/30">
-                                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-0.5">Total Calculado</span>
-                                    <span className="text-3xl font-bold text-primary dark:text-orange-400 tracking-tight">
-                                        {calculatedTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                    </span>
-                                </div>
-                             )}
-                             <PriceHistoryWidget itemName={name} currentPrice={calculatedTotal} />
-                        </div>
                     </div>
 
-                    <div>
-                        <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal pb-3 pt-1">Calcular por</p>
-                        <div className="flex">
-                            <div className="flex h-12 flex-1 items-center justify-center rounded-lg bg-background-light dark:bg-background-dark p-1 border border-border-light dark:border-border-dark">
-                                <label className="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded px-2 has-[:checked]:bg-primary has-[:checked]:shadow-sm has-[:checked]:text-white text-text-primary-light dark:text-text-primary-dark text-sm font-medium leading-normal transition-colors duration-200">
-                                    <span className="truncate">Unidade</span>
-                                    <input checked={!isWeightBased} onChange={() => setIsWeightBased(false)} className="invisible w-0" name="calculation_type" type="radio" value="Unidade" disabled={isSubmitting}/>
-                                </label>
-                                <label className="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded px-2 has-[:checked]:bg-primary has-[:checked]:shadow-sm has-[:checked]:text-white text-text-primary-light dark:text-text-primary-dark text-sm font-medium leading-normal transition-colors duration-200">
-                                    <span className="truncate">Peso (kg/g)</span>
-                                    <input checked={isWeightBased} onChange={() => setIsWeightBased(true)} className="invisible w-0" name="calculation_type" type="radio" value="Peso" disabled={isSubmitting}/>
-                                </label>
-                            </div>
-                        </div>
+                    {/* WIDGET DE PREÇO (O CORAÇÃO DO APP) */}
+                    <div className="flex flex-col items-center justify-center bg-white dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm transition-all">
+                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Valor Total do Item</span>
+                         <div className="flex items-baseline gap-1">
+                            <span className="text-xl font-bold text-primary opacity-70">R$</span>
+                            <span className={`text-4xl font-black tracking-tighter ${calculatedTotal > 0 ? 'text-primary' : 'text-gray-200 dark:text-gray-800'}`}>
+                                {calculatedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                         </div>
+                         <PriceHistoryWidget itemName={name} currentPrice={calculatedTotal} />
                     </div>
 
+                    {/* SELETOR DE MODO */}
+                    <div className="flex bg-gray-100 dark:bg-black/40 rounded-xl p-1.5 border border-gray-200 dark:border-gray-800">
+                        <button 
+                            type="button"
+                            onClick={() => setIsWeightBased(false)}
+                            className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${!isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}
+                        >
+                            <span className="material-symbols-outlined text-lg">shopping_basket</span>
+                            Unidade
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={() => setIsWeightBased(true)}
+                            className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}
+                        >
+                            <span className="material-symbols-outlined text-lg">scale</span>
+                            Pesagem (Kg)
+                        </button>
+                    </div>
+
+                    {/* INPUTS DINÂMICOS */}
                     {isWeightBased ? (
-                        <div className="flex w-full flex-wrap items-end gap-4 animate-fadeIn">
-                            <label className="flex flex-col min-w-32 flex-1">
-                                <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal pb-2">Peso (g)</p>
+                        <div className="flex gap-4 animate-fadeIn">
+                            <div className="flex-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-2 mb-1 block">Peso (g)</label>
                                 <input
-                                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-primary-light dark:text-text-primary-dark bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 py-3 text-base font-normal leading-normal disabled:opacity-70"
-                                    placeholder="Ex: 500"
+                                    className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg"
+                                    placeholder="0"
                                     type="number"
                                     inputMode="numeric"
                                     value={weight}
                                     onChange={(e) => setWeight(e.target.value)}
                                     disabled={isSubmitting}
-                                    autoFocus={false}
                                 />
-                            </label>
-                            
-                            <div className="flex flex-col min-w-40 flex-[1.5]">
-                                <div className="flex justify-between items-center pb-2">
-                                    <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Preço</p>
+                            </div>
+                            <div className="flex-[1.5]">
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase ml-2">Preço</label>
                                     <div className="flex bg-gray-100 dark:bg-white/10 rounded-md p-0.5">
-                                        <button 
-                                            type="button"
-                                            onClick={() => setWeightPriceMode('kg')}
-                                            className={`text-[10px] px-2 py-0.5 rounded transition-all ${weightPriceMode === 'kg' ? 'bg-white dark:bg-surface-dark shadow-sm text-primary font-bold' : 'text-gray-500'}`}
-                                        >
-                                            R$/Kg
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => setWeightPriceMode('total')}
-                                            className={`text-[10px] px-2 py-0.5 rounded transition-all ${weightPriceMode === 'total' ? 'bg-white dark:bg-surface-dark shadow-sm text-primary font-bold' : 'text-gray-500'}`}
-                                        >
-                                            Total
-                                        </button>
+                                        <button type="button" onClick={() => setWeightPriceMode('kg')} className={`text-[9px] px-2 py-0.5 rounded ${weightPriceMode === 'kg' ? 'bg-primary text-white font-bold' : 'text-gray-500'}`}>R$/Kg</button>
+                                        <button type="button" onClick={() => setWeightPriceMode('total')} className={`text-[9px] px-2 py-0.5 rounded ${weightPriceMode === 'total' ? 'bg-primary text-white font-bold' : 'text-gray-500'}`}>Total</button>
                                     </div>
                                 </div>
                                 <input
-                                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-primary-light dark:text-text-primary-dark bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 py-3 text-base font-normal leading-normal disabled:opacity-70"
-                                    placeholder={weightPriceMode === 'kg' ? "R$ por Kg" : "R$ Total"}
+                                    className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg text-primary"
+                                    placeholder="0,00"
                                     type="text"
                                     inputMode="numeric"
                                     value={priceInput}
                                     onChange={(e) => setPriceInput(formatPriceInput(e.target.value))}
                                     disabled={isSubmitting}
-                                    autoFocus={false}
                                 />
                             </div>
                         </div>
                     ) : (
-                        <div className="flex w-full flex-wrap items-end gap-4 animate-fadeIn">
-                            <label className="flex flex-col min-w-32 flex-1">
-                                <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal pb-2">Qtd</p>
+                        <div className="flex gap-4 animate-fadeIn">
+                            <div className="flex-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-2 mb-1 block">Quantidade</label>
                                 <input
-                                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-primary-light dark:text-text-primary-dark bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 py-3 text-base font-normal leading-normal disabled:opacity-70"
-                                    placeholder="Ex: 1"
+                                    className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg"
+                                    placeholder="1"
                                     type="number"
                                     min="1"
                                     inputMode="numeric"
                                     value={quantity}
                                     onChange={(e) => setQuantity(e.target.value)}
                                     disabled={isSubmitting}
-                                    autoFocus={false}
                                 />
-                            </label>
-                            <label className="flex flex-col min-w-40 flex-[1.5]">
-                                <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal pb-2">Preço Un.</p>
+                            </div>
+                            <div className="flex-[1.5]">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-2 mb-1 block">Preço Unitário</label>
                                 <input
-                                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-primary-light dark:text-text-primary-dark bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 py-3 text-base font-normal leading-normal disabled:opacity-70"
-                                    placeholder="R$ 0,00"
+                                    className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg text-primary"
+                                    placeholder="0,00"
                                     type="text"
                                     inputMode="numeric"
                                     value={pricePerUnit}
                                     onChange={(e) => setPricePerUnit(formatPriceInput(e.target.value))}
                                     disabled={isSubmitting}
-                                    autoFocus={false}
                                 />
-                            </label>
+                            </div>
                         </div>
                     )}
-                    {error && <p className="text-sm text-red-600 text-center py-2">{error}</p>}
+
+                    {error && <p className="text-xs text-red-500 text-center font-bold">{error}</p>}
                     
-                    <div className="grid grid-cols-2 gap-3 pt-4">
-                        <button type="button" onClick={handleClose} disabled={isSubmitting} className="flex h-14 w-full items-center justify-center rounded-xl bg-gray-100 dark:bg-white/10 px-6 text-base font-bold text-text-secondary-light dark:text-text-secondary-dark shadow-sm transition-colors hover:bg-gray-200 dark:hover:bg-white/20 disabled:opacity-50">Cancelar</button>
+                    <div className="grid grid-cols-1 gap-3">
                         <button 
                             type="submit" 
-                            disabled={isSubmitting}
-                            className="flex h-14 w-full items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg transition-all duration-200 hover:bg-blue-700 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-                            aria-label="Salvar"
+                            disabled={isSubmitting || !name.trim()}
+                            className="flex h-16 w-full items-center justify-center rounded-2xl bg-primary text-white shadow-lg transition-all duration-200 hover:bg-primary/90 active:scale-95 disabled:opacity-50 font-black text-lg gap-2"
                         >
                             {isSubmitting ? (
-                                <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
+                                <span className="material-symbols-outlined animate-spin">sync</span>
                             ) : (
-                                <span className="material-symbols-outlined !text-4xl">check</span>
+                                <>
+                                    <span className="material-symbols-outlined !text-3xl">add_shopping_cart</span>
+                                    ADICIONAR À LISTA
+                                </>
                             )}
                         </button>
                     </div>

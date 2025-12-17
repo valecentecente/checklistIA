@@ -1,9 +1,9 @@
 
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { GoogleGenAI } from "@google/genai";
-import { callGenAIWithRetry, useApp } from '../contexts/AppContext';
 import { db } from '../firebase';
+import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import type { FullRecipe } from '../types';
 
 interface RecipeWithId extends FullRecipe {
@@ -98,7 +98,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
             setEnrichLogs(prev => [...prev, logMsg]);
 
             try {
-                // Inicializamos a IA dentro da iteração para garantir que use a chave mais recente do sistema
+                // Instanciamos aqui para garantir que pegue a chave do Vercel atualizada
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const ingredientsText = r.ingredients?.map(ing => ing.detailedName).join(', ') || '';
                 const prompt = `Analise o prato "${r.name}" (Ingredientes: ${ingredientsText}). 
@@ -121,11 +121,12 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                         keywords: generateKeywords(r.name)
                     });
                 }
-                setEnrichLogs(prev => [...prev, `> SUCESSO: Tags aplicadas.`]);
+                setEnrichLogs(prev => [...prev, `> SUCESSO: ${suggestedTags.join(', ')}`]);
 
             } catch (err: any) {
                 let errorMessage = err.message || 'Erro desconhecido';
                 
+                // Se o erro contém o JSON do Google, tenta extrair a mensagem amigável
                 if (errorMessage.includes('{')) {
                     try {
                         const jsonError = JSON.parse(errorMessage.substring(errorMessage.indexOf('{')));
@@ -135,14 +136,15 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
 
                 setEnrichLogs(prev => [...prev, `> ERRO CRÍTICO: ${errorMessage}`]);
                 
+                // Se for erro de autenticação (403), interrompe e avisa
                 if (errorMessage.includes('403') || errorMessage.includes('key')) {
-                    setEnrichLogs(prev => [...prev, "[ALERTA] Acesso Negado. Verifique se a chave de API é válida e se o modelo gemini-3-flash-preview está disponível no seu projeto do AI Studio."]);
+                    setEnrichLogs(prev => [...prev, "[ALERTA] Chave de API bloqueada ou inválida. Verifique as variáveis de ambiente no Vercel."]);
                     setShouldStopEnrich(true);
                     break; 
                 }
 
                 if (errorMessage.includes('429')) {
-                    setEnrichLogs(prev => [...prev, "[COTA] Limite atingido. Aguardando 30s para resfriamento..."]);
+                    setEnrichLogs(prev => [...prev, "[COTA] Limite atingido. Aguardando 30s..."]);
                     await new Promise(res => setTimeout(res, 30000));
                 }
             }
@@ -150,7 +152,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
             setEnrichProgress(((i + 1) / targets.length) * 100);
             
             if (i < targets.length - 1 && !shouldStopEnrich) {
-                setEnrichLogs(prev => [...prev, `[SAFE] Cooldown de 8s...`]);
                 await new Promise(res => setTimeout(res, 8000));
             }
         }
@@ -209,7 +210,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                     <span className="material-symbols-outlined animate-spin text-blue-400">psychology</span>
                                     Enriquecimento de Dados
                                 </h3>
-                                <p className="text-xs text-blue-300">A IA está processando as receitas para organização automática.</p>
+                                <p className="text-xs text-blue-300">A IA está processando as receitas antigas.</p>
                             </div>
                             <button onClick={() => setShouldStopEnrich(true)} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-full transition-colors">PARAR PROCESSO</button>
                         </div>
@@ -223,7 +224,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             </div>
                             <div className="flex-1 bg-black rounded-xl p-5 font-mono text-[12px] text-green-400 overflow-y-auto border border-blue-500/20 shadow-inner">
                                 {enrichLogs.map((log, i) => (
-                                    <p key={i} className={`mb-1.5 ${log.startsWith('>') ? 'text-blue-300' : log.includes('ERRO') ? 'text-red-400 font-bold' : log.includes('ALERTA') ? 'text-yellow-400 bg-yellow-900/20 p-2 rounded' : log.includes('SAFE') ? 'text-yellow-600/80 italic' : ''}`}>
+                                    <p key={i} className={`mb-1.5 ${log.startsWith('>') ? 'text-blue-300' : log.includes('ERRO') ? 'text-red-400 font-bold' : log.includes('ALERTA') ? 'text-yellow-400 bg-yellow-900/20 p-2 rounded' : ''}`}>
                                         {log}
                                     </p>
                                 ))}
@@ -270,7 +271,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                         </div>
                                         <div className="p-3 flex flex-col flex-1">
                                             <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 line-clamp-2 mb-2 leading-tight uppercase">{recipe.name}</h3>
-                                            <div className="mt-auto flex flex-wrap gap-1">
+                                            <div className="mt-auto flex wrap gap-1">
                                                 {recipe.tags?.slice(0, 3).map((t, i) => (
                                                     <span key={i} className="bg-gray-100 dark:bg-white/5 text-gray-500 text-[8px] px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700">{t}</span>
                                                 ))}
