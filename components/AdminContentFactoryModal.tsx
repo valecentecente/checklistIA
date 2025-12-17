@@ -9,7 +9,7 @@ import type { FullRecipe } from '../types';
 
 interface FactoryLog {
     text: string;
-    type: 'info' | 'error' | 'success' | 'separator';
+    type: 'info' | 'error' | 'success' | 'separator' | 'warning';
 }
 
 export const AdminContentFactoryModal: React.FC = () => {
@@ -32,7 +32,6 @@ export const AdminContentFactoryModal: React.FC = () => {
     ];
 
     const categoriesOptions = ["--- TODAS AS CATEGORIAS ---", ...baseCategories];
-
     const apiKey = process.env.API_KEY as string;
 
     useEffect(() => {
@@ -41,7 +40,7 @@ export const AdminContentFactoryModal: React.FC = () => {
         }
     }, [logs]);
 
-    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'separator' = 'info') => {
+    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'separator' | 'warning' = 'info') => {
         setLogs(prev => [...prev, { text: msg, type }]);
     };
 
@@ -89,7 +88,8 @@ export const AdminContentFactoryModal: React.FC = () => {
         setProgress(0);
 
         const categoriesToProcess = category === "--- TODAS AS CATEGORIAS ---" ? baseCategories : [category];
-        addLog(`--- INICIANDO FÁBRICA: ${category === "--- TODAS AS CATEGORIAS ---" ? "MODO EM LOTE (TODAS)" : category.toUpperCase()} ---`, 'separator');
+        addLog(`--- INICIANDO FÁBRICA: MODO ${category === "--- TODAS AS CATEGORIAS ---" ? "LOTE" : "ÚNICO"} ---`, 'separator');
+        addLog(`Nota: Usando Cooldown de segurança para evitar erro 429.`, 'warning');
 
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -108,7 +108,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                 }));
 
                 const recipeNames: string[] = JSON.parse(listResponse.text || "[]");
-                addLog(`Lista de [${currentCat}] recebida: ${recipeNames.length} itens.`, 'info');
+                addLog(`Lista recebida: ${recipeNames.length} pratos identificados.`, 'info');
 
                 for (let i = 0; i < recipeNames.length; i++) {
                     if (shouldStop) break;
@@ -120,17 +120,16 @@ export const AdminContentFactoryModal: React.FC = () => {
                         const docRef = doc(db, 'global_recipes', docId);
                         const docSnap = await getDoc(docRef);
                         if (docSnap.exists()) {
-                            addLog(`> ${name} já existe. Pulando...`, 'info');
+                            addLog(`> [${i+1}/${recipeNames.length}] ${name} já existe. Pulando...`, 'info');
                             continue;
                         }
                     }
                     
-                    addLog(`> Gerando: ${name}...`, 'info');
+                    addLog(`> [${i+1}/${recipeNames.length}] Gerando: ${name}...`, 'info');
                     
                     try {
-                        // PROMPT ATUALIZADO PARA GERAR TAGS AUTOMATICAMENTE
-                        const detailPrompt = `Gere a receita completa para "${name}" em JSON. Além dos dados normais, sugira de 3 a 5 tags curtas e relevantes para este prato (ex: se for sobremesa brasileira, tags: ['doce', 'brasileira', 'sobremesa']). 
-                        Formato: { "name": "${name}", "ingredients": [{"simplifiedName": "x", "detailedName": "y"}], "instructions": [], "imageQuery": "v", "prepTimeInMinutes": 30, "difficulty": "Fácil", "cost": "Médio", "isAlcoholic": false, "tags": ["tag1", "tag2"] }`;
+                        const detailPrompt = `Gere a receita completa para "${name}" em JSON. Inclua 3 a 5 tags. 
+                        Formato: { "name": "${name}", "ingredients": [{"simplifiedName": "x", "detailedName": "y"}], "instructions": [], "imageQuery": "v", "prepTimeInMinutes": 30, "difficulty": "Fácil", "cost": "Médio", "isAlcoholic": false, "tags": ["tag1"] }`;
 
                         const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
                             model: 'gemini-3-flash-preview',
@@ -140,6 +139,7 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                         const recipeData = JSON.parse(detailRes.text || "{}");
                         
+                        // IMAGEM
                         const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                             model: 'gemini-2.5-flash-image',
                             contents: { parts: [{ text: `Foto profissional de culinária: ${recipeData.imageQuery || name}` }] },
@@ -152,7 +152,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                             imageUrl = await compressImage(`data:image/jpeg;base64,${rawBase64}`);
                         }
 
-                        // Garante que a categoria atual esteja nas tags
                         const finalTags = Array.from(new Set([
                             ...(recipeData.tags || []), 
                             currentCat.toLowerCase(), 
@@ -168,26 +167,41 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 tags: finalTags,
                                 createdAt: serverTimestamp()
                             }, { merge: true });
-                            addLog(`> SALVO: ${name}`, 'success');
+                            addLog(`> SUCESSO: ${name} salvo.`, 'success');
                         }
 
                     } catch (err: any) {
-                        addLog(`> ERRO EM ${name}: ${err.message}`, 'error');
+                        addLog(`> ERRO em ${name}: ${err.message}`, 'error');
+                        // Se for erro de cota no meio do loop, espera extra
+                        if (err.message?.includes('429')) {
+                             addLog("Pausa forçada de 30s por limite de cota...", "warning");
+                             await new Promise(r => setTimeout(r, 30000));
+                        }
                     }
                     
-                    // Progresso baseado no total de categorias e itens
+                    // Atualiza Progresso
                     const totalItems = categoriesToProcess.length * quantity;
                     const itemsProcessedSoFar = (categoriesToProcess.indexOf(currentCat) * quantity) + (i + 1);
                     setProgress((itemsProcessedSoFar / totalItems) * 100);
                     
-                    await new Promise(r => setTimeout(r, 1000));
+                    // COOLDOWN OBRIGATÓRIO (8 segundos entre cada receita para evitar 429)
+                    if (i < recipeNames.length - 1) {
+                        addLog("Aguardando cooldown de segurança (8s)...", "warning");
+                        await new Promise(r => setTimeout(r, 8000));
+                    }
+                }
+                
+                // Pausa maior entre categorias
+                if (categoriesToProcess.indexOf(currentCat) < categoriesToProcess.length - 1) {
+                    addLog("Troca de categoria. Pausa de 15s...", "warning");
+                    await new Promise(r => setTimeout(r, 15000));
                 }
             }
 
             addLog(`--- PROCESSO CONCLUÍDO ---`, 'separator');
 
         } catch (error: any) {
-            addLog(`ERRO FATAL: ${error.message}`, 'error');
+            addLog(`ERRO CRÍTICO: ${error.message}`, 'error');
         } finally {
             setIsGenerating(false);
         }
@@ -202,7 +216,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                 <div className="p-4 border-b border-slate-700 bg-slate-800 flex justify-between items-center">
                     <h2 className="text-white font-bold text-lg flex items-center gap-2">
                         <span className="material-symbols-outlined text-green-400">factory</span>
-                        Fábrica de Conteúdo
+                        Fábrica de Conteúdo (Safe Mode)
                     </h2>
                     <button onClick={() => closeModal('contentFactory')} className="text-gray-400 hover:text-white">
                         <span className="material-symbols-outlined">close</span>
@@ -211,7 +225,7 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                 <div className="p-4 bg-slate-800/50 flex gap-4 items-end border-b border-slate-700">
                     <div className="flex-1">
-                        <label className="text-xs text-gray-400 uppercase font-bold block mb-1">Categoria de Origem</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold block mb-1">Categoria</label>
                         <select 
                             value={category} 
                             onChange={e => setCategory(e.target.value)}
@@ -248,11 +262,16 @@ export const AdminContentFactoryModal: React.FC = () => {
                 )}
 
                 <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-[11px] space-y-1 scrollbar-hide">
-                    {logs.length === 0 && <p className="text-gray-600 italic text-center py-10">Configure a quantidade por categoria e clique em Iniciar.<br/>Modo "TODAS" percorrerá toda a base do sistema.</p>}
+                    {logs.length === 0 && (
+                        <div className="text-center py-10">
+                            <p className="text-gray-500 italic">O Modo Lote utiliza pausas de 8s para respeitar o plano gratuito da API.</p>
+                        </div>
+                    )}
                     {logs.map((log, i) => (
                         <p key={i} className={`break-words ${
                             log.type === 'error' ? 'text-red-500 font-bold bg-red-500/10 p-1 rounded' : 
                             log.type === 'success' ? 'text-green-400' : 
+                            log.type === 'warning' ? 'text-yellow-500 italic' : 
                             log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800 font-bold' : 
                             'text-gray-400'
                         }`}>

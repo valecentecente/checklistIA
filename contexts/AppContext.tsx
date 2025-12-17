@@ -169,23 +169,23 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper for retry logic specifically optimized for Free Tier Limits (429)
-export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 3): Promise<any> => {
+// Helper for retry logic optimized for Free Tier Limits (429)
+export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 5): Promise<any> => {
     try {
         return await fn();
     } catch (error: any) {
-        // Verifica erros comuns de limite de cota
-        const isQuotaError = error?.status === 429 || 
-                             error?.message?.includes('429') || 
-                             error?.toString().includes('429') ||
-                             error?.message?.includes('quota') ||
-                             error?.message?.includes('Too Many Requests') ||
-                             error?.status === 503;
+        const errorStr = error?.toString() || '';
+        const isQuotaError = 
+            error?.status === 429 || 
+            errorStr.includes('429') || 
+            errorStr.includes('RESOURCE_EXHAUSTED') ||
+            error?.message?.includes('quota');
                              
         if (retries > 0 && isQuotaError) {
-            // Backoff exponencial: espera 2s, 4s, 6s...
-            const delay = (2000 * (4 - retries)) + Math.random() * 1000; 
-            console.warn(`Limite do plano grátis atingido (429). Retentando em ${Math.round(delay)}ms...`);
+            // Aumentamos o delay significativamente no erro 429
+            // Espera de 10s a 20s para garantir que o "bucket" da API se recupere
+            const delay = (10000 * (6 - retries)) + Math.random() * 5000; 
+            console.warn(`Cota excedida. Aguardando ${Math.round(delay/1000)}s para tentar novamente...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return callGenAIWithRetry(fn, retries - 1);
         }
@@ -196,7 +196,7 @@ export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 3): P
 // Helper to ignore permission errors
 const ignorePermissionError = (err: any) => {
     if (err.code === 'permission-denied' || err.message?.includes('Missing or insufficient permissions')) {
-        console.warn('Salvamento no acervo ignorado: Sem permissão (apenas Admin pode sobrescrever).');
+        console.warn('Salvamento no acervo ignorado: Sem permissão.');
         return true;
     }
     return false;
@@ -347,7 +347,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 
                 setFeaturedRecipes(shuffled.slice(0, 5));
 
-                // Carrega Cache Global (Aumentado para 300 para melhor hit rate)
+                // Carrega Cache Global
                 const qCache = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(300));
                 const snapshotCache = await getDocs(qCache);
                 const cachedRecipes: FullRecipe[] = [];
@@ -527,15 +527,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         const recipeName = typeof input === 'string' ? input : input.name;
-        const cachedBroken = getCachedRecipe(recipeName);
-        const existingImage = (typeof input !== 'string' ? input.imageUrl : undefined) || cachedBroken?.imageUrl;
-        
-        if (!existingImage) {
-            showToast("O Chef IA está procurando no livro de receitas...");
-        } else {
-            showToast("Restaurando receita...");
-        }
-
         fetchRecipeDetails(recipeName, undefined, false);
     };
 
@@ -623,7 +614,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  }
              }
         } catch (error) {
-            console.warn("Imagem não gerada (Erro na API):", error);
+            console.warn("Imagem não gerada:", error);
         }
     };
 
@@ -693,7 +684,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 fetchRecipeDetails(term);
             }
         } catch (error) {
-            console.error("Erro na busca handleRecipeSearch:", error);
             fetchRecipeDetails(term); 
         } finally {
             setIsRecipeLoading(false);
@@ -713,24 +703,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     if (autoAdd) addRecipeToShoppingList(localMatch);
                     return;
                 }
-
-                const dbMatches = await searchGlobalRecipes(recipeName);
-                if (dbMatches.length > 0) {
-                    const bestMatch = dbMatches[0];
-                    setSelectedRecipe(bestMatch);
-                    setFullRecipes(prev => ({...prev, [bestMatch.name]: bestMatch}));
-                    closeModal('recipeAssistant');
-                    setIsRecipeLoading(false);
-                    if (autoAdd) addRecipeToShoppingList(bestMatch);
-                    return;
-                }
-            } catch (e) {
-                console.warn("Falha na busca preliminar, seguindo para IA:", e);
-            }
+            } catch (e) {}
         }
 
         if (!apiKey) {
-            setRecipeError("Chave de IA não configurada. Verifique se o projeto tem acesso.");
+            setRecipeError("Chave de IA não configurada.");
             setIsRecipeLoading(false);
             return;
         }
@@ -739,28 +716,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setRecipeError(null);
         try {
             const ai = new GoogleGenAI({ apiKey });
-            let systemPrompt = `Você é um assistente culinário especialista. Gere uma receita completa e detalhada em Português do Brasil no formato JSON.`;
+            let systemPrompt = `Você é um assistente culinário especialista. Gere uma receita completa em JSON.`;
             
             if (recipeName && !imageBase64) {
                  systemPrompt += ` para o prato: "${recipeName}".`;
             } else if (imageBase64) {
-                 systemPrompt += ` Analise a imagem fornecida, identifique o prato (se houver input de texto "${recipeName}", use-o como contexto) e gere a receita para ele.`;
+                 systemPrompt += ` Analise a imagem e gere a receita.`;
             }
 
             systemPrompt += `\nIMPORTANTE: Retorne APENAS o objeto JSON puro.
-O formato deve ser EXATAMENTE este:
+Format:
 {
-  "name": "Nome Identificado do Prato",
-  "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz"}],
-  "instructions": ["Passo 1", "Passo 2"],
-  "imageQuery": "descrição visual curta do prato para gerar imagem",
-  "servings": "4 porções",
+  "name": "Nome",
+  "ingredients": [{"simplifiedName": "x", "detailedName": "y"}],
+  "instructions": ["1", "2"],
+  "imageQuery": "visual",
+  "servings": "4",
   "prepTimeInMinutes": 30,
   "difficulty": "Fácil",
-  "cost": "Baixo",
+  "cost": "Médio",
   "isAlcoholic": false 
-}
-(isAlcoholic: true se for bebida alcoólica para maiores de 18 anos)`;
+}`;
 
             const parts: any[] = [];
             if (imageBase64) {
@@ -771,70 +747,38 @@ O formato deve ser EXATAMENTE este:
             parts.push({ text: systemPrompt });
 
             const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-2.5-flash', 
+                model: 'gemini-3-flash-preview', 
                 contents: { parts },
                 config: { responseMimeType: "application/json" }
             }));
 
-            let textResponse = response.text || "";
-            textResponse = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-            const firstBrace = textResponse.indexOf('{');
-            const lastBrace = textResponse.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                textResponse = textResponse.substring(firstBrace, lastBrace + 1);
-            }
-
-            const recipeDetails = JSON.parse(textResponse);
+            const recipeDetails = JSON.parse(response.text || "{}");
             
-            if (!recipeDetails.ingredients || !Array.isArray(recipeDetails.ingredients)) recipeDetails.ingredients = [];
-            if (!recipeDetails.instructions || !Array.isArray(recipeDetails.instructions)) recipeDetails.instructions = [];
-
-            const finalRecipeName = recipeDetails.name || recipeName || "Receita Identificada";
+            const finalRecipeName = recipeDetails.name || recipeName || "Receita";
             const cachedRecipe = getCachedRecipe(recipeName);
-            const currentRecipe = selectedRecipe?.name === recipeName ? selectedRecipe : fullRecipes[recipeName];
-            const existingImage = currentRecipe?.imageUrl || cachedRecipe?.imageUrl;
-            const existingSource = currentRecipe?.imageSource || cachedRecipe?.imageSource;
-            const keywords = generateKeywords(finalRecipeName);
+            const existingImage = cachedRecipe?.imageUrl;
+            const existingSource = cachedRecipe?.imageSource;
 
             const fullRecipeData: FullRecipe = { 
                 name: finalRecipeName, 
                 ...recipeDetails,
                 imageUrl: existingImage, 
                 imageSource: existingSource,
-                keywords: keywords 
+                keywords: generateKeywords(finalRecipeName) 
             };
             
             setFullRecipes(prev => ({...prev, [finalRecipeName]: fullRecipeData}));
             setSelectedRecipe(fullRecipeData);
-            
             closeModal('recipeAssistant');
 
-            if (autoAdd) {
-                await addRecipeToShoppingList(fullRecipeData);
-            }
+            if (autoAdd) await addRecipeToShoppingList(fullRecipeData);
 
             if (recipeDetails.imageQuery && !existingImage) {
-                generateRecipeImageBackground(fullRecipeData).catch(err => console.error("Background Gen Error:", err));
-            } else if (db) {
-                try {
-                     const docId = finalRecipeName.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
-                     await setDoc(doc(db, 'global_recipes', docId), fullRecipeData, { merge: true });
-                } catch(e: any) { 
-                    if (!ignorePermissionError(e)) {
-                        console.error('Erro ao atualizar receita reparada no DB', e); 
-                    }
-                }
+                generateRecipeImageBackground(fullRecipeData).catch(err => console.error(err));
             }
 
         } catch (e: any) {
-            console.error("Error fetching recipe:", e);
-            if (e?.status === 429 || e?.message?.includes('quota') || e?.message?.includes('429')) {
-                setRecipeError("Muitos pedidos no plano grátis. Aguarde um momento e tente novamente.");
-            } else if (e?.message?.includes('API key') || e?.status === 400 || e?.status === 403) {
-                 setRecipeError("Erro de Permissão: Chave de API inválida ou domínio não autorizado.");
-            } else {
-                setRecipeError(`Erro na IA: ${e?.message || "Tente novamente."}`);
-            }
+            setRecipeError("Muitos pedidos. Aguarde e tente novamente.");
         } finally {
             setIsRecipeLoading(false);
         }
@@ -870,14 +814,12 @@ O formato deve ser EXATAMENTE este:
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue e Peixaria", "🧀 Frios e Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene Pessoal", "🐾 Pets", "🏠 Utilidades Domésticas", "❓ Outros" ];
                 
                 const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Use APENAS estas categorias: ${categories.join(', ')}. Retorne JSON array: [{"itemName": "Nome", "category": "Categoria"}]`,
+                    model: 'gemini-3-flash-preview',
+                    contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Categorias: ${categories.join(', ')}. Return JSON array.`,
                     config: { responseMimeType: "application/json" }
                 }));
                 
                 const categorizedItems = JSON.parse(response.text || "[]");
-                if (!Array.isArray(categorizedItems)) throw new Error("Resposta inválida da IA");
-
                 const newCategoryMap = { ...itemCategories };
                 const itemMap = new Map<string, string>(itemsToCategorize.map(i => [normalizeString(i.name), i.id]));
                 
@@ -891,12 +833,7 @@ O formato deve ser EXATAMENTE este:
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
             } catch (error: any) { 
-                console.error("Error organizing items:", error);
-                if (error?.message?.includes('API key')) {
-                    showToast("Erro: Chave de API inválida no Vercel.");
-                } else {
-                    showToast("Erro ao organizar. Limite do plano grátis atingido?"); 
-                }
+                showToast("Muitas tentativas. Aguarde."); 
             }
             finally { setIsOrganizing(false); }
         } else {
@@ -969,24 +906,8 @@ O formato deve ser EXATAMENTE este:
         
         try {
             let suggestions = getCategoryRecipes(key).slice(0, 10);
-            
-            if (priorityRecipeName) {
-                const priorityIdx = suggestions.findIndex(r => r.name === priorityRecipeName);
-                if (priorityIdx > -1) {
-                    const [item] = suggestions.splice(priorityIdx, 1);
-                    suggestions.unshift(item);
-                } else {
-                    const allRecipes = getCategoryRecipes(key);
-                    const fullMatch = allRecipes.find(r => r.name === priorityRecipeName);
-                    if (fullMatch) {
-                        suggestions.unshift(fullMatch);
-                        suggestions = suggestions.slice(0, 10);
-                    }
-                }
-            }
-            
             if (suggestions.length === 0) {
-                showToast(`Nenhuma receita encontrada para esta categoria.`);
+                showToast(`Nenhuma receita encontrada.`);
             } else {
                 setFullRecipes(prev => {
                     const updated = { ...prev };
@@ -996,7 +917,6 @@ O formato deve ser EXATAMENTE este:
                 setRecipeSuggestions(suggestions);
             }
         } catch (error) {
-            console.error("Erro ao buscar sugestões:", error);
             showToast("Erro ao carregar receitas.");
         } finally {
             setIsSuggestionsLoading(false);
@@ -1028,7 +948,7 @@ O formato deve ser EXATAMENTE este:
         smartNudgeItemName,
         currentMarketName, setCurrentMarketName,
         isSharedSession, setIsSharedSession,
-        historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab), // Fix type if needed
+        historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab),
         isHomeViewActive, setHomeViewActive,
         isFocusMode, setFocusMode,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
@@ -1044,7 +964,7 @@ O formato deve ser EXATAMENTE este:
         pendingAction, setPendingAction,
         selectedProduct,
         openProductDetails,
-        recipeSearchResults, currentSearchTerm, handleRecipeSearch // EXPOSTOS
+        recipeSearchResults, currentSearchTerm, handleRecipeSearch 
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

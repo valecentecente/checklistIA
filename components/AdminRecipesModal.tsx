@@ -11,7 +11,7 @@ interface RecipeWithId extends FullRecipe {
 }
 
 export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-    const { showToast } = useApp();
+    const { showToast, generateKeywords } = useApp();
     const [recipes, setRecipes] = useState<RecipeWithId[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -21,6 +21,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const [newTags, setNewTags] = useState('');
 
     // IA Enrichment State
+    const [isChecking, setIsChecking] = useState(false); // Novo: Para o clique inicial
     const [isEnriching, setIsEnriching] = useState(false);
     const [enrichProgress, setEnrichProgress] = useState(0);
     const [enrichLogs, setEnrichLogs] = useState<string[]>([]);
@@ -65,24 +66,32 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         } catch (error) { showToast("Erro."); }
     };
 
-    // --- LÓGICA DE ENRIQUECIMENTO COM IA ---
+    // --- LÓGICA DE ENRIQUECIMENTO COM IA (SAFE MODE) ---
     const startEnrichment = async () => {
+        setIsChecking(true);
         const apiKey = process.env.API_KEY as string;
-        if (!apiKey) return;
+        
+        // Simula um pequeno delay para a UI respirar
+        await new Promise(r => setTimeout(r, 800));
 
         // Filtra apenas receitas que precisam de tags (menos de 2 tags)
         const targets = recipes.filter(r => !r.tags || r.tags.length < 2);
         
         if (targets.length === 0) {
             showToast("Tudo certo! Todas as receitas já possuem tags inteligentes.");
+            setIsChecking(false);
             return;
         }
 
-        if (!window.confirm(`Deseja analisar e gerar tags para ${targets.length} receitas usando IA?`)) return;
+        if (!window.confirm(`A IA identificou ${targets.length} receitas antigas sem organização. Iniciar processamento seguro?`)) {
+            setIsChecking(false);
+            return;
+        }
 
         setIsEnriching(true);
+        setIsChecking(false);
         setShouldStopEnrich(false);
-        setEnrichLogs(["Iniciando análise de acervo..."]);
+        setEnrichLogs(["[SISTEMA] Iniciando varredura de tags...", "[SISTEMA] Modo seguro ativado (Pausa de 8s entre requisições)."]);
         setEnrichProgress(0);
 
         const ai = new GoogleGenAI({ apiKey });
@@ -91,11 +100,14 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
             if (shouldStopEnrich) break;
 
             const r = targets[i];
-            setEnrichLogs(prev => [...prev, `[${i+1}/${targets.length}] Analisando: ${r.name}...`]);
+            const logMsg = `[${i+1}/${targets.length}] Analisando ingredientes de: ${r.name}...`;
+            setEnrichLogs(prev => [...prev, logMsg]);
 
             try {
                 const ingredientsText = r.ingredients?.map(ing => ing.detailedName).join(', ') || '';
-                const prompt = `Baseado no prato "${r.name}" e seus ingredientes [${ingredientsText}], sugira exatamente 4 tags curtas e categóricas para organização. Retorne apenas um JSON array de strings. Ex: ["doce", "brasileira", "chocolate", "sobremesa"]`;
+                const prompt = `Analise o prato "${r.name}" (Ingredientes: ${ingredientsText}). 
+                Gere exatamente 4 tags curtas para filtragem (ex: Massa, Fit, Jantar, Carne). 
+                Retorne apenas um JSON array de strings.`;
 
                 const result = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-3-flash-preview',
@@ -105,22 +117,41 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
 
                 const suggestedTags: string[] = JSON.parse(result.text || "[]");
                 
-                // Combina tags sugeridas com as que já existiam (ex: a categoria de origem)
+                // Combina tags sugeridas com as que já existiam
                 const currentTags = r.tags || [];
                 const mergedTags = Array.from(new Set([...currentTags, ...suggestedTags])).map(t => t.toLowerCase());
 
-                await updateDoc(doc(db, 'global_recipes', r.id), { tags: mergedTags });
+                if (db) {
+                    await updateDoc(doc(db, 'global_recipes', r.id), { 
+                        tags: mergedTags,
+                        keywords: generateKeywords(r.name) // Aproveita para atualizar indexação
+                    });
+                }
                 
+                setEnrichLogs(prev => [...prev, `> SUCESSO: Tags aplicadas: ${suggestedTags.join(', ')}`]);
+
             } catch (err: any) {
-                setEnrichLogs(prev => [...prev, `> ERRO em ${r.name}: ${err.message}`]);
+                const errorStr = err.message || 'Erro desconhecido';
+                setEnrichLogs(prev => [...prev, `> ERRO em ${r.name}: ${errorStr.substring(0, 50)}...`]);
+                
+                if (errorStr.includes('429')) {
+                    setEnrichLogs(prev => [...prev, `[AVISO] Limite atingido. Aguardando 20s para reset...`]);
+                    await new Promise(res => setTimeout(res, 20000));
+                }
             }
 
             setEnrichProgress(((i + 1) / targets.length) * 100);
-            await new Promise(res => setTimeout(res, 800)); // Delay para evitar rate limit
+            
+            // COOLDOWN OBRIGATÓRIO (8 segundos para evitar 429)
+            if (i < targets.length - 1 && !shouldStopEnrich) {
+                setEnrichLogs(prev => [...prev, `[SAFE] Aguardando cooldown (8s)...`]);
+                await new Promise(res => setTimeout(res, 8000));
+            }
         }
 
+        setEnrichLogs(prev => [...prev, "--- PROCESSO CONCLUÍDO ---"]);
         setIsEnriching(false);
-        showToast("Enriquecimento concluído!");
+        showToast("Processamento de tags finalizado!");
     };
 
     const processedRecipes = useMemo(() => {
@@ -128,7 +159,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         return filtered.sort((a, b) => {
             const hasTagsA = (a.tags && a.tags.length > 2) ? 1 : 0;
             const hasTagsB = (b.tags && b.tags.length > 2) ? 1 : 0;
-            return hasTagsA - hasTagsB; // Mostra as SEM tags primeiro para facilitar gestão
+            return hasTagsA - hasTagsB; 
         });
     }, [recipes, searchTerm]);
 
@@ -145,36 +176,52 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             <span className="material-symbols-outlined text-orange-400">menu_book</span>
                             Gestão de Acervo
                         </h2>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">IA Data Management</p>
+                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Database & Tags Manager</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button 
                             onClick={startEnrichment}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all text-xs font-bold shadow-lg"
+                            disabled={isChecking || isEnriching}
+                            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all text-xs font-bold shadow-lg disabled:opacity-50`}
                         >
-                            <span className="material-symbols-outlined text-sm">auto_fix_high</span>
-                            Inteligência de Tags
+                            {isChecking ? (
+                                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                            ) : (
+                                <span className="material-symbols-outlined text-sm">auto_fix_high</span>
+                            )}
+                            {isChecking ? "Analisando Acervo..." : "Inteligência de Tags"}
                         </button>
                         <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><span className="material-symbols-outlined">close</span></button>
                     </div>
                 </div>
 
-                {/* IA Enrichment Progress Overlay */}
+                {/* IA Enrichment Progress Overlay (Garante feedback total) */}
                 {isEnriching && (
-                    <div className="absolute inset-0 z-[60] bg-slate-900/95 flex flex-col animate-fadeIn">
-                        <div className="p-6 border-b border-white/10 flex justify-between items-center">
-                            <h3 className="text-white font-bold flex items-center gap-2">
-                                <span className="material-symbols-outlined animate-spin text-blue-400">sync</span>
-                                Enriquecendo Acervo com IA...
-                            </h3>
-                            <button onClick={() => setShouldStopEnrich(true)} className="px-4 py-1 bg-red-600 text-white text-xs font-bold rounded-full">Parar</button>
-                        </div>
-                        <div className="p-10 flex-1 flex flex-col">
-                            <div className="w-full bg-white/10 h-4 rounded-full overflow-hidden mb-6">
-                                <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${enrichProgress}%` }}></div>
+                    <div className="absolute inset-0 z-[60] bg-slate-900/98 flex flex-col animate-fadeIn">
+                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-slate-800">
+                            <div>
+                                <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                                    <span className="material-symbols-outlined animate-spin text-blue-400">psychology</span>
+                                    Enriquecimento de Dados
+                                </h3>
+                                <p className="text-xs text-blue-300">A IA está lendo cada receita para categorizá-la.</p>
                             </div>
-                            <div className="flex-1 bg-black/40 rounded-xl p-4 font-mono text-[11px] text-blue-300 overflow-y-auto scrollbar-hide">
-                                {enrichLogs.map((log, i) => <p key={i} className="mb-1">{log}</p>)}
+                            <button onClick={() => setShouldStopEnrich(true)} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-full transition-colors">PARAR PROCESSO</button>
+                        </div>
+                        <div className="p-8 flex-1 flex flex-col overflow-hidden">
+                            <div className="mb-2 flex justify-between text-xs font-bold text-blue-400">
+                                <span>PROGRESSO TOTAL</span>
+                                <span>{Math.round(enrichProgress)}%</span>
+                            </div>
+                            <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden mb-6 border border-white/10">
+                                <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-500" style={{ width: `${enrichProgress}%` }}></div>
+                            </div>
+                            <div className="flex-1 bg-black rounded-xl p-5 font-mono text-[12px] text-green-400 overflow-y-auto border border-blue-500/20 shadow-inner">
+                                {enrichLogs.map((log, i) => (
+                                    <p key={i} className={`mb-1.5 ${log.startsWith('>') ? 'text-blue-300' : log.includes('ERRO') ? 'text-red-400' : log.includes('SAFE') ? 'text-yellow-500 italic' : ''}`}>
+                                        {log}
+                                    </p>
+                                ))}
                                 <div ref={logsEndRef} />
                             </div>
                         </div>
@@ -193,9 +240,9 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-surface-dark text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-primary/50 outline-none transition-all text-sm"
                         />
                     </div>
-                    <div className="flex items-center text-[10px] font-bold text-gray-500 gap-4 px-2 uppercase">
+                    <div className="flex items-center text-[10px] font-bold text-gray-500 gap-4 px-2 uppercase shrink-0">
                         <span>Total: {recipes.length}</span>
-                        <span className="text-orange-500">A processar: {recipes.filter(r => !r.tags || r.tags.length < 2).length}</span>
+                        <span className="text-orange-500 bg-orange-500/10 px-2 py-1 rounded">Sem Tags: {recipes.filter(r => !r.tags || r.tags.length < 2).length}</span>
                     </div>
                 </div>
 
