@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, getDoc, writeBatch, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../firebase';
 import type { User, ShoppingItem, AdminInvite } from '../types';
@@ -13,6 +13,7 @@ interface AuthContextType {
     login: () => Promise<void>;
     loginWithEmail: (email: string, pass: string) => Promise<void>;
     registerWithEmail: (name: string, username: string, email: string, pass: string, birthDate: string) => Promise<void>;
+    resetPassword: (email: string) => Promise<void>;
     updateUserProfile: (name: string, photoURL?: string, birthDate?: string) => Promise<void>;
     updateUserPassword: (currentPass: string, newPass: string) => Promise<void>;
     updateUsername: (newUsername: string) => Promise<void>;
@@ -29,7 +30,7 @@ interface AuthContextType {
     pendingAdminInvite: AdminInvite | null;
     sendAdminInvite: (username: string, level: 'admin_l1' | 'admin_l2') => Promise<{ success: boolean; message: string }>;
     respondToAdminInvite: (inviteId: string, accept: boolean) => Promise<void>;
-    refreshUserProfile: () => Promise<void>; // NOVO: Permite atualizar permissões sem F5
+    refreshUserProfile: () => Promise<void>; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,7 +42,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
     const [pendingAdminInvite, setPendingAdminInvite] = useState<AdminInvite | null>(null);
 
-    // Verifica se o username já existe no banco de dados público
     const checkUsernameUniqueness = async (username: string): Promise<boolean> => {
         if (!db) return true;
         try {
@@ -58,8 +58,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return true;
         } catch (error) {
             console.error("Erro ao verificar username:", error);
-            // Se der erro de permissão aqui (apesar da regra corrigida), permitimos para não travar a UX
-            // O backend do Firebase rejeitaria a gravação depois se fosse o caso.
             return true; 
         }
     };
@@ -110,7 +108,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // Função central para processar dados do usuário (Auth + Firestore)
     const processUserData = async (currentUser: any) => {
         let photoToUse = currentUser.photoURL;
         let usernameToUse = null;
@@ -122,7 +119,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (db) {
             try {
-                // Busca dados privados
                 const userDocRef = doc(db, 'users', currentUser.uid);
                 const userDocSnap = await getDoc(userDocRef);
                 if (userDocSnap.exists()) {
@@ -135,7 +131,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (data.role) roleToUse = data.role;
                 }
 
-                // Busca username
                 if (currentUser.email) {
                     const publicUserRef = doc(db, 'users_public', currentUser.email.toLowerCase());
                     const publicUserSnap = await getDoc(publicUserRef);
@@ -164,7 +159,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
     };
 
-    // Nova função para atualizar o perfil sem recarregar a página
     const refreshUserProfile = async () => {
         if (!auth?.currentUser) return;
         const updatedUser = await processUserData(auth.currentUser);
@@ -255,15 +249,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsAuthLoading(false);
     };
 
-    const getApiKeyDebugInfo = () => {
-        // @ts-ignore
-        const key = auth?.app?.options?.apiKey || 'N/A';
-        if (key && key.length > 10) {
-            return `${key.substring(0, 7)}...${key.substring(key.length - 5)}`;
-        }
-        return key;
-    };
-
     const loginWithEmail = async (email: string, pass: string) => {
         setAuthError(null);
         setAuthErrorCode(null);
@@ -277,23 +262,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.setItem('remembered_email', email);
             await migrateGuestData(result.user.uid);
         } catch (error: any) {
-            console.error("Email Login Error:", error);
+            console.error("Email Login Error Trace:", error);
             const errorCode = error.code || '';
-            const errorMessage = error.message || '';
             
-            if (errorMessage.includes('identity-toolkit-api-has-not-been-used')) {
-                setAuthErrorCode('CONFIG_ERROR');
-                setAuthError(`A API de Autenticação não está ativada no Firebase.`);
-            } else if (errorCode.includes('api-key-not-valid') || errorMessage.includes('api-key-not-valid')) {
-                setAuthErrorCode('API_KEY_ERROR');
-                const keyDebug = getApiKeyDebugInfo();
-                setAuthError(`Chave Recusada (${keyDebug}). O navegador pode estar usando uma versão antiga.`);
-            } else if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
-                setAuthError("E-mail ou senha incorretos. Se não tem conta, cadastre-se.");
+            if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
+                setAuthErrorCode('INVALID_CREDENTIALS');
+                setAuthError("E-mail ou senha incorretos.");
             } else if (errorCode === 'auth/too-many-requests') {
                 setAuthError("Muitas tentativas falhas. Tente novamente mais tarde.");
             } else {
-                setAuthError(`Erro ao entrar: ${errorMessage}`);
+                setAuthError(`Erro ao entrar: ${error.message}`);
             }
         }
     };
@@ -348,340 +326,189 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (error: any) {
             console.error("Registration Error:", error);
             const errorCode = error.code || '';
-            const errorMessage = error.message || '';
-
-            if (errorMessage.includes('identity-toolkit-api-has-not-been-used')) {
-                setAuthErrorCode('CONFIG_ERROR');
-                setAuthError(`A API de Autenticação não está ativada no Firebase.`);
-            } else if (errorCode.includes('api-key-not-valid')) {
-                setAuthErrorCode('API_KEY_ERROR');
-                setAuthError(`Chave Recusada. Verifique se confere com o Firebase.`);
-            } else if (errorCode === 'auth/email-already-in-use') {
-                setAuthError("Este e-mail já está cadastrado. Tente fazer login.");
+            if (errorCode === 'auth/email-already-in-use') {
+                setAuthErrorCode('EMAIL_IN_USE');
+                setAuthError("Este e-mail já está cadastrado.");
             } else if (errorCode === 'auth/weak-password') {
                 setAuthError("A senha deve ter pelo menos 6 caracteres.");
-            } else if (errorCode === 'auth/invalid-email') {
-                setAuthError("Formato de e-mail inválido.");
-            } else if (errorCode.includes('permission-denied')) {
-                setAuthError("Erro de permissão no banco de dados. Tente novamente.");
             } else {
-                setAuthError(`Erro ao criar conta (${errorCode}).`);
+                setAuthError(`Erro ao criar conta: ${error.message}`);
             }
         }
     };
 
+    const resetPassword = async (email: string) => {
+        if (!auth) return;
+        try {
+            await sendPasswordResetEmail(auth, email);
+        } catch (error: any) {
+            throw new Error(error.message);
+        }
+    };
+
     const updateUsername = async (newUsername: string) => {
-        if (!auth || !auth.currentUser || !user || !db) throw new Error("Usuário não autenticado ou sistema offline.");
+        if (!auth || !auth.currentUser || !user || !db) throw new Error("Usuário não autenticado.");
 
         const cleanUsername = newUsername.trim().toLowerCase();
         if (cleanUsername === user.username) return;
 
-        if (!/^[a-z0-9]{3,15}$/.test(cleanUsername)) {
-            throw new Error("O nome de usuário deve ter 3 a 15 caracteres, apenas letras minúsculas e números.");
-        }
-
-        const LIMIT_CHANGES = 2;
-        const DAYS_WINDOW = 15;
-        const history = user.usernameChangeHistory || [];
-        const now = new Date();
-        const windowStart = new Date(now.getTime() - (DAYS_WINDOW * 24 * 60 * 60 * 1000));
-
-        const recentChanges = history.filter(dateStr => new Date(dateStr) > windowStart);
-
-        if (recentChanges.length >= LIMIT_CHANGES) {
-            throw new Error(`Limite de alterações atingido (máx. 2 a cada 15 dias).`);
-        }
-
         try {
             const isUnique = await checkUsernameUniqueness(cleanUsername);
-            if (!isUnique) {
-                throw new Error(`O usuário @${cleanUsername} já está em uso.`);
-            }
+            if (!isUnique) throw new Error(`O usuário @${cleanUsername} já está em uso.`);
 
             await syncUserToPublicDirectory(auth.currentUser, undefined, cleanUsername);
             
-            const newHistory = [...history, now.toISOString()];
+            const history = user.usernameChangeHistory || [];
+            const newHistory = [...history, new Date().toISOString()];
             const userDocRef = doc(db, 'users', auth.currentUser.uid);
             await setDoc(userDocRef, { usernameChangeHistory: newHistory }, { merge: true });
 
             setUser(prev => prev ? ({ ...prev, username: cleanUsername, usernameChangeHistory: newHistory }) : null);
 
         } catch (error: any) {
-            console.error("Erro ao atualizar username:", error);
             throw new Error(error.message || "Falha ao atualizar nome de usuário.");
         }
     };
 
     const updateDietaryPreferences = async (preferences: string[]) => {
         if (!auth || !auth.currentUser || !db) throw new Error("Usuário não autenticado.");
-        
         try {
             const userDocRef = doc(db, 'users', auth.currentUser.uid);
             await setDoc(userDocRef, { dietaryPreferences: preferences }, { merge: true });
             setUser(prev => prev ? ({ ...prev, dietaryPreferences: preferences }) : null);
-        } catch (error: any) {
-            console.error("Erro ao salvar preferências:", error);
+        } catch (error) {
             throw new Error("Falha ao salvar preferências.");
         }
     };
 
     const deleteAccount = async (password: string) => {
         if (!auth || !auth.currentUser || !auth.currentUser.email || !db) throw new Error("Erro de autenticação.");
-
         try {
             const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
             await reauthenticateWithCredential(auth.currentUser, credential);
-
             const uid = auth.currentUser.uid;
             const email = auth.currentUser.email;
-
             await deleteDoc(doc(db, 'users_public', email.toLowerCase()));
             await deleteDoc(doc(db, 'users', uid));
             await deleteUser(auth.currentUser);
-
             setUser(null);
-            
         } catch (error: any) {
-            console.error("Erro ao excluir conta:", error);
-            if (error.code === 'auth/wrong-password') {
-                throw new Error("Senha incorreta.");
-            }
-            throw new Error("Erro ao excluir conta: " + error.message);
+            throw new Error(error.code === 'auth/wrong-password' ? "Senha incorreta." : error.message);
         }
     };
 
     const updateUserProfile = async (name: string, photoURL?: string, birthDate?: string) => {
         if (!auth || !auth.currentUser) throw new Error("Usuário não autenticado.");
-        
         try {
             await updateProfile(auth.currentUser, { displayName: name });
-
             if (db) {
                 const userDocRef = doc(db, 'users', auth.currentUser.uid);
                 const updates: any = {};
-                
-                if (photoURL) {
-                    updates.photoBase64 = photoURL;
-                    localStorage.setItem(`user_photo_${auth.currentUser.uid}`, photoURL);
-                }
-                
-                if (birthDate) {
-                    updates.birthDate = birthDate;
-                }
-
-                if (Object.keys(updates).length > 0) {
-                    await setDoc(userDocRef, updates, { merge: true });
-                }
+                if (photoURL) updates.photoBase64 = photoURL;
+                if (birthDate) updates.birthDate = birthDate;
+                if (Object.keys(updates).length > 0) await setDoc(userDocRef, updates, { merge: true });
             }
-
             await syncUserToPublicDirectory(auth.currentUser, photoURL, user?.username || undefined);
-            
-            setUser(prev => prev ? ({ 
-                ...prev, 
-                displayName: name, 
-                photoURL: photoURL || prev.photoURL,
-                birthDate: birthDate || prev.birthDate
-            }) : null);
-            
+            setUser(prev => prev ? ({ ...prev, displayName: name, photoURL: photoURL || prev.photoURL, birthDate: birthDate || prev.birthDate }) : null);
         } catch (error: any) {
-            console.error("Erro ao atualizar perfil:", error);
-            throw new Error("Falha ao atualizar perfil: " + error.message);
+            throw new Error(error.message);
         }
     };
 
     const removeProfilePhoto = async () => {
         if (!auth || !auth.currentUser) throw new Error("Usuário não autenticado.");
-
         try {
             await updateProfile(auth.currentUser, { photoURL: "" });
-
-            if (db) {
-                const userDocRef = doc(db, 'users', auth.currentUser.uid);
-                await setDoc(userDocRef, { photoBase64: null }, { merge: true });
-            }
-            
-            localStorage.removeItem(`user_photo_${auth.currentUser.uid}`);
+            if (db) await setDoc(doc(db, 'users', auth.currentUser.uid), { photoBase64: null }, { merge: true });
             await syncUserToPublicDirectory(auth.currentUser, "", user?.username || undefined);
             setUser(prev => prev ? ({ ...prev, photoURL: null }) : null);
-
         } catch (error: any) {
-            console.error("Erro ao remover foto:", error);
-            throw new Error("Falha ao remover foto: " + error.message);
+            throw new Error(error.message);
         }
     };
 
     const updateUserPassword = async (currentPass: string, newPass: string) => {
         if (!auth || !auth.currentUser || !auth.currentUser.email) throw new Error("Usuário não autenticado.");
-        
         try {
             const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPass);
             await reauthenticateWithCredential(auth.currentUser, credential);
             await updatePassword(auth.currentUser, newPass);
         } catch (error: any) {
-            if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-                throw new Error("A senha atual está incorreta.");
-            }
-            if (error.code === 'auth/too-many-requests') {
-                throw new Error("Muitas tentativas. Aguarde um momento.");
-            }
-            throw new Error("Erro ao mudar senha: " + error.message);
+            if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') throw new Error("A senha atual está incorreta.");
+            throw new Error(error.message);
         }
     };
 
     const login = async () => {
         setAuthError(null);
         setAuthErrorCode(null);
-        
-        if (!isFirebaseConfigured || !auth) {
-            setAuthError("Sistema de login indisponível no momento.");
-            return;
-        }
-
+        if (!auth) return;
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
-
         try {
             const result = await signInWithPopup(auth, provider);
-            
             let finalUsername = undefined;
             if (db && result.user.email) {
                 const publicUserRef = doc(db, 'users_public', result.user.email.toLowerCase());
                 const publicUserSnap = await getDoc(publicUserRef);
-                
                 if (!publicUserSnap.exists()) {
-                    const baseName = result.user.email.split('@')[0];
-                    finalUsername = await generateUniqueUsername(baseName);
+                    finalUsername = await generateUniqueUsername(result.user.email.split('@')[0]);
                 }
             }
-
             await migrateGuestData(result.user.uid);
             await syncUserToPublicDirectory(result.user, undefined, finalUsername);
         } catch (error: any) {
-            console.error("Google Login Error:", error);
+            console.error("Google Login Error Trace:", error);
             const errorCode = error.code || '';
-            const errorMessage = error.message || '';
-            
-            if (errorCode === 'auth/popup-closed-by-user') return;
-            
-            if (errorMessage.includes('identity-toolkit-api-has-not-been-used')) {
-                setAuthErrorCode('CONFIG_ERROR');
-                setAuthError(`A API de Autenticação não está ativada no Firebase.`);
-            } else if (errorCode.includes('api-key-not-valid')) {
-                setAuthErrorCode('API_KEY_ERROR');
-                setAuthError(`Chave Recusada. Verifique se confere com o painel.`);
-            } else if (errorCode === 'auth/unauthorized-domain') {
-                 // CAPTURA DO ERRO DE DOMÍNIO PARA A UI MOSTRAR O POPUP
-                 const domain = window.location.hostname;
-                 console.warn(`Blocking domain: ${domain}`);
+            if (errorCode === 'auth/unauthorized-domain') {
                  setAuthErrorCode('DOMAIN_ERROR');
-                 setAuthError(`Domínio não autorizado: ${domain}`);
-            } else {
-                setAuthError(`Erro Google: ${errorMessage}`);
-                setAuthErrorCode('GOOGLE_ERROR');
+                 setAuthError(`Domínio não autorizado: ${window.location.hostname}`);
+            } else if (errorCode !== 'auth/popup-closed-by-user') {
+                setAuthError(`Erro ao entrar com Google: ${error.message}`);
             }
         }
     };
 
     const logout = async () => {
-        if (!auth || !isFirebaseConfigured) {
-            setUser(null);
-            return;
-        }
-        try {
-            await signOut(auth);
-            setUser(null);
-        } catch (error) {
-            console.error("Logout Error:", error);
-            setUser(null);
-        }
+        if (!auth) return;
+        try { await signOut(auth); setUser(null); } catch (error) { setUser(null); }
     };
 
-    const clearAuthError = () => {
-        setAuthError(null);
-        setAuthErrorCode(null);
-    }
+    const clearAuthError = () => { setAuthError(null); setAuthErrorCode(null); }
 
     const sendAdminInvite = async (username: string, level: 'admin_l1' | 'admin_l2') => {
         if (!db || !user) return { success: false, message: 'Erro interno.' };
-        
         try {
             const q = query(collection(db, 'users_public'), where('username', '==', username.toLowerCase()));
             const querySnapshot = await getDocs(q);
-            
-            if (querySnapshot.empty) {
-                return { success: false, message: 'Usuário não encontrado.' };
-            }
-
+            if (querySnapshot.empty) return { success: false, message: 'Usuário não encontrado.' };
             const targetUser = querySnapshot.docs[0].data();
-            if (targetUser.uid === user.uid) {
-                return { success: false, message: 'Você não pode convidar a si mesmo.' };
-            }
-
-            await addDoc(collection(db, 'admin_invites'), {
-                fromUid: user.uid,
-                fromName: user.displayName,
-                toUsername: username.toLowerCase(),
-                level: level,
-                status: 'pending',
-                createdAt: serverTimestamp()
-            });
-
+            if (targetUser.uid === user.uid) return { success: false, message: 'Você não pode convidar a si mesmo.' };
+            await addDoc(collection(db, 'admin_invites'), { fromUid: user.uid, fromName: user.displayName, toUsername: username.toLowerCase(), level: level, status: 'pending', createdAt: serverTimestamp() });
             return { success: true, message: `Convite enviado para @${username}` };
-
         } catch (error) {
-            console.error("Erro ao enviar convite admin:", error);
             return { success: false, message: 'Falha ao enviar convite.' };
         }
     };
 
     const respondToAdminInvite = async (inviteId: string, accept: boolean) => {
         if (!db || !user) return;
-        
         try {
             const inviteRef = doc(db, 'admin_invites', inviteId);
             const inviteSnap = await getDoc(inviteRef);
-            
             if (inviteSnap.exists()) {
                 const inviteData = inviteSnap.data() as AdminInvite;
-                
-                if (accept) {
-                    const userRef = doc(db, 'users', user.uid);
-                    await updateDoc(userRef, { role: inviteData.level });
-                    // Não precisa atualizar o user state manualmente se usar o refreshUserProfile
-                }
-
+                if (accept) await updateDoc(doc(db, 'users', user.uid), { role: inviteData.level });
                 await updateDoc(inviteRef, { status: accept ? 'accepted' : 'rejected' });
             }
-            
             setPendingAdminInvite(null); 
         } catch (error) {
-            console.error("Erro ao responder convite:", error);
+            console.error(error);
         }
     };
 
     const value = { 
-        user, 
-        isAuthLoading, 
-        authError, 
-        authErrorCode, 
-        login, 
-        loginWithEmail, 
-        registerWithEmail, 
-        updateUserProfile, 
-        updateUserPassword, 
-        updateUsername, 
-        updateDietaryPreferences,
-        removeProfilePhoto,
-        deleteAccount,
-        loginDemo, 
-        logout, 
-        setAuthError, 
-        clearAuthError,
-        checkUsernameUniqueness,
-        pendingAdminInvite,
-        sendAdminInvite,
-        respondToAdminInvite,
-        refreshUserProfile // Expoe a nova função
+        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, loginDemo, logout, setAuthError, clearAuthError, checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, respondToAdminInvite, refreshUserProfile 
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -689,8 +516,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuth = (): AuthContextType => {
     const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
+    if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
     return context;
 };

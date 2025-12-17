@@ -107,7 +107,6 @@ export const WebSidebarLeft: React.FC = () => {
                     <Logo className="w-6 h-6" />
                 </div>
                 <div>
-                    {/* REMOVIDO font-display DAQUI */}
                     <h1 className="text-xl font-bold text-white leading-none">Checklist<span className="text-blue-500">IA</span></h1>
                     <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Web Beta</span>
                 </div>
@@ -188,13 +187,12 @@ export const WebSidebarLeft: React.FC = () => {
                         {/* Expanded Menu (Accordion) */}
                         <div className={`flex flex-col gap-1 px-2 transition-all duration-300 ease-in-out ${isProfileExpanded ? 'max-h-[600px] py-2 opacity-100' : 'max-h-0 py-0 opacity-0'}`}>
                             
-                            {/* Standard Options */}
                             <button onClick={() => app.openModal('profile')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors text-sm">
                                 <span className="material-symbols-outlined text-lg">account_circle</span>
                                 Meu Perfil
                             </button>
 
-                            {/* ADMIN SECTION (NESTED ACCORDION) */}
+                            {/* ADMIN SECTION */}
                             {app.isAdmin && (
                                 <div className="mt-1 mb-1 border-y border-white/5 py-1">
                                     <button 
@@ -208,7 +206,6 @@ export const WebSidebarLeft: React.FC = () => {
                                         <span className={`material-symbols-outlined text-sm transition-transform duration-300 ${isAdminExpanded ? 'rotate-180' : ''}`}>expand_more</span>
                                     </button>
 
-                                    {/* Admin Buttons List */}
                                     {isAdminExpanded && (
                                         <div className="flex flex-col gap-1 pl-2 mt-1 animate-slideUp">
                                             <button onClick={() => app.openModal('admin')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
@@ -219,6 +216,10 @@ export const WebSidebarLeft: React.FC = () => {
                                             {/* Super Admin Options */}
                                             {app.isSuperAdmin && (
                                                 <>
+                                                    <button onClick={() => app.openModal('contentFactory')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-green-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-green-500/50">
+                                                        <span className="material-symbols-outlined text-base">factory</span>
+                                                        Fábrica de Conteúdo
+                                                    </button>
                                                     <button onClick={() => app.openModal('adminRecipes')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
                                                         <span className="material-symbols-outlined text-base">menu_book</span>
                                                         Receitas
