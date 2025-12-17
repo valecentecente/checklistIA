@@ -89,7 +89,6 @@ export const AdminContentFactoryModal: React.FC = () => {
 
         const categoriesToProcess = category === "--- TODAS AS CATEGORIAS ---" ? baseCategories : [category];
         addLog(`--- INICIANDO FÁBRICA: MODO ${category === "--- TODAS AS CATEGORIAS ---" ? "LOTE" : "ÚNICO"} ---`, 'separator');
-        addLog(`Nota: Usando Cooldown de segurança para evitar erro 429.`, 'warning');
 
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -139,7 +138,6 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                         const recipeData = JSON.parse(detailRes.text || "{}");
                         
-                        // IMAGEM
                         const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                             model: 'gemini-2.5-flash-image',
                             contents: { parts: [{ text: `Foto profissional de culinária: ${recipeData.imageQuery || name}` }] },
@@ -171,29 +169,27 @@ export const AdminContentFactoryModal: React.FC = () => {
                         }
 
                     } catch (err: any) {
-                        addLog(`> ERRO em ${name}: ${err.message}`, 'error');
-                        // Se for erro de cota no meio do loop, espera extra
-                        if (err.message?.includes('429')) {
-                             addLog("Pausa forçada de 30s por limite de cota...", "warning");
-                             await new Promise(r => setTimeout(r, 30000));
+                        let errorMsg = err.message || 'Erro desconhecido';
+                        addLog(`> ERRO em ${name}: ${errorMsg}`, 'error');
+                        
+                        if (errorMsg.includes('403') || errorMsg.includes('API key')) {
+                            addLog("ERRO CRÍTICO: Chave de API rejeitada ou revogada pelo Google.", "error");
+                            setShouldStop(true);
+                            break;
                         }
                     }
                     
-                    // Atualiza Progresso
                     const totalItems = categoriesToProcess.length * quantity;
                     const itemsProcessedSoFar = (categoriesToProcess.indexOf(currentCat) * quantity) + (i + 1);
                     setProgress((itemsProcessedSoFar / totalItems) * 100);
                     
-                    // COOLDOWN OBRIGATÓRIO (8 segundos entre cada receita para evitar 429)
                     if (i < recipeNames.length - 1) {
-                        addLog("Aguardando cooldown de segurança (8s)...", "warning");
                         await new Promise(r => setTimeout(r, 8000));
                     }
                 }
                 
-                // Pausa maior entre categorias
-                if (categoriesToProcess.indexOf(currentCat) < categoriesToProcess.length - 1) {
-                    addLog("Troca de categoria. Pausa de 15s...", "warning");
+                if (categoriesToProcess.indexOf(currentCat) < categoriesToProcess.length - 1 && !shouldStop) {
+                    addLog("Pausa de transição entre categorias (15s)...", "warning");
                     await new Promise(r => setTimeout(r, 15000));
                 }
             }
@@ -201,7 +197,7 @@ export const AdminContentFactoryModal: React.FC = () => {
             addLog(`--- PROCESSO CONCLUÍDO ---`, 'separator');
 
         } catch (error: any) {
-            addLog(`ERRO CRÍTICO: ${error.message}`, 'error');
+            addLog(`ERRO NO SISTEMA: ${error.message}`, 'error');
         } finally {
             setIsGenerating(false);
         }
@@ -262,11 +258,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                 )}
 
                 <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-[11px] space-y-1 scrollbar-hide">
-                    {logs.length === 0 && (
-                        <div className="text-center py-10">
-                            <p className="text-gray-500 italic">O Modo Lote utiliza pausas de 8s para respeitar o plano gratuito da API.</p>
-                        </div>
-                    )}
                     {logs.map((log, i) => (
                         <p key={i} className={`break-words ${
                             log.type === 'error' ? 'text-red-500 font-bold bg-red-500/10 p-1 rounded' : 

@@ -21,7 +21,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const [newTags, setNewTags] = useState('');
 
     // IA Enrichment State
-    const [isChecking, setIsChecking] = useState(false); // Novo: Para o clique inicial
+    const [isChecking, setIsChecking] = useState(false);
     const [isEnriching, setIsEnriching] = useState(false);
     const [enrichProgress, setEnrichProgress] = useState(0);
     const [enrichLogs, setEnrichLogs] = useState<string[]>([]);
@@ -66,15 +66,11 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         } catch (error) { showToast("Erro."); }
     };
 
-    // --- LÓGICA DE ENRIQUECIMENTO COM IA (SAFE MODE) ---
     const startEnrichment = async () => {
         setIsChecking(true);
         const apiKey = process.env.API_KEY as string;
         
-        // Simula um pequeno delay para a UI respirar
         await new Promise(r => setTimeout(r, 800));
-
-        // Filtra apenas receitas que precisam de tags (menos de 2 tags)
         const targets = recipes.filter(r => !r.tags || r.tags.length < 2);
         
         if (targets.length === 0) {
@@ -94,13 +90,14 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         setEnrichLogs(["[SISTEMA] Iniciando varredura de tags...", "[SISTEMA] Modo seguro ativado (Pausa de 8s entre requisições)."]);
         setEnrichProgress(0);
 
+        // Criamos a instância apenas aqui para garantir que pegue a chave mais atual
         const ai = new GoogleGenAI({ apiKey });
 
         for (let i = 0; i < targets.length; i++) {
             if (shouldStopEnrich) break;
 
             const r = targets[i];
-            const logMsg = `[${i+1}/${targets.length}] Analisando ingredientes de: ${r.name}...`;
+            const logMsg = `[${i+1}/${targets.length}] Analisando: ${r.name}...`;
             setEnrichLogs(prev => [...prev, logMsg]);
 
             try {
@@ -116,42 +113,52 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                 }));
 
                 const suggestedTags: string[] = JSON.parse(result.text || "[]");
-                
-                // Combina tags sugeridas com as que já existiam
                 const currentTags = r.tags || [];
                 const mergedTags = Array.from(new Set([...currentTags, ...suggestedTags])).map(t => t.toLowerCase());
 
                 if (db) {
                     await updateDoc(doc(db, 'global_recipes', r.id), { 
                         tags: mergedTags,
-                        keywords: generateKeywords(r.name) // Aproveita para atualizar indexação
+                        keywords: generateKeywords(r.name)
                     });
                 }
-                
-                setEnrichLogs(prev => [...prev, `> SUCESSO: Tags aplicadas: ${suggestedTags.join(', ')}`]);
+                setEnrichLogs(prev => [...prev, `> SUCESSO: ${suggestedTags.join(', ')}`]);
 
             } catch (err: any) {
-                const errorStr = err.message || 'Erro desconhecido';
-                setEnrichLogs(prev => [...prev, `> ERRO em ${r.name}: ${errorStr.substring(0, 50)}...`]);
+                // Captura a mensagem de erro completa do Google para diagnóstico
+                let errorDetails = err.message || 'Erro desconhecido';
+                try {
+                    // Tenta extrair o JSON de erro se existir na mensagem
+                    if (errorDetails.includes('{')) {
+                        const jsonPart = errorDetails.substring(errorDetails.indexOf('{'));
+                        const parsed = JSON.parse(jsonPart);
+                        errorDetails = parsed.error?.message || errorDetails;
+                    }
+                } catch(e) {}
+
+                setEnrichLogs(prev => [...prev, `> ERRO CRÍTICO: ${errorDetails}`]);
                 
-                if (errorStr.includes('429')) {
-                    setEnrichLogs(prev => [...prev, `[AVISO] Limite atingido. Aguardando 20s para reset...`]);
-                    await new Promise(res => setTimeout(res, 20000));
+                if (errorDetails.includes('403') || errorDetails.includes('key')) {
+                    setEnrichLogs(prev => [...prev, "[ALERTA] Sua chave de API parece inválida ou foi cancelada pelo Google. Por favor, gere uma nova no AI Studio."]);
+                    setShouldStopEnrich(true);
+                    break;
+                }
+
+                if (errorDetails.includes('429')) {
+                    setEnrichLogs(prev => [...prev, `[COTA] Limite atingido. Aguardando 30s...`]);
+                    await new Promise(res => setTimeout(res, 30000));
                 }
             }
 
             setEnrichProgress(((i + 1) / targets.length) * 100);
             
-            // COOLDOWN OBRIGATÓRIO (8 segundos para evitar 429)
             if (i < targets.length - 1 && !shouldStopEnrich) {
-                setEnrichLogs(prev => [...prev, `[SAFE] Aguardando cooldown (8s)...`]);
                 await new Promise(res => setTimeout(res, 8000));
             }
         }
 
         setEnrichLogs(prev => [...prev, "--- PROCESSO CONCLUÍDO ---"]);
         setIsEnriching(false);
-        showToast("Processamento de tags finalizado!");
     };
 
     const processedRecipes = useMemo(() => {
@@ -189,13 +196,13 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             ) : (
                                 <span className="material-symbols-outlined text-sm">auto_fix_high</span>
                             )}
-                            {isChecking ? "Analisando Acervo..." : "Inteligência de Tags"}
+                            {isChecking ? "Analisando..." : "Inteligência de Tags"}
                         </button>
                         <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><span className="material-symbols-outlined">close</span></button>
                     </div>
                 </div>
 
-                {/* IA Enrichment Progress Overlay (Garante feedback total) */}
+                {/* IA Enrichment Progress Overlay */}
                 {isEnriching && (
                     <div className="absolute inset-0 z-[60] bg-slate-900/98 flex flex-col animate-fadeIn">
                         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-slate-800">
@@ -204,7 +211,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                     <span className="material-symbols-outlined animate-spin text-blue-400">psychology</span>
                                     Enriquecimento de Dados
                                 </h3>
-                                <p className="text-xs text-blue-300">A IA está lendo cada receita para categorizá-la.</p>
+                                <p className="text-xs text-blue-300">A IA está processando as receitas antigas.</p>
                             </div>
                             <button onClick={() => setShouldStopEnrich(true)} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-full transition-colors">PARAR PROCESSO</button>
                         </div>
@@ -218,7 +225,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             </div>
                             <div className="flex-1 bg-black rounded-xl p-5 font-mono text-[12px] text-green-400 overflow-y-auto border border-blue-500/20 shadow-inner">
                                 {enrichLogs.map((log, i) => (
-                                    <p key={i} className={`mb-1.5 ${log.startsWith('>') ? 'text-blue-300' : log.includes('ERRO') ? 'text-red-400' : log.includes('SAFE') ? 'text-yellow-500 italic' : ''}`}>
+                                    <p key={i} className={`mb-1.5 ${log.startsWith('>') ? 'text-blue-300' : log.includes('ERRO') ? 'text-red-400 font-bold' : log.includes('ALERTA') ? 'text-yellow-400 bg-yellow-900/20 p-2 rounded' : ''}`}>
                                         {log}
                                     </p>
                                 ))}
@@ -246,7 +253,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     </div>
                 </div>
 
-                {/* Content */}
+                {/* Content Grid */}
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-100 dark:bg-black/20">
                     {isLoading ? (
                         <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-4xl text-primary">sync</span></div>
@@ -269,7 +276,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                                 {recipe.tags?.slice(0, 3).map((t, i) => (
                                                     <span key={i} className="bg-gray-100 dark:bg-white/5 text-gray-500 text-[8px] px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700">{t}</span>
                                                 ))}
-                                                {recipe.tags && recipe.tags.length > 3 && <span className="text-[8px] text-gray-400">+{recipe.tags.length - 3}</span>}
                                                 {needsTags && <span className="text-orange-500 text-[8px] font-bold">● Requer IA</span>}
                                             </div>
                                         </div>
@@ -277,7 +283,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                             <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 z-50 p-3 flex flex-col animate-fadeIn">
                                                 <textarea className="flex-1 w-full bg-gray-50 dark:bg-black/20 border rounded p-2 text-xs mb-2 outline-none" value={newTags} onChange={e => setNewTags(e.target.value)} />
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => handleSaveTags(recipe.id)} className="flex-1 bg-green-600 text-white text-[10px] font-bold py-2 rounded">Salvar</button>
+                                                    <button onClick={handleSaveTags} className="flex-1 bg-green-600 text-white text-[10px] font-bold py-2 rounded">Salvar</button>
                                                     <button onClick={() => setTaggingId(null)} className="px-2 bg-gray-200 text-gray-500 text-[10px] font-bold rounded">X</button>
                                                 </div>
                                             </div>
