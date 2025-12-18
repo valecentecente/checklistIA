@@ -20,7 +20,6 @@ export const RecipeSelectionModal: React.FC = () => {
     const { toggleFavorite, isFavorite } = useShoppingList();
     const { user } = useAuth();
     
-    // Estado para o pedido personalizado na comanda
     const [customOrder, setCustomOrder] = useState('');
 
     if (!isRecipeSelectionModalOpen) return null;
@@ -47,36 +46,25 @@ export const RecipeSelectionModal: React.FC = () => {
         await toggleFavorite(recipe);
     };
 
-    const handleShare = async (e: React.MouseEvent, recipe: FullRecipe) => {
-        e.stopPropagation();
-        const text = `Confira a receita de ${recipe.name} no ChecklistIA!`;
-        if (navigator.share) {
-            try { await navigator.share({ title: recipe.name, text, url: window.location.href }); } catch {}
-        } else {
-            await navigator.clipboard.writeText(window.location.href);
-            showToast("Link copiado!");
-        }
-    };
-
     return (
-        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col justify-center items-center animate-fadeIn">
+        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col justify-center items-center animate-fadeIn backdrop-blur-sm">
             
-            {/* Header / Close */}
-            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
-                <div className="flex flex-col">
-                    <span className="text-gray-400 text-xs uppercase tracking-widest font-bold">Resultados para</span>
-                    <h2 className="text-white text-2xl font-bold capitalize">{currentSearchTerm}</h2>
+            {/* Header Compacto */}
+            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-50">
+                <div className="flex flex-col bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
+                    <span className="text-gray-300 text-[10px] uppercase tracking-widest font-black">Menu Sugerido</span>
+                    <h2 className="text-white text-lg font-black capitalize truncate max-w-[200px]">{currentSearchTerm}</h2>
                 </div>
                 <button 
                     onClick={() => closeModal('recipeSelection')}
-                    className="bg-white/10 hover:bg-white/20 text-white rounded-full p-2 transition-colors backdrop-blur-md"
+                    className="bg-white/10 hover:bg-red-500 text-white rounded-full p-2 transition-all backdrop-blur-md border border-white/20"
                 >
                     <span className="material-symbols-outlined">close</span>
                 </button>
             </div>
 
-            {/* Horizontal Snap Scroll Carousel */}
-            <div className="w-full flex overflow-x-auto snap-x snap-mandatory gap-4 px-8 pb-8 pt-4 scrollbar-hide items-center h-[75vh]">
+            {/* Horizontal Carousel */}
+            <div className="w-full flex overflow-x-auto snap-x snap-mandatory gap-6 px-8 pb-8 pt-4 scrollbar-hide items-center h-[75vh]">
                 
                 {/* 1. Results Cards */}
                 {recipeSearchResults.map((recipe, idx) => {
@@ -87,166 +75,135 @@ export const RecipeSelectionModal: React.FC = () => {
                         <div 
                             key={idx} 
                             onClick={() => handleSelect(recipe)}
-                            className="snap-center shrink-0 w-[85vw] sm:w-[350px] h-full relative rounded-3xl overflow-hidden shadow-2xl cursor-pointer group border border-white/10 transition-transform active:scale-95 bg-[#1a1a1a]"
+                            className="snap-center shrink-0 w-[85vw] sm:w-[320px] h-[65vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl cursor-pointer group border border-white/10 transition-transform active:scale-95 bg-[#1a1a1a]"
                         >
-                            {/* Background Image */}
                             <div 
                                 className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
                                 style={{ 
                                     backgroundImage: recipe.imageUrl ? `url(${recipe.imageUrl})` : 'none',
                                     backgroundColor: '#222'
                                 }}
-                            >
-                                {!recipe.imageUrl && (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                        <span className="material-symbols-outlined text-6xl text-white/20">restaurant</span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Gradient Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90"></div>
-
-                            {/* Content */}
+                            ></div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-90"></div>
                             <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-start text-white">
-                                
-                                <div className="flex flex-wrap items-center gap-2 mb-3">
-                                    <div className="flex items-center gap-1 bg-blue-600/20 backdrop-blur-md px-2 py-1 rounded-lg border border-blue-500/30">
-                                        <div className="flex text-blue-400 text-[10px] gap-[1px]">
-                                            {[1,2,3,4,5].map(i => (
-                                                <span key={i} className="material-symbols-outlined text-[12px] font-bold">check</span>
-                                            ))}
-                                        </div>
-                                        <span className="text-[10px] font-bold text-blue-100 ml-1">{fakeRating}</span>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[10px]">check</span> {fakeRating}
                                     </div>
-
-                                    <span className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[12px]">timer</span>
-                                        {recipe.prepTimeInMinutes ? `${recipe.prepTimeInMinutes} min` : 'Rápido'}
+                                    <span className="bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-md text-[9px] font-bold">
+                                        {recipe.prepTimeInMinutes || 30} MIN
                                     </span>
                                 </div>
-
-                                <h3 className="text-3xl font-bold leading-tight mb-2 font-display drop-shadow-lg line-clamp-2">
-                                    {recipe.name}
-                                </h3>
-                                
-                                <div className="flex items-center gap-2 text-sm text-gray-300 mb-6">
-                                    <span className="material-symbols-outlined text-base">inventory_2</span>
-                                    <span>{recipe.ingredients?.length || 0} ingredientes</span>
-                                </div>
-                                
-                                <div className="flex items-center justify-between w-full mt-2">
-                                    <div className="flex gap-3">
-                                        <button 
-                                            onClick={(e) => handleToggleFavorite(e, recipe)}
-                                            className={`h-14 w-14 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 shadow-lg transition-all active:scale-90 ${
-                                                isSaved 
-                                                ? 'bg-red-600 text-white border-red-500' 
-                                                : 'bg-black/30 text-white hover:bg-white/20'
-                                            }`}
-                                        >
-                                            <span className={`material-symbols-outlined text-2xl ${isSaved ? 'font-variation-FILL-1' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
-                                                favorite
-                                            </span>
-                                        </button>
-
-                                        <button 
-                                            onClick={(e) => handleShare(e, recipe)}
-                                            className="h-14 w-14 rounded-full flex items-center justify-center bg-black/30 text-white backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all active:scale-90"
-                                        >
-                                            <span className="material-symbols-outlined text-2xl">share</span>
-                                        </button>
-                                    </div>
-
-                                    <button 
-                                        className="h-16 w-16 rounded-full bg-white text-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 hover:shadow-[0_0_40px_rgba(37,99,235,0.8)] transition-all duration-300 active:scale-95 group relative"
-                                        onClick={() => handleSelect(recipe)}
-                                    >
-                                        <span className="material-symbols-outlined text-4xl font-bold">check</span>
-                                        <div className="absolute inset-0 rounded-full border-2 border-blue-400 opacity-0 group-hover:animate-ping"></div>
+                                <h3 className="text-xl font-black leading-tight mb-4 drop-shadow-lg line-clamp-2 uppercase italic">{recipe.name}</h3>
+                                <div className="flex items-center justify-between w-full">
+                                    <button onClick={(e) => handleToggleFavorite(e, recipe)} className={`h-11 w-11 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all ${isSaved ? 'bg-red-600 border-red-500' : 'bg-black/30'}`}>
+                                        <span className={`material-symbols-outlined text-xl ${isSaved ? 'font-variation-FILL-1' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>favorite</span>
                                     </button>
+                                    <div className="h-12 w-12 rounded-full bg-white text-blue-600 flex items-center justify-center shadow-lg group-hover:bg-blue-50">
+                                        <span className="material-symbols-outlined text-2xl font-black">add</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     );
                 })}
 
-                {/* 2. THE CUSTOM "WAITRESS/ORDER" CARD (Final Experience) */}
+                {/* 2. THE WAITRESS CARD - FOCUS ON CHARISMA & UNIFORM */}
                 <div 
-                    className="snap-center shrink-0 w-[85vw] sm:w-[350px] h-full relative rounded-3xl overflow-hidden shadow-2xl bg-[#1a1a1a] border border-white/10"
+                    className="snap-center shrink-0 w-[85vw] sm:w-[320px] h-[65vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border-2 border-blue-500/30"
                 >
-                    {/* Background Image: Garçonete anotando pedido */}
+                    {/* Imagem Principal: Garçonete Carismática com Pad */}
                     <div 
-                        className="absolute inset-0 bg-cover bg-center transition-transform duration-[15s] hover:scale-110"
+                        className="absolute inset-0 bg-cover bg-center transition-transform duration-[40s] animate-slowZoom"
                         style={{ 
-                            backgroundImage: 'url("https://images.unsplash.com/photo-1590604518046-30ed5a5180f3?auto=format&fit=crop&w=800&q=80")',
-                            filter: 'brightness(0.7) contrast(1.1)'
+                            backgroundImage: 'url("https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&w=800&q=80")',
+                            filter: 'contrast(1.05) saturate(1.1)'
                         }}
                     ></div>
 
-                    {/* Uniform Badge Badge (Logo da Marca no Uniforme) */}
-                    <div className="absolute top-20 left-10 z-20 scale-75 opacity-90 rotate-[-5deg] animate-pulse">
-                        <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-xl border border-gray-100 flex items-center gap-1.5">
-                             <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
-                                <span className="material-symbols-outlined text-white text-[12px] font-bold">check</span>
+                    {/* Branding: Crachá ChecklistIA realista no peito */}
+                    <div className="absolute top-[42%] left-[30%] z-40 scale-110 drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]">
+                         <div className="bg-white/95 backdrop-blur-md px-3 py-1 rounded-md border-b-2 border-slate-300 shadow-xl flex items-center gap-1.5 -rotate-2 transform hover:rotate-0 transition-transform">
+                             <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center ring-2 ring-blue-100">
+                                <span className="material-symbols-outlined text-white text-[9px] font-black">check</span>
                              </div>
-                             <span className="text-[10px] font-black tracking-tight text-gray-800">
+                             <span className="text-[9px] font-black text-gray-900 tracking-tighter uppercase">
                                 Checklist<span className="text-blue-600">IA</span>
                              </span>
-                        </div>
+                         </div>
                     </div>
 
-                    {/* Gradient for content readability */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+                    {/* Gradient de leitura no rodapé (Ultra suave) */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 
-                    {/* Content Section */}
-                    <div className="absolute inset-0 p-6 flex flex-col items-center justify-between text-center">
+                    {/* Content Section: Apenas na base para não cobrir o rosto/uniforme */}
+                    <div className="absolute inset-0 p-6 flex flex-col items-center justify-end text-center">
                         
-                        <div className="pt-4">
-                            <h3 className="text-2xl font-black text-white drop-shadow-lg mb-2">Não é o que você queria?</h3>
-                            <p className="text-gray-200 text-xs font-medium opacity-90 px-4">
-                                Nossa garçonete digital está pronta para anotar seu pedido especial.
-                            </p>
-                        </div>
+                        {/* Interactive Area: ULTRA SLIM & TRANSPARENT */}
+                        <div className="w-full bg-black/40 backdrop-blur-xl rounded-3xl p-4 border border-white/20 shadow-2xl mb-2 relative overflow-hidden group">
+                             {/* Glossy Reflection */}
+                             <div className="absolute -top-[100%] left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent skew-y-12"></div>
+                             
+                             <div className="relative z-10">
+                                <label className="block text-left mb-2">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest ml-1">Pedido à Garçonete</span>
+                                        <span className="material-symbols-outlined text-blue-400 text-sm animate-bounce">pan_tool_alt</span>
+                                    </div>
+                                    <input 
+                                        type="text"
+                                        value={customOrder}
+                                        onChange={(e) => setCustomOrder(e.target.value)}
+                                        placeholder="O que deseja pedir hoje?"
+                                        className="w-full bg-transparent border-0 border-b border-white/20 text-white placeholder:text-white/40 focus:ring-0 focus:border-blue-400 text-sm font-bold h-9 px-0 transition-all text-center"
+                                    />
+                                </label>
 
-                        {/* Interactive "Order Pad" Area */}
-                        <div className="w-full bg-white/10 backdrop-blur-xl rounded-2xl p-4 border border-white/20 shadow-2xl">
-                             <label className="block text-left mb-2">
-                                 <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest ml-1">Seu pedido personalizado</span>
-                                 <input 
-                                     type="text"
-                                     value={customOrder}
-                                     onChange={(e) => setCustomOrder(e.target.value)}
-                                     placeholder={`Ex: ${currentSearchTerm} com toque de...`}
-                                     className="w-full bg-white/5 border-0 border-b border-white/30 text-white placeholder:text-white/40 focus:ring-0 focus:border-blue-400 text-sm font-medium h-10 px-1 mt-1 transition-colors"
-                                 />
-                             </label>
-
-                             <button 
-                                onClick={() => handleGenerateNew(customOrder)}
-                                disabled={!customOrder.trim() && !currentSearchTerm}
-                                className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-400 hover:from-blue-500 hover:to-blue-300 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 group"
-                             >
-                                <span className="material-symbols-outlined text-lg group-hover:rotate-12 transition-transform">edit_note</span>
-                                FAZER PEDIDO (IA)
-                             </button>
-                        </div>
-
-                        <div className="pb-4 opacity-60">
-                             <p className="text-[9px] text-white font-medium uppercase tracking-[0.2em]">Serviço Exclusivo ChecklistIA</p>
+                                <button 
+                                    onClick={() => handleGenerateNew(customOrder)}
+                                    disabled={!customOrder.trim()}
+                                    className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale"
+                                >
+                                    CRIAR RECEITA E FOTO (IA)
+                                </button>
+                             </div>
                         </div>
 
                     </div>
                 </div>
 
-                {/* Spacer for right padding */}
-                <div className="snap-center shrink-0 w-4"></div>
+                {/* Spacer Final */}
+                <div className="snap-center shrink-0 w-8"></div>
             </div>
             
-            <p className="text-white/40 text-xs mt-4 animate-pulse flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">swipe</span>
-                Deslize para ver mais opções
-            </p>
+            <div className="flex flex-col items-center gap-2 mt-4">
+                <p className="text-white/60 text-[10px] animate-pulse flex items-center gap-2 font-black uppercase tracking-widest">
+                    <span className="material-symbols-outlined text-sm">keyboard_double_arrow_left</span>
+                    Arraste para o lado para mais opções
+                </p>
+                <div className="flex gap-1.5">
+                    {[1,2,3].map(i => (
+                        <div key={i} className={`h-1 rounded-full ${i === 3 ? 'w-4 bg-primary' : 'w-1 bg-white/20'}`}></div>
+                    ))}
+                </div>
+            </div>
+
+            <style>{`
+                @keyframes slowZoom {
+                    from { transform: scale(1); }
+                    to { transform: scale(1.15); }
+                }
+                .animate-slowZoom {
+                    animation: slowZoom 60s infinite alternate ease-in-out;
+                }
+                .scrollbar-hide::-webkit-scrollbar {
+                    display: none;
+                }
+                .scrollbar-hide {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+            `}</style>
         </div>
     );
 };
