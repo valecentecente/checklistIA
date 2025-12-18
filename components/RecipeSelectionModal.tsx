@@ -69,7 +69,7 @@ export const RecipeSelectionModal: React.FC = () => {
                 {/* 1. Results Cards */}
                 {recipeSearchResults.map((recipe, idx) => {
                     const isSaved = isFavorite(recipe.name);
-                    const fakeRating = (4.5 + (recipe.name.length % 5) / 10).toFixed(1);
+                    const fakeRating = "5.0"; // Padronizado conforme pedido
 
                     return (
                         <div 
@@ -108,11 +108,10 @@ export const RecipeSelectionModal: React.FC = () => {
                     );
                 })}
 
-                {/* 2. THE WAITRESS CARD - FOCUS ON CHARISMA & UNIFORM */}
+                {/* 2. THE WAITRESS CARD */}
                 <div 
                     className="snap-center shrink-0 w-[85vw] sm:w-[320px] h-[65vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border-2 border-blue-500/30"
                 >
-                    {/* Imagem Principal: Garçonete Carismática com Pad */}
                     <div 
                         className="absolute inset-0 bg-cover bg-center transition-transform duration-[40s] animate-slowZoom"
                         style={{ 
@@ -121,7 +120,6 @@ export const RecipeSelectionModal: React.FC = () => {
                         }}
                     ></div>
 
-                    {/* Branding: Crachá ChecklistIA realista no peito */}
                     <div className="absolute top-[42%] left-[30%] z-40 scale-110 drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]">
                          <div className="bg-white/95 backdrop-blur-md px-3 py-1 rounded-md border-b-2 border-slate-300 shadow-xl flex items-center gap-1.5 -rotate-2 transform hover:rotate-0 transition-transform">
                              <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center ring-2 ring-blue-100">
@@ -133,15 +131,10 @@ export const RecipeSelectionModal: React.FC = () => {
                          </div>
                     </div>
 
-                    {/* Gradient de leitura no rodapé (Ultra suave) */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 
-                    {/* Content Section: Apenas na base para não cobrir o rosto/uniforme */}
                     <div className="absolute inset-0 p-6 flex flex-col items-center justify-end text-center">
-                        
-                        {/* Interactive Area: ULTRA SLIM & TRANSPARENT */}
                         <div className="w-full bg-black/40 backdrop-blur-xl rounded-3xl p-4 border border-white/20 shadow-2xl mb-2 relative overflow-hidden group">
-                             {/* Glossy Reflection */}
                              <div className="absolute -top-[100%] left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent skew-y-12"></div>
                              
                              <div className="relative z-10">
@@ -168,11 +161,9 @@ export const RecipeSelectionModal: React.FC = () => {
                                 </button>
                              </div>
                         </div>
-
                     </div>
                 </div>
 
-                {/* Spacer Final */}
                 <div className="snap-center shrink-0 w-8"></div>
             </div>
             

@@ -11,18 +11,17 @@ interface RecipeModalProps {
   onImageGenerated: (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => void;
 }
 
-// Coleção de Chefs Diversificados para o Placeholder
 const CHEF_PLACEHOLDERS = [
-    "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=800&q=80", // Chef Mulher
-    "https://images.unsplash.com/photo-1583394293214-28ded15ee548?auto=format&fit=crop&w=800&q=80", // Chef Homem Negro
-    "https://images.unsplash.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=800&q=80", // Chef Mulher Asiática
-    "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?auto=format&fit=crop&w=800&q=80", // Chef Homem Jovem
-    "https://images.unsplash.com/photo-1654922207993-2952fec3276f?auto=format&fit=crop&w=800&q=80", // Chef Mulher Focada
-    "https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&w=800&q=80", // Chef Italiano
-    "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&w=800&q=80", // Chef Confeiteira
-    "https://images.unsplash.com/photo-1512485800893-b08ec1ea59b1?auto=format&fit=crop&w=800&q=80", // Mãos trabalhando (neutro)
-    "https://images.unsplash.com/photo-1556910103-1c02745a30bf?auto=format&fit=crop&w=800&q=80", // Equipe diversa
-    "https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&w=800&q=80"  // Chef sorrindo
+    "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1583394293214-28ded15ee548?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1654922207993-2952fec3276f?auto=format&fit=crop&w=800&q=80",
+    "https://images.Counter.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1512485800893-b08ec1ea59b1?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1556910103-1c02745a30bf?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&w=800&q=80"
 ];
 
 export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => {
@@ -32,31 +31,25 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   
   const [isAdding, setIsAdding] = useState(false);
   const imageUrl = recipe.imageUrl;
-  // Se não tem URL mas tem query, significa que estamos esperando a IA (background)
-  const isGeneratingInBackground = !imageUrl && !!recipe.imageQuery;
   const isFromCache = recipe.imageSource === 'cache';
   
   const isSaved = isFavorite(recipe.name);
   
-  // Lógica de Detecção de Conteúdo +18 (Híbrida: Flag da IA ou Tags)
   const isAdultContent = useMemo(() => {
       if (recipe.isAlcoholic) return true;
       if (recipe.tags && recipe.tags.length > 0) {
           const adultTags = ['drinks', 'drink', 'alcool', 'álcool', 'bebida alcoólica', 'coquetel', 'vodka', 'gin', 'whisky', 'cerveja'];
           return recipe.tags.some(t => adultTags.includes(t.toLowerCase()));
       }
-      // Fallback por nome se não tiver tags
       const nameLower = recipe.name.toLowerCase();
       if (nameLower.includes('caipirinha') || nameLower.includes('gin tônica') || nameLower.includes('mojito')) return true;
-      
       return false;
   }, [recipe]);
   
-  // Seleciona um Chef aleatório apenas UMA vez quando o componente monta
   const randomChefImage = useMemo(() => {
       const randomIndex = Math.floor(Math.random() * CHEF_PLACEHOLDERS.length);
       return CHEF_PLACEHOLDERS[randomIndex];
-  }, []); // Dependência vazia = roda 1 vez por montagem
+  }, []);
 
   const hasActiveList = items.length > 0 || !!currentMarketName;
   const safeIngredients = recipe.ingredients || [];
@@ -68,6 +61,13 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
       'Médio': 'signal_cellular_alt_2_bar',
       'Difícil': 'signal_cellular_alt',
   };
+
+  const costSymbols = useMemo(() => {
+      if (recipe.cost === 'Baixo') return '$';
+      if (recipe.cost === 'Médio') return '$$';
+      if (recipe.cost === 'Alto') return '$$$';
+      return '$';
+  }, [recipe.cost]);
 
   const handleAddRequest = async () => {
       if (!hasActiveList) {
@@ -126,25 +126,18 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
             <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide relative">
                 
-                {/* --- ÁREA DA IMAGEM (Smart Placeholder Logic) --- */}
                 <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] flex-shrink-0 overflow-hidden bg-gray-200 dark:bg-gray-800">
-                    
-                    {/* Imagem REAL (Se existir) com Fade-In */}
                     <div 
                         className={`absolute inset-0 bg-center bg-no-repeat bg-cover transition-opacity duration-1000 ${imageUrl ? 'opacity-100' : 'opacity-0'}`}
                         style={{backgroundImage: imageUrl ? `url(${imageUrl})` : 'none'}}
                     ></div>
 
-                    {/* Placeholder do CHEF (Se estiver carregando ou sem imagem) */}
                     {!imageUrl && (
                         <div className="absolute inset-0">
-                            {/* Foto do Chef */}
                             <div 
                                 className="absolute inset-0 bg-center bg-cover filter blur-[1px] scale-105"
                                 style={{backgroundImage: `url(${randomChefImage})`}}
                             ></div>
-                            
-                            {/* Overlay Escuro Elegante */}
                             <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-3 p-6 text-center">
                                 <div className="bg-white/20 p-4 rounded-full backdrop-blur-md animate-pulse">
                                     <span className="material-symbols-outlined text-4xl">restaurant_menu</span>
@@ -157,7 +150,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                         </div>
                     )}
                      
-                     {/* Badges e Botões Sobrepostos */}
                      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 items-start pointer-events-none">
                          {imageUrl && isFromCache && (
                              <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10 shadow-sm">
@@ -168,7 +160,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                              </div>
                          )}
                          
-                         {/* --- NOVO: SELO +18 --- */}
                          {isAdultContent && (
                              <div className="animate-bounce-y flex items-center gap-1.5 select-none bg-red-600 text-white px-3 py-1.5 rounded-lg shadow-lg border border-white/20">
                                  <span className="text-xs font-black uppercase tracking-wider leading-none">
@@ -194,7 +185,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                          </button>
                      </div>
                      
-                     {/* Gradient Fade Bottom */}
                      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F7F7F7] dark:from-[#1a1a1a] to-transparent pointer-events-none"></div>
                 </div>
 
@@ -202,25 +192,41 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                      <h1 className="text-text-main dark:text-gray-50 tracking-tight text-[28px] font-bold leading-none font-display capitalize drop-shadow-sm pr-12">{recipe.name}</h1>
                 </div>
                 
-                <div className="flex gap-2 p-5 pt-4 flex-wrap">
+                {/* LINHA DE METADADOS */}
+                <div className="flex gap-2 p-5 pt-4 flex-wrap items-center">
+                    {/* NOTA 5.0 */}
+                    <div className="flex h-8 shrink-0 items-center justify-center gap-x-1.5 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 px-3 shadow-sm">
+                         <span className="material-symbols-outlined text-sm text-blue-600 dark:text-blue-400 font-black">check</span>
+                         <p className="text-blue-600 dark:text-blue-400 text-xs font-black">5.0</p>
+                    </div>
+
+                    {/* INDICADOR DE CUSTO $$$ */}
+                    <div className="flex h-8 shrink-0 items-center justify-center gap-x-1 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/30 px-3 shadow-sm" title={`Custo: ${recipe.cost}`}>
+                         <p className="text-green-600 dark:text-green-400 text-xs font-black tracking-widest">{costSymbols}</p>
+                    </div>
+
                     {recipe.prepTimeInMinutes > 0 && (
                         <div className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 shadow-sm">
                             <span className="material-symbols-outlined text-base text-text-secondary dark:text-gray-400">timer</span>
                             <p className="text-text-secondary dark:text-gray-300 text-xs font-bold uppercase tracking-wide">{recipe.prepTimeInMinutes} min</p>
                         </div>
                     )}
-                    {recipe.servings && (
-                         <div className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 shadow-sm">
-                            <span className="material-symbols-outlined text-base text-text-secondary dark:text-gray-400">restaurant</span>
-                            <p className="text-text-secondary dark:text-gray-300 text-xs font-bold uppercase tracking-wide">{recipe.servings}</p>
-                        </div>
-                    )}
+                    
                     {recipe.difficulty && (
                         <div className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 shadow-sm">
                              <span className="material-symbols-outlined text-base text-text-secondary dark:text-gray-400">{difficultyMap[recipe.difficulty as keyof typeof difficultyMap] || 'signal_cellular_alt'}</span>
                             <p className="text-text-secondary dark:text-gray-300 text-xs font-bold uppercase tracking-wide">{recipe.difficulty}</p>
                         </div>
                     )}
+
+                    {/* BOTÃO TRANSLÚCIDO DE VOLTAR (NOVO) */}
+                    <button 
+                        onClick={onClose}
+                        className="ml-auto flex h-8 shrink-0 items-center justify-center gap-x-1.5 rounded-full bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/5 px-4 backdrop-blur-md hover:bg-white/30 dark:hover:bg-white/20 transition-all active:scale-95 group shadow-sm"
+                    >
+                        <span className="material-symbols-outlined text-sm text-text-main dark:text-gray-200 group-hover:-translate-x-0.5 transition-transform">arrow_back_ios_new</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-text-main dark:text-gray-200">Voltar</span>
+                    </button>
                 </div>
 
                 <div className="px-5">
