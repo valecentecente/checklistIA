@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +19,9 @@ export const RecipeSelectionModal: React.FC = () => {
 
     const { toggleFavorite, isFavorite } = useShoppingList();
     const { user } = useAuth();
+    
+    // Estado para o pedido personalizado na comanda
+    const [customOrder, setCustomOrder] = useState('');
 
     if (!isRecipeSelectionModalOpen) return null;
 
@@ -27,9 +30,10 @@ export const RecipeSelectionModal: React.FC = () => {
         closeModal('recipeSelection');
     };
 
-    const handleGenerateNew = () => {
-        showToast("Gerando nova receita com IA...");
-        fetchRecipeDetails(currentSearchTerm);
+    const handleGenerateNew = (term: string) => {
+        const finalTerm = term.trim() || currentSearchTerm;
+        showToast(`O Chef IA recebeu seu pedido: ${finalTerm}`);
+        fetchRecipeDetails(finalTerm);
         closeModal('recipeSelection');
     };
 
@@ -77,7 +81,6 @@ export const RecipeSelectionModal: React.FC = () => {
                 {/* 1. Results Cards */}
                 {recipeSearchResults.map((recipe, idx) => {
                     const isSaved = isFavorite(recipe.name);
-                    // Simula uma nota alta para o visual "Instagram" (4.5 a 5.0)
                     const fakeRating = (4.5 + (recipe.name.length % 5) / 10).toFixed(1);
 
                     return (
@@ -107,9 +110,7 @@ export const RecipeSelectionModal: React.FC = () => {
                             {/* Content */}
                             <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-start text-white">
                                 
-                                {/* TAGS & RATING ROW */}
                                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                                    {/* Rating Badge (Blue Checks) */}
                                     <div className="flex items-center gap-1 bg-blue-600/20 backdrop-blur-md px-2 py-1 rounded-lg border border-blue-500/30">
                                         <div className="flex text-blue-400 text-[10px] gap-[1px]">
                                             {[1,2,3,4,5].map(i => (
@@ -119,7 +120,6 @@ export const RecipeSelectionModal: React.FC = () => {
                                         <span className="text-[10px] font-bold text-blue-100 ml-1">{fakeRating}</span>
                                     </div>
 
-                                    {/* Prep Time Badge */}
                                     <span className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1">
                                         <span className="material-symbols-outlined text-[12px]">timer</span>
                                         {recipe.prepTimeInMinutes ? `${recipe.prepTimeInMinutes} min` : 'Rápido'}
@@ -135,10 +135,8 @@ export const RecipeSelectionModal: React.FC = () => {
                                     <span>{recipe.ingredients?.length || 0} ingredientes</span>
                                 </div>
                                 
-                                {/* --- BOTTOM ACTION BAR (ZONA DO DEDÃO) --- */}
                                 <div className="flex items-center justify-between w-full mt-2">
                                     <div className="flex gap-3">
-                                        {/* Botão Favoritar */}
                                         <button 
                                             onClick={(e) => handleToggleFavorite(e, recipe)}
                                             className={`h-14 w-14 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 shadow-lg transition-all active:scale-90 ${
@@ -152,7 +150,6 @@ export const RecipeSelectionModal: React.FC = () => {
                                             </span>
                                         </button>
 
-                                        {/* Botão Compartilhar */}
                                         <button 
                                             onClick={(e) => handleShare(e, recipe)}
                                             className="h-14 w-14 rounded-full flex items-center justify-center bg-black/30 text-white backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all active:scale-90"
@@ -161,40 +158,85 @@ export const RecipeSelectionModal: React.FC = () => {
                                         </button>
                                     </div>
 
-                                    {/* THE BIG BLUE CHECK BUTTON */}
                                     <button 
                                         className="h-16 w-16 rounded-full bg-white text-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 hover:shadow-[0_0_40px_rgba(37,99,235,0.8)] transition-all duration-300 active:scale-95 group relative"
                                         onClick={() => handleSelect(recipe)}
                                     >
                                         <span className="material-symbols-outlined text-4xl font-bold">check</span>
-                                        {/* Pulse Effect Ring */}
                                         <div className="absolute inset-0 rounded-full border-2 border-blue-400 opacity-0 group-hover:animate-ping"></div>
                                     </button>
                                 </div>
-
                             </div>
                         </div>
                     );
                 })}
 
-                {/* 2. The "Magic/AI" Card (Last Item) */}
+                {/* 2. THE CUSTOM "WAITRESS/ORDER" CARD (Final Experience) */}
                 <div 
-                    onClick={handleGenerateNew}
-                    className="snap-center shrink-0 w-[85vw] sm:w-[350px] h-full relative rounded-3xl overflow-hidden shadow-2xl cursor-pointer group border-2 border-dashed border-white/20 bg-[#1a1a1a] flex flex-col items-center justify-center text-center p-8 transition-colors hover:border-primary hover:bg-[#222]"
+                    className="snap-center shrink-0 w-[85vw] sm:w-[350px] h-full relative rounded-3xl overflow-hidden shadow-2xl bg-[#1a1a1a] border border-white/10"
                 >
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center mb-6 shadow-lg shadow-primary/30 animate-pulse">
-                        <span className="material-symbols-outlined text-5xl text-white">auto_awesome</span>
+                    {/* Background Image: Garçonete anotando pedido */}
+                    <div 
+                        className="absolute inset-0 bg-cover bg-center transition-transform duration-[15s] hover:scale-110"
+                        style={{ 
+                            backgroundImage: 'url("https://images.unsplash.com/photo-1590604518046-30ed5a5180f3?auto=format&fit=crop&w=800&q=80")',
+                            filter: 'brightness(0.7) contrast(1.1)'
+                        }}
+                    ></div>
+
+                    {/* Uniform Badge Badge (Logo da Marca no Uniforme) */}
+                    <div className="absolute top-20 left-10 z-20 scale-75 opacity-90 rotate-[-5deg] animate-pulse">
+                        <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-xl border border-gray-100 flex items-center gap-1.5">
+                             <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                                <span className="material-symbols-outlined text-white text-[12px] font-bold">check</span>
+                             </div>
+                             <span className="text-[10px] font-black tracking-tight text-gray-800">
+                                Checklist<span className="text-blue-600">IA</span>
+                             </span>
+                        </div>
                     </div>
-                    
-                    <h3 className="text-2xl font-bold text-white mb-2">Não é o que queria?</h3>
-                    <p className="text-gray-400 text-sm mb-8 leading-relaxed max-w-[200px]">
-                        Crie uma receita totalmente nova e personalizada para "<strong>{currentSearchTerm}</strong>" usando Inteligência Artificial.
-                    </p>
-                    
-                    <span className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full font-bold text-sm transition-colors flex items-center gap-2">
-                        Criar Nova com IA
-                        <span className="material-symbols-outlined text-base">add</span>
-                    </span>
+
+                    {/* Gradient for content readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+
+                    {/* Content Section */}
+                    <div className="absolute inset-0 p-6 flex flex-col items-center justify-between text-center">
+                        
+                        <div className="pt-4">
+                            <h3 className="text-2xl font-black text-white drop-shadow-lg mb-2">Não é o que você queria?</h3>
+                            <p className="text-gray-200 text-xs font-medium opacity-90 px-4">
+                                Nossa garçonete digital está pronta para anotar seu pedido especial.
+                            </p>
+                        </div>
+
+                        {/* Interactive "Order Pad" Area */}
+                        <div className="w-full bg-white/10 backdrop-blur-xl rounded-2xl p-4 border border-white/20 shadow-2xl">
+                             <label className="block text-left mb-2">
+                                 <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest ml-1">Seu pedido personalizado</span>
+                                 <input 
+                                     type="text"
+                                     value={customOrder}
+                                     onChange={(e) => setCustomOrder(e.target.value)}
+                                     placeholder={`Ex: ${currentSearchTerm} com toque de...`}
+                                     className="w-full bg-white/5 border-0 border-b border-white/30 text-white placeholder:text-white/40 focus:ring-0 focus:border-blue-400 text-sm font-medium h-10 px-1 mt-1 transition-colors"
+                                 />
+                             </label>
+
+                             <button 
+                                onClick={() => handleGenerateNew(customOrder)}
+                                disabled={!customOrder.trim() && !currentSearchTerm}
+                                className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-400 hover:from-blue-500 hover:to-blue-300 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 group"
+                             >
+                                <span className="material-symbols-outlined text-lg group-hover:rotate-12 transition-transform">edit_note</span>
+                                FAZER PEDIDO (IA)
+                             </button>
+                        </div>
+
+                        <div className="pb-4 opacity-60">
+                             <p className="text-[9px] text-white font-medium uppercase tracking-[0.2em]">Serviço Exclusivo ChecklistIA</p>
+                        </div>
+
+                    </div>
                 </div>
 
                 {/* Spacer for right padding */}
