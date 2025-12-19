@@ -112,6 +112,11 @@ const AppContent: React.FC = () => {
     const [isImportingShare, setIsImportingShare] = useState(false);
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
     const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+    
+    // Estados para edição inline do mercado
+    const [isEditingMarketName, setIsEditingMarketName] = useState(false);
+    const [tempMarketName, setTempMarketName] = useState('');
+    const marketInputRef = useRef<HTMLInputElement>(null);
 
     const [lastSeenNotificationCount, setLastSeenNotificationCount] = useState(0);
     const showProfileBadge = app.unreadNotificationCount > 0 && app.unreadNotificationCount > lastSeenNotificationCount;
@@ -390,6 +395,20 @@ const AppContent: React.FC = () => {
             }
         }
     };
+    
+    // Função para ativar edição inline do mercado
+    const startEditingMarketName = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setTempMarketName(app.currentMarketName || "Minha Lista");
+        setIsEditingMarketName(true);
+        setTimeout(() => marketInputRef.current?.focus(), 50);
+    };
+
+    const saveMarketNameInline = () => {
+        const finalName = tempMarketName.trim() || "Minha Lista";
+        app.setCurrentMarketName(finalName);
+        setIsEditingMarketName(false);
+    };
 
     const showHomeView = (items.length === 0 && !app.currentMarketName) || app.isHomeViewActive;
     const showSessionBar = ((items.length > 0 || app.currentMarketName) && !app.isHomeViewActive);
@@ -487,11 +506,25 @@ const AppContent: React.FC = () => {
 
                 {showSessionBar && (
                     <div className={`absolute left-0 right-0 z-[112] w-full bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm animate-slideUp overflow-visible transition-all duration-300 ${app.isFocusMode ? 'top-0' : 'top-24 lg:top-0'}`}>
-                       <div className="flex flex-col cursor-pointer flex-1 min-w-0" onClick={() => app.openModal('startShopping')}>
+                       <div className="flex flex-col flex-1 min-w-0">
                           <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-0.5">Local de Compra</span>
                           <div className="flex items-center gap-2 group">
-                             <span className="font-bold text-primary dark:text-orange-400 text-lg leading-none truncate max-w-[200px]">{app.currentMarketName || "Minha Lista"}</span>
-                             <span className="material-symbols-outlined text-sm text-gray-400 group-hover:text-primary transition-colors">edit</span>
+                             {isEditingMarketName ? (
+                                <input 
+                                    ref={marketInputRef}
+                                    type="text"
+                                    value={tempMarketName}
+                                    onChange={(e) => setTempMarketName(e.target.value)}
+                                    onBlur={saveMarketNameInline}
+                                    onKeyDown={(e) => e.key === 'Enter' && saveMarketNameInline()}
+                                    className="bg-white dark:bg-zinc-800 border-none rounded px-2 py-0.5 font-bold text-primary dark:text-orange-400 text-lg w-full focus:ring-1 focus:ring-primary h-7"
+                                />
+                             ) : (
+                                <div className="flex items-center gap-2 cursor-pointer" onClick={startEditingMarketName}>
+                                    <span className="font-bold text-primary dark:text-orange-400 text-lg leading-none truncate max-w-[200px]">{app.currentMarketName || "Minha Lista"}</span>
+                                    <span className="material-symbols-outlined text-sm text-gray-400 group-hover:text-primary transition-colors">edit</span>
+                                </div>
+                             )}
                           </div>
                        </div>
                        <div className="flex items-center justify-end pl-2 gap-2">
@@ -559,7 +592,7 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="favorite" label="Favoritos" onClick={() => { if (!user) app.openModal('auth'); else app.openModal('favorites'); }} active={app.isFavoritesModalOpen} /></div>
                         <div className="flex-1 h-full flex items-center justify-center relative">
-                            <button onClick={() => { if (app.isHomeViewActive) { if (items.length > 0 || app.currentMarketName) app.setHomeViewActive(false); else app.openModal('startShopping'); } else { if (items.length === 0) app.openModal('startShopping'); else app.openModal('addItem'); } }} className={`absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl ring-4 ring-white/50 dark:ring-black/20 backdrop-blur-sm transition-all active:scale-95 ${app.theme === 'christmas' ? 'bg-[#165B33]' : (app.theme === 'newyear' ? 'bg-amber-500' : 'bg-gradient-to-br from-primary to-orange-600')}`}>
+                            <button onClick={() => { if (app.isHomeViewActive) { app.setHomeViewActive(false); if (items.length === 0 && !app.currentMarketName) app.openModal('addItem'); } else { app.openModal('addItem'); } }} className={`absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl ring-4 ring-white/50 dark:ring-black/20 backdrop-blur-sm transition-all active:scale-95 ${app.theme === 'christmas' ? 'bg-[#165B33]' : (app.theme === 'newyear' ? 'bg-amber-500' : 'bg-gradient-to-br from-primary to-orange-600')}`}>
                                 {app.isHomeViewActive ? (<span className="material-symbols-outlined" style={{ fontSize: '32px' }}>shopping_cart</span>) : (<span className="material-symbols-outlined" style={{ fontSize: '32px' }}>add</span>)}
                             </button>
                         </div>

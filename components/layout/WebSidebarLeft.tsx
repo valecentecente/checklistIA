@@ -33,11 +33,8 @@ export const WebSidebarLeft: React.FC = () => {
 
     const isListActive = items.length > 0 || !!app.currentMarketName;
     const handleMainAction = () => {
-        if (isListActive) {
-            app.openModal('addItem');
-        } else {
-            app.openModal('startShopping');
-        }
+        app.setHomeViewActive(false);
+        app.openModal('addItem');
     };
 
     const handleProtectedAction = (action: () => void, intent?: string) => {
@@ -238,7 +235,7 @@ export const WebSidebarLeft: React.FC = () => {
                                                     </button>
                                                     <button onClick={() => app.openModal('teamReports')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
                                                         <span className="material-symbols-outlined text-base">monitoring</span>
-                                                        Relatórios
+                                                        Relatórios Equipe
                                                     </button>
                                                 </>
                                             )}
