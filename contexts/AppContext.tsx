@@ -214,6 +214,25 @@ export const generateKeywords = (text: string): string[] => {
         .filter(word => word.length > 2 && !stopWords.includes(word)); 
 };
 
+// Mapeamento de Preferências para Tags do Sistema
+const DIETARY_TAG_MAP: Record<string, string[]> = {
+    'vegan': ['vegano', 'vegan', 'planta', 'sem leite', 'sem ovo', 'vegetal'],
+    'vegetarian': ['vegetariano', 'vegano', 'sem carne', 'legumes', 'ovo'],
+    'fitness': ['fit', 'saudável', 'saudavel', 'proteína', 'proteina', 'leve', 'baixo teor', 'academia'],
+    'quick': ['rápido', 'rapido', '15min', 'prático', 'pratico', 'express', 'fácil', 'facil'],
+    'lowcarb': ['lowcarb', 'low carb', 'sem carboidrato', 'proteína', 'paleo'],
+    'lactose_free': ['sem lactose', 'lactose free', 'zero lactose'],
+    'gluten_free': ['sem glúten', 'sem gluten', 'gluten free', 'celíaco'],
+    'sweets': ['doce', 'sobremesa', 'açúcar', 'bolo', 'chocolate'],
+    'alcohol': ['drink', 'coquetel', 'álcool', 'alcool', 'bebida alcoólica', 'adulto']
+};
+
+// Palavras proibidas para dietas restritivas (Exclusão Radical)
+const FORBIDDEN_WORDS: Record<string, string[]> = {
+    'vegan': ['carne', 'frango', 'peixe', 'ovo', 'leite', 'queijo', 'presunto', 'bacon', 'linguiça', 'mel', 'suíno', 'picanha', 'costela', 'filé', 'file', 'isca', 'camarão', 'camarao', 'salmão', 'bacalhau'],
+    'vegetarian': ['carne', 'frango', 'peixe', 'bacon', 'linguiça', 'suíno', 'picanha', 'costela', 'filé', 'file', 'isca', 'camarão', 'camarao', 'salmão', 'bacalhau', 'presunto']
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
     const { user, pendingAdminInvite } = useAuth();
@@ -347,7 +366,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         showToast("Grade de horários atualizada!");
     };
 
-    // --- ALGORITMO DE AFINIDADE CONTEXTUAL (HORÁRIO + DATA) ---
+    // --- ALGORITMO DE AFINIDADE V3 (DATA + HORA + GOSTO DO USUÁRIO) ---
     const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
         if (pool.length === 0) return [];
 
@@ -355,45 +374,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const hour = now.getHours();
         const monthDay = `${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 
-        // 1. Filtrar Regras Ativas por Data e Hora
-        let activeRules = scheduleRules.filter(r => {
-            // Verifica Data (Se houver startDate/endDate definido)
+        // 1. Filtrar Regras Contextuais Ativas
+        let activeContextRules = scheduleRules.filter(r => {
             if (r.startDate && r.endDate) {
                 const isDateMatch = monthDay >= r.startDate && monthDay <= r.endDate;
                 if (!isDateMatch) return false;
             }
-            
-            // Verifica Hora
             return hour >= r.startHour && hour < r.endHour;
         });
-
-        // Coletar todas as tags das regras ativas
-        const activeTags = activeRules.reduce((acc, r) => [...acc, ...r.tags], [] as string[]);
-        
-        // Identificar se alguma regra sazonal está ativa (Data preenchida) para bônus extra
-        const hasSeasonalActive = activeRules.some(r => r.startDate);
 
         // 2. Sistema de Pontuação (Peso)
         const scored = pool.map(recipe => {
             let score = 0;
             const text = (recipe.name + ' ' + (recipe.tags?.join(' ') || '')).toLowerCase();
             
-            // Bônus de Regras Ativas (Sazonais e Diárias)
-            activeRules.forEach(rule => {
-                const ruleBonus = rule.startDate ? 50 : 20; // Sazonalidade tem peso MUITO maior
+            // --- PESO 1: Contexto (Sazonalidade e Horário) ---
+            activeContextRules.forEach(rule => {
+                const ruleBonus = rule.startDate ? 50 : 20; 
                 if (rule.tags.some(tag => text.includes(tag.toLowerCase()))) {
                     score += ruleBonus;
                 }
             });
 
-            // Variedade (Novas receitas ganham leve bônus)
-            if (recipe.imageSource === 'genai') score += 5;
+            // --- PESO 2: Gosto Pessoal (Afinidade e Exclusão) ---
+            if (user?.dietaryPreferences && user.dietaryPreferences.length > 0) {
+                user.dietaryPreferences.forEach(pref => {
+                    // Exclusão Radical (Vegano/Vegetariano)
+                    const forbidden = FORBIDDEN_WORDS[pref];
+                    if (forbidden && forbidden.some(word => text.includes(word))) {
+                        score -= 500; // Penalidade massiva para esconder carnes de veganos
+                    }
+
+                    // Afinidade Positiva
+                    const affinityTags = DIETARY_TAG_MAP[pref];
+                    if (affinityTags && affinityTags.some(tag => text.includes(tag))) {
+                        score += 100; // Bônus alto para o que o usuário gosta
+                    }
+                });
+            }
+
+            // Bônus para receitas no acervo (Qualidade curada)
+            if (recipe.imageSource === 'cache') score += 10;
 
             return { recipe, score };
         });
 
-        return scored.sort((a, b) => b.score - a.score).map(s => s.recipe);
-    }, [scheduleRules]);
+        // Ordena por score e retorna (Excluindo as que tiverem score muito baixo se houver opções)
+        const sorted = scored.sort((a, b) => b.score - a.score);
+        
+        // Se o usuário for restrito (Vegano/Veg) e sobrar muito pouca coisa, relaxamos a regra no final da lista
+        return sorted.map(s => s.recipe);
+    }, [scheduleRules, user?.dietaryPreferences]);
 
     // Carregar dados e ordenar destaque
     useEffect(() => {
@@ -433,24 +464,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, []);
 
     const featuredRecipes = useMemo(() => {
-        return getContextualRecipes(allRecipesPool).slice(0, 8);
+        return getContextualRecipes(allRecipesPool).slice(0, 10);
     }, [allRecipesPool, getContextualRecipes]);
-
-    useEffect(() => {
-        const hasDismissed = localStorage.getItem('preferences_dismissed') === 'true';
-        if (user && user.uid && !user.uid.startsWith('offline') && (!user.dietaryPreferences || user.dietaryPreferences.length === 0) && !modalStates.isAuthModalOpen && !modalStates.isTourModalOpen && !hasDismissed) {
-            const timer = setTimeout(() => {
-                openModal('preferences');
-            }, 1500);
-            return () => clearTimeout(timer);
-        }
-    }, [user, modalStates.isAuthModalOpen, modalStates.isTourModalOpen]);
-
-    useEffect(() => {
-        if (pendingAdminInvite && !modalStates.isAdminInviteModalOpen) {
-            setModalStates(prev => ({ ...prev, isAdminInviteModalOpen: true }));
-        }
-    }, [pendingAdminInvite]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -464,12 +479,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (toastMessage) timer = window.setTimeout(() => setToastMessage(null), 3000);
         return () => clearTimeout(timer);
     }, [toastMessage]);
-
-    useEffect(() => {
-        let timer: number;
-        if (isCartTooltipVisible) timer = window.setTimeout(() => setIsCartTooltipVisible(false), 3000);
-        return () => clearTimeout(timer);
-    }, [isCartTooltipVisible]);
 
     const openModal = (modal: string) => {
         if (modal === 'addItem' && showStartHerePrompt) setShowStartHerePrompt(false);
