@@ -9,19 +9,19 @@ interface EmptyStateCTAProps {
 }
 
 export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssistant, onShowBudget }) => {
-    const { featuredRecipes, fetchThemeSuggestions, handleExploreRecipeClick, totalRecipeCount, getCategoryCount, getCategoryRecipes, openModal, showToast } = useApp();
+    const { featuredRecipes, fetchThemeSuggestions, handleExploreRecipeClick, totalRecipeCount, getCategoryRecipes, openModal, showToast } = useApp();
     const { user } = useAuth();
     const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
     const displayRecipes = featuredRecipes;
-    const showCategories = totalRecipeCount >= 5; // Show categories if we have enough data
+    const showCategories = totalRecipeCount >= 5;
 
     // Auto-rotate banners
     useEffect(() => {
         if (displayRecipes.length <= 1) return;
         const interval = setInterval(() => {
             setCurrentBannerIndex(prev => (prev + 1) % displayRecipes.length);
-        }, 5000);
+        }, 6000); // Um pouco mais lento para leitura
         return () => clearInterval(interval);
     }, [displayRecipes.length]);
 
@@ -31,19 +31,17 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             openModal('auth');
             return;
         }
-        // MODIFICAÇÃO: Passa o objeto receita inteiro, não apenas o nome string
         handleExploreRecipeClick(recipe);
     };
 
-    // Novas Categorias Comportamentais (Cards Visuais com Deduplicação)
     const categories = useMemo(() => {
         const baseCategories = [
             { id: 'top10', label: "Em Alta", key: "top10" },
             { id: 'fast', label: "Rápidas", key: "fast" },
             { id: 'new', label: "Novidades", key: "new" },
             { id: 'cheap', label: "Econômicas", key: "cheap" },
-            { id: 'healthy', label: "Saudáveis", key: "healthy" }, // NOVO
-            { id: 'dessert', label: "Sobremesas", key: "dessert" }, // NOVO
+            { id: 'healthy', label: "Saudáveis", key: "healthy" },
+            { id: 'dessert', label: "Sobremesas", key: "dessert" },
             { id: 'random', label: "Surpresa", key: "random" },
         ];
 
@@ -64,7 +62,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             return { ...cat, count, coverImage, coverRecipe };
         }).filter(cat => cat.count > 0);
 
-    }, [totalRecipeCount, getCategoryRecipes, displayRecipes]); 
+    }, [getCategoryRecipes, displayRecipes]); 
 
     const handleCategoryClick = (key: string, priorityRecipeName?: string) => {
         if (!user) {
@@ -75,7 +73,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         fetchThemeSuggestions(key, priorityRecipeName);
     };
 
-    // Handlers para os botões com cadeado
     const handleAiClick = () => {
         if (!user) {
             showToast("Faça login para usar a IA!");
@@ -98,10 +95,25 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         openModal('arcade');
     };
 
+    // Identifica se estamos em período sazonal para mudar o título
+    const getHeroTitle = () => {
+        const month = new Date().getMonth();
+        if (month === 11) return "Especial de Natal";
+        if (month === 0) return "Receitas de Verão";
+        const hour = new Date().getHours();
+        if (hour < 11) return "Bom dia! Café da Manhã";
+        if (hour < 15) return "Hora do Almoço";
+        return "Sugestões para Você";
+    };
+
     return (
         <div className="flex flex-col gap-6 animate-fadeIn pb-6">
             
-            {/* 1. HERO CAROUSEL (Vitrine) ou ZERO STATE */}
+            <div className="px-1 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">{getHeroTitle()}</h3>
+                <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+            </div>
+
             {displayRecipes.length > 0 ? (
                 <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group">
                     {displayRecipes.map((recipe, index) => (
@@ -110,21 +122,17 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                             onClick={() => handleBannerClick(recipe)}
                             className={`absolute inset-0 transition-opacity duration-700 ease-in-out cursor-pointer ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                         >
-                            {/* Background Image */}
                             <div 
                                 className="absolute inset-0 bg-cover bg-center transition-transform duration-[10000ms] ease-linear transform group-hover:scale-105"
                                 style={{ backgroundImage: `url(${recipe.imageUrl})` }}
                             ></div>
                             
-                            {/* Gradient Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
 
-                            {/* Content */}
                             <div className="absolute bottom-0 left-0 p-5 w-full text-white">
-                                {/* Tags */}
                                 <div className="flex gap-2 mb-2">
                                     <span className="bg-primary/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md uppercase tracking-wide">
-                                        Destaque
+                                        Recomendado
                                     </span>
                                     {recipe.prepTimeInMinutes && (
                                         <span className="bg-black/40 text-white text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-md flex items-center gap-1">
@@ -137,13 +145,12 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                     {recipe.name}
                                 </h2>
                                 <p className="text-xs text-gray-300 font-medium flex items-center gap-1">
-                                    Ver receita completa <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                    Toque para ver a receita <span className="material-symbols-outlined text-sm">arrow_forward</span>
                                 </p>
                             </div>
                         </div>
                     ))}
 
-                    {/* Indicators (Only if more than 1) */}
                     {displayRecipes.length > 1 && (
                         <div className="absolute bottom-2 right-4 z-20 flex gap-1.5">
                             {displayRecipes.map((_, idx) => (
@@ -156,7 +163,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     )}
                 </div>
             ) : (
-                // ZERO STATE BANNER (Mostrado quando não há receitas no banco)
                 <div 
                     onClick={handleAiClick}
                     className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group cursor-pointer bg-gradient-to-br from-orange-400 to-red-500"
@@ -168,16 +174,12 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                         </div>
                         <h2 className="text-xl sm:text-2xl font-bold mb-1">Livro de Receitas</h2>
                         <p className="text-xs sm:text-sm font-medium opacity-90 max-w-[260px] sm:max-w-[300px] leading-relaxed">
-                            O acervo começa com você. Crie a primeira receita e inspire a comunidade!
+                            Crie a primeira receita e inspire a comunidade!
                         </p>
-                        <span className="mt-3 sm:mt-4 bg-white text-orange-600 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide shadow-sm hover:bg-orange-50 transition-colors">
-                            Criar Agora
-                        </span>
                     </div>
                 </div>
             )}
 
-            {/* 2. VISUAL CATEGORY CARDS (Story Style - Premium Look) */}
             {categories.length > 0 && showCategories && (
                 <div className="animate-fadeIn">
                     <div className="flex items-center justify-between px-1 mb-3">
@@ -190,7 +192,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                 onClick={() => handleCategoryClick(cat.key, cat.coverRecipe?.name)}
                                 className="relative flex-shrink-0 w-28 h-36 sm:w-32 sm:h-40 rounded-xl overflow-hidden shadow-md snap-center group active:scale-95 transition-transform border border-black/5 dark:border-white/5"
                             >
-                                {/* Cover Image */}
                                 <div 
                                     className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
                                     style={{ 
@@ -204,11 +205,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                         </div>
                                     )}
                                 </div>
-                                
-                                {/* Premium Gradient Overlay */}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
-                                
-                                {/* Label Styled Premium */}
                                 <div className="absolute bottom-0 left-0 w-full p-3 text-left">
                                     <span className="block text-sm font-extrabold text-white leading-none tracking-wide drop-shadow-lg font-display">
                                         {cat.label}
@@ -221,47 +218,41 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             )}
 
-            {/* 3. QUICK ACTIONS GRID */}
             <div className="grid grid-cols-2 gap-3">
                 <button 
                     onClick={handleAiClick}
                     className="flex flex-col p-4 rounded-xl bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 text-left relative overflow-hidden group active:scale-95 transition-transform"
                 >
-                    {/* CADEADO SE NÃO LOGADO */}
                     {!user && (
                         <div className="absolute top-2 right-2 text-gray-400/80 bg-white/50 dark:bg-black/20 rounded-full p-1 z-10 backdrop-blur-sm">
                             <span className="material-symbols-outlined text-[16px]">lock</span>
                         </div>
                     )}
-
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <span className="material-symbols-outlined text-6xl text-primary">restaurant_menu</span>
                     </div>
                     <span className="material-symbols-outlined text-2xl text-primary mb-2">auto_awesome</span>
                     <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Criar com IA</span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight mt-1">Qualquer prato, em segundos.</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight mt-1">Sua receita em segundos.</span>
                 </button>
 
                 <button 
                     onClick={handleBudgetClick}
                     className="flex flex-col p-4 rounded-xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 text-left relative overflow-hidden group active:scale-95 transition-transform"
                 >
-                    {/* CADEADO SE NÃO LOGADO */}
                     {!user && (
                         <div className="absolute top-2 right-2 text-gray-400/80 bg-white/50 dark:bg-black/20 rounded-full p-1 z-10 backdrop-blur-sm">
                             <span className="material-symbols-outlined text-[16px]">lock</span>
                         </div>
                     )}
-
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <span className="material-symbols-outlined text-6xl text-blue-500">account_balance_wallet</span>
                     </div>
                     <span className="material-symbols-outlined text-2xl text-blue-500 mb-2">savings</span>
-                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Definir Orçamento</span>
+                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Meu Orçamento</span>
                     <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight mt-1">Controle seus gastos.</span>
                 </button>
 
-                {/* --- ARCADE BUTTON (Novo - Full Width na Grid) --- */}
                 <button 
                     onClick={handleArcadeClick}
                     className="col-span-2 relative flex items-center justify-center gap-4 p-4 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-md text-white hover:from-indigo-600 hover:to-purple-700 transition-all active:scale-95 group overflow-hidden"
@@ -277,8 +268,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm group-hover:rotate-12 transition-transform z-10">
                         <span className="material-symbols-outlined text-2xl">stadia_controller</span>
                     </div>
-                    
-                    {/* Background Icon Decoration */}
                     <div className="absolute -right-4 -bottom-6 opacity-20 rotate-12">
                         <span className="material-symbols-outlined text-8xl">videogame_asset</span>
                     </div>

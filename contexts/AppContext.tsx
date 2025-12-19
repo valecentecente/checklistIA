@@ -1,9 +1,9 @@
 
-import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer } from '../types';
+import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
 
@@ -35,6 +35,7 @@ interface AppContextType {
     isAdminModalOpen: boolean;
     isAdminRecipesModalOpen: boolean;
     isAdminReviewsModalOpen: boolean;
+    isAdminScheduleModalOpen: boolean; 
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
     isArcadeModalOpen: boolean;
@@ -107,6 +108,10 @@ interface AppContextType {
     getRandomCachedRecipe: () => FullRecipe | null;
     generateKeywords: (text: string) => string[];
 
+    // Grade Dinâmica de Horários
+    scheduleRules: ScheduleRule[];
+    saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
+
     // Recipe Search & Selection
     recipeSearchResults: FullRecipe[];
     currentSearchTerm: string;
@@ -169,7 +174,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper for retry logic optimized for Free Tier Limits (429)
 export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 5): Promise<any> => {
     try {
         return await fn();
@@ -182,8 +186,6 @@ export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 5): P
             error?.message?.includes('quota');
                              
         if (retries > 0 && isQuotaError) {
-            // Aumentamos o delay significativamente no erro 429
-            // Espera de 10s a 20s para garantir que o "bucket" da API se recupere
             const delay = (10000 * (6 - retries)) + Math.random() * 5000; 
             console.warn(`Cota excedida. Aguardando ${Math.round(delay/1000)}s para tentar novamente...`);
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -193,16 +195,14 @@ export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 5): P
     }
 };
 
-// Helper to ignore permission errors
 const ignorePermissionError = (err: any) => {
     if (err.code === 'permission-denied' || err.message?.includes('Missing or insufficient permissions')) {
-        console.warn('Salvamento no acervo ignorado: Sem permissão.');
+        console.warn('Operação ignorada por falta de permissão.');
         return true;
     }
     return false;
 };
 
-// Helper para gerar palavras-chave (Keywords) de busca
 export const generateKeywords = (text: string): string[] => {
     if (!text) return [];
     const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero'];
@@ -234,8 +234,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isAdminModalOpen: false,
         isAdminRecipesModalOpen: false,
         isAdminReviewsModalOpen: false,
+        isAdminScheduleModalOpen: false,
         isManageTeamModalOpen: false,
-        isTeamReportsModalOpen: false,
+        isTeamReportsModalOpen: false, 
         isArcadeModalOpen: false,
         isAdminInviteModalOpen: false,
         isInfoModalOpen: false,
@@ -281,12 +282,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [isFocusMode, setFocusMode] = useState(false);
     const [pendingAction, setPendingAction] = useState<string | null>(null);
     
-    const [featuredRecipes, setFeaturedRecipes] = useState<FullRecipe[]>([]);
+    const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>([]);
     const [recipeSuggestions, setRecipeSuggestions] = useState<FullRecipe[]>([]);
     const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
     const [currentTheme, setCurrentTheme] = useState<string | null>(null);
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
     const [totalRecipeCount, setTotalRecipeCount] = useState(0);
+    const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
     const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>([]);
@@ -324,12 +326,81 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
     }, []);
 
+    // --- CARREGAMENTO DA GRADE DE HORÁRIOS ---
+    useEffect(() => {
+        if (!db) return;
+        const unsub = onSnapshot(doc(db, 'settings', 'recipe_schedule'), (snapshot) => {
+            if (snapshot.exists()) {
+                setScheduleRules(snapshot.data().rules || []);
+            }
+        }, (error) => {
+            if (!ignorePermissionError(error)) {
+                console.error("Erro no listener da grade:", error);
+            }
+        });
+        return () => unsub();
+    }, []);
+
+    const saveScheduleRules = async (rules: ScheduleRule[]) => {
+        if (!db || !isAdmin) return;
+        await setDoc(doc(db, 'settings', 'recipe_schedule'), { rules, updatedAt: serverTimestamp() });
+        showToast("Grade de horários atualizada!");
+    };
+
+    // --- ALGORITMO DE AFINIDADE CONTEXTUAL (HORÁRIO + DATA) ---
+    const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
+        if (pool.length === 0) return [];
+
+        const now = new Date();
+        const hour = now.getHours();
+        const monthDay = `${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+
+        // 1. Filtrar Regras Ativas por Data e Hora
+        let activeRules = scheduleRules.filter(r => {
+            // Verifica Data (Se houver startDate/endDate definido)
+            if (r.startDate && r.endDate) {
+                const isDateMatch = monthDay >= r.startDate && monthDay <= r.endDate;
+                if (!isDateMatch) return false;
+            }
+            
+            // Verifica Hora
+            return hour >= r.startHour && hour < r.endHour;
+        });
+
+        // Coletar todas as tags das regras ativas
+        const activeTags = activeRules.reduce((acc, r) => [...acc, ...r.tags], [] as string[]);
+        
+        // Identificar se alguma regra sazonal está ativa (Data preenchida) para bônus extra
+        const hasSeasonalActive = activeRules.some(r => r.startDate);
+
+        // 2. Sistema de Pontuação (Peso)
+        const scored = pool.map(recipe => {
+            let score = 0;
+            const text = (recipe.name + ' ' + (recipe.tags?.join(' ') || '')).toLowerCase();
+            
+            // Bônus de Regras Ativas (Sazonais e Diárias)
+            activeRules.forEach(rule => {
+                const ruleBonus = rule.startDate ? 50 : 20; // Sazonalidade tem peso MUITO maior
+                if (rule.tags.some(tag => text.includes(tag.toLowerCase()))) {
+                    score += ruleBonus;
+                }
+            });
+
+            // Variedade (Novas receitas ganham leve bônus)
+            if (recipe.imageSource === 'genai') score += 5;
+
+            return { recipe, score };
+        });
+
+        return scored.sort((a, b) => b.score - a.score).map(s => s.recipe);
+    }, [scheduleRules]);
+
+    // Carregar dados e ordenar destaque
     useEffect(() => {
         if (!db) return;
         const loadData = async () => {
             try {
-                // Carrega destaque
-                const qFeatured = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(30));
+                const qFeatured = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(50));
                 const snapshotFeatured = await getDocs(qFeatured);
                 const recipesPool: FullRecipe[] = [];
                 snapshotFeatured.forEach(doc => {
@@ -339,15 +410,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     }
                 });
 
-                const shuffled = [...recipesPool];
-                for (let i = shuffled.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-                }
-                
-                setFeaturedRecipes(shuffled.slice(0, 5));
+                setAllRecipesPool(recipesPool);
 
-                // Carrega Cache Global
                 const qCache = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(300));
                 const snapshotCache = await getDocs(qCache);
                 const cachedRecipes: FullRecipe[] = [];
@@ -367,6 +431,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
         loadData();
     }, []);
+
+    const featuredRecipes = useMemo(() => {
+        return getContextualRecipes(allRecipesPool).slice(0, 8);
+    }, [allRecipesPool, getContextualRecipes]);
 
     useEffect(() => {
         const hasDismissed = localStorage.getItem('preferences_dismissed') === 'true';
@@ -411,6 +479,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'admin') modalKey = 'isAdminModalOpen';
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
+        if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -432,6 +501,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'admin') modalKey = 'isAdminModalOpen';
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
+        if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -851,7 +921,7 @@ Format:
     };
 
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
-        const pool = globalRecipeCache.length > 0 ? globalRecipeCache : featuredRecipes;
+        const pool = globalRecipeCache.length > 0 ? globalRecipeCache : allRecipesPool;
         
         const matches = (r: FullRecipe, terms: string[]) => {
             const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
@@ -876,7 +946,7 @@ Format:
             default:
                 return pool.slice(0, 10);
         }
-    }, [globalRecipeCache, featuredRecipes]);
+    }, [globalRecipeCache, allRecipesPool]);
 
     const getCategoryCount = useCallback((categoryKey: string) => {
         return getCategoryRecipes(categoryKey).length;
@@ -964,7 +1034,8 @@ Format:
         pendingAction, setPendingAction,
         selectedProduct,
         openProductDetails,
-        recipeSearchResults, currentSearchTerm, handleRecipeSearch 
+        recipeSearchResults, currentSearchTerm, handleRecipeSearch,
+        scheduleRules, saveScheduleRules 
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

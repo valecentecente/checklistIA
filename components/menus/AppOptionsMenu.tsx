@@ -94,6 +94,10 @@ export const AppOptionsMenu: React.FC = () => {
                                     {/* Super Admin (Nível 1) vê tudo */}
                                     {app.isSuperAdmin && (
                                         <>
+                                            <button onClick={() => handleOptionClick('adminSchedule')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors text-indigo-700 dark:text-indigo-300 pl-8 font-bold border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20">
+                                                <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">calendar_month</span>
+                                                Grade de Horários
+                                            </button>
                                             <button onClick={() => handleOptionClick('contentFactory')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-green-700 dark:text-green-300 pl-8 font-bold border-l-4 border-green-500 bg-green-50 dark:bg-green-900/20">
                                                 <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">factory</span>
                                                 Fábrica de Conteúdo

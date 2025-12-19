@@ -80,7 +80,7 @@ export const WebSidebarLeft: React.FC = () => {
             active: app.isFavoritesModalOpen 
         },
         { 
-            icon: 'local_offer', // Changed from redeem
+            icon: 'local_offer', 
             label: 'Ofertas', 
             onClick: () => app.openModal('offers'), 
             active: app.isOffersModalOpen 
@@ -216,6 +216,10 @@ export const WebSidebarLeft: React.FC = () => {
                                             {/* Super Admin Options */}
                                             {app.isSuperAdmin && (
                                                 <>
+                                                    <button onClick={() => app.openModal('adminSchedule')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-indigo-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-indigo-500/50">
+                                                        <span className="material-symbols-outlined text-base">calendar_month</span>
+                                                        Grade de Vitrine
+                                                    </button>
                                                     <button onClick={() => app.openModal('contentFactory')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-green-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-green-500/50">
                                                         <span className="material-symbols-outlined text-base">factory</span>
                                                         Fábrica de Conteúdo

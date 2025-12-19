@@ -1,4 +1,14 @@
 
+export interface ScheduleRule {
+  id: string;
+  label: string;
+  startHour: number;
+  endHour: number;
+  tags: string[];
+  startDate?: string | null; // Formato "MM-DD" para recorrência anual
+  endDate?: string | null;   // Formato "MM-DD"
+}
+
 export interface ShoppingItem {
   id: string;
   name: string;
@@ -55,9 +65,9 @@ export interface FullRecipe {
   imageUrl?: string;
   imageSource?: 'cache' | 'genai';
   description?: string;
-  keywords?: string[]; // Indexação para busca rápida
-  tags?: string[]; // Categorização (ex: sobremesa, fit, vegano)
-  isAlcoholic?: boolean; // NOVO: Classificação +18
+  keywords?: string[]; 
+  tags?: string[]; 
+  isAlcoholic?: boolean; 
 }
 
 export interface RecipeSuggestion {
@@ -87,11 +97,11 @@ export interface User {
   email: string | null;
   photoURL: string | null;
   username: string | null;
-  usernameChangeHistory?: string[]; // Lista de datas ISO das últimas alterações
-  activeListId?: string; // ID da lista que o usuário deve ler (pode ser o próprio UID ou de outro usuário)
-  dietaryPreferences?: string[]; // NOVO: Preferências para o algoritmo (ex: ['vegan', 'fitness'])
-  birthDate?: string; // Data de nascimento YYYY-MM-DD
-  role?: 'user' | 'admin_l1' | 'admin_l2'; // NOVO: Role administrativa
+  usernameChangeHistory?: string[]; 
+  activeListId?: string; 
+  dietaryPreferences?: string[]; 
+  birthDate?: string; 
+  role?: 'user' | 'admin_l1' | 'admin_l2'; 
 }
 
 export interface AuthorMetadata {
@@ -109,7 +119,7 @@ export interface ReceivedListRecord {
   itemCount: number;
   author: AuthorMetadata;
   items?: HistoricItem[];
-  read?: boolean; // NOVO: Status de leitura (false por padrão)
+  read?: boolean; 
 }
 
 export interface StartShoppingData {
@@ -122,24 +132,24 @@ export interface Offer {
     name: string;
     price: string;
     oldPrice?: string;
-    image: string; // Mantido como "capa"
-    images?: string[]; // NOVO: Array de imagens para carrossel
+    image: string; 
+    images?: string[]; 
     store: string;
     category: string;
     link: string;
     discount?: string;
-    tags?: string[]; // NOVO: Tags para match contextual
-    description?: string; // NOVO: Descrição detalhada do produto
-    averageRating?: number; // NOVO: Média de estrelas (1-5)
-    reviewCount?: number; // NOVO: Total de avaliações
+    tags?: string[]; 
+    description?: string; 
+    averageRating?: number; 
+    reviewCount?: number; 
     createdAt?: any;
 }
 
 export interface Review {
     id: string;
     offerId: string;
-    offerName?: string; // Snapshot do nome do produto
-    offerImage?: string; // Snapshot da imagem do produto
+    offerName?: string; 
+    offerImage?: string; 
     userId: string;
     userName: string;
     userPhotoURL?: string | null;
@@ -164,7 +174,7 @@ export interface ActivityLog {
     userName: string;
     userPhoto: string | null;
     actionType: 'create' | 'update' | 'delete' | 'login';
-    targetName: string; // Nome do produto ou objeto afetado
+    targetName: string; 
     details?: string;
     timestamp: any;
 }

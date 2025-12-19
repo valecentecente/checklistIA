@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -16,6 +16,7 @@ export const AdminContentFactoryModal: React.FC = () => {
     const { isContentFactoryModalOpen, closeModal, showToast, generateKeywords } = useApp();
     const { user } = useAuth();
     const [category, setCategory] = useState('Sobremesas');
+    const [customSazonal, setCustomSazonal] = useState('');
     const [quantity, setQuantity] = useState(10);
     const [isGenerating, setIsGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -27,12 +28,38 @@ export const AdminContentFactoryModal: React.FC = () => {
     const isFirebaseAuthenticated = !!auth?.currentUser;
 
     const baseCategories = [
-        "Sobremesas", "Massas", "Fit / Saudável", "Vegano", "Drinks", 
-        "Bolos", "Carnes", "Aves", "Peixes", "Lanches", "Sopas", "Brasileira Clássica"
+        "Sazonal / Datas Comemorativas", 
+        "Café da Manhã", 
+        "Almoço Rápido", 
+        "Sobremesas", 
+        "Massas", 
+        "Sucos",
+        "Fit / Saudável", 
+        "Vegano", 
+        "Drinks", 
+        "Bolos", 
+        "Carnes", 
+        "Lanches", 
+        "Brasileira Clássica"
     ];
 
     const categoriesOptions = ["--- TODAS AS CATEGORIAS ---", ...baseCategories];
     const apiKey = process.env.API_KEY as string;
+
+    // --- LÓGICA DE LEMBRETE DE CALENDÁRIO ---
+    const upcomingHoliday = useMemo(() => {
+        const now = new Date();
+        const month = now.getMonth(); // 0-11
+        const day = now.getDate();
+
+        // Verificamos com antecedência de ~30 dias
+        if (month === 1 || (month === 2 && day < 15)) return "Páscoa";
+        if (month === 4 || (month === 5 && day < 12)) return "Festa Junina";
+        if (month === 7 || (month === 8 && day < 20)) return "Semana do Gaúcho / Primavera";
+        if (month === 9 || (month === 10 && day < 15)) return "Natal & Ceias";
+        if (month === 11) return "Ano Novo / Verão";
+        return null;
+    }, []);
 
     useEffect(() => {
         if (logsEndRef.current) {
@@ -87,8 +114,8 @@ export const AdminContentFactoryModal: React.FC = () => {
         setLogs([]);
         setProgress(0);
 
-        const categoriesToProcess = category === "--- TODAS AS CATEGORIAS ---" ? baseCategories : [category];
-        addLog(`--- INICIANDO FÁBRICA: MODO ${category === "--- TODAS AS CATEGORIAS ---" ? "LOTE" : "ÚNICO"} ---`, 'separator');
+        const categoriesToProcess = category === "--- TODAS AS CATEGORIAS ---" ? baseCategories.filter(c => c !== "Sazonal / Datas Comemorativas") : [category];
+        addLog(`--- INICIANDO FÁBRICA INTELIGENTE ---`, 'separator');
 
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -96,9 +123,18 @@ export const AdminContentFactoryModal: React.FC = () => {
             for (const currentCat of categoriesToProcess) {
                 if (shouldStop) break;
                 
-                addLog(`PROCESSO: Iniciando Categoria [${currentCat}]`, 'separator');
+                // Determina o tema sazonal se aplicável
+                let holidayTheme = "";
+                if (currentCat === "Sazonal / Datas Comemorativas") {
+                    holidayTheme = customSazonal || upcomingHoliday || "Próximo Feriado Brasileiro";
+                }
+
+                addLog(`CATEGORIA: [${currentCat}] ${holidayTheme ? `| TEMA: ${holidayTheme}` : ''}`, 'separator');
                 
-                const listPrompt = `Gere uma lista JSON com ${quantity} nomes das receitas mais populares da categoria "${currentCat}" no Brasil. Retorne apenas o JSON array de strings.`;
+                // 1. Busca nomes potenciais
+                const listPrompt = `Gere uma lista JSON com ${quantity * 2} nomes das receitas mais populares da categoria "${currentCat}" no Brasil. 
+                ${holidayTheme ? `FOCO TOTAL NO TEMA: "${holidayTheme}".` : ''}
+                Retorne apenas o JSON array de strings.`;
 
                 const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-3-flash-preview',
@@ -107,27 +143,34 @@ export const AdminContentFactoryModal: React.FC = () => {
                 }));
 
                 const recipeNames: string[] = JSON.parse(listResponse.text || "[]");
-                addLog(`Lista recebida: ${recipeNames.length} pratos identificados.`, 'info');
+                addLog(`Analisando banco de dados para evitar duplicatas...`, 'info');
 
-                for (let i = 0; i < recipeNames.length; i++) {
+                let successCount = 0;
+                let attemptCount = 0;
+
+                while (successCount < quantity && attemptCount < recipeNames.length) {
                     if (shouldStop) break;
 
-                    const name = recipeNames[i];
+                    const name = recipeNames[attemptCount];
+                    attemptCount++;
+
                     const docId = name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
                     
                     if (db) {
                         const docRef = doc(db, 'global_recipes', docId);
                         const docSnap = await getDoc(docRef);
                         if (docSnap.exists()) {
-                            addLog(`> [${i+1}/${recipeNames.length}] ${name} já existe. Pulando...`, 'info');
+                            addLog(`> Ignorado: "${name}" já existe.`, 'warning');
                             continue;
                         }
                     }
                     
-                    addLog(`> [${i+1}/${recipeNames.length}] Gerando: ${name}...`, 'info');
+                    addLog(`> [${successCount + 1}/${quantity}] Gerando: ${name} ${holidayTheme ? `(${holidayTheme})` : ''}...`, 'info');
                     
                     try {
-                        const detailPrompt = `Gere a receita completa para "${name}" em JSON. Inclua 3 a 5 tags. 
+                        const detailPrompt = `Gere a receita completa para "${name}" em JSON. 
+                        ${holidayTheme ? `Certifique-se que a receita combine com o tema "${holidayTheme}".` : ''}
+                        Inclua 4 tags específicas (Ex: Fit, Almoço, ${holidayTheme || 'Geral'}). 
                         Formato: { "name": "${name}", "ingredients": [{"simplifiedName": "x", "detailedName": "y"}], "instructions": [], "imageQuery": "v", "prepTimeInMinutes": 30, "difficulty": "Fácil", "cost": "Médio", "isAlcoholic": false, "tags": ["tag1"] }`;
 
                         const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -140,7 +183,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                         
                         const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                             model: 'gemini-2.5-flash-image',
-                            contents: { parts: [{ text: `Foto profissional de culinária: ${recipeData.imageQuery || name}` }] },
+                            contents: { parts: [{ text: `Foto profissional de alta gastronomia, close-up, luz natural, tema ${holidayTheme || 'comida'}: ${recipeData.imageQuery || name}` }] },
                             config: { responseModalities: [Modality.IMAGE] }
                         }));
 
@@ -152,8 +195,9 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                         const finalTags = Array.from(new Set([
                             ...(recipeData.tags || []), 
-                            currentCat.toLowerCase(), 
-                            'factory_generated'
+                            currentCat.toLowerCase().replace(' / datas comemorativas', ''),
+                            ...(holidayTheme ? [holidayTheme.toLowerCase()] : []),
+                            'factory_v2'
                         ]));
 
                         if (db) {
@@ -165,39 +209,37 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 tags: finalTags,
                                 createdAt: serverTimestamp()
                             }, { merge: true });
-                            addLog(`> SUCESSO: ${name} salvo.`, 'success');
+                            
+                            successCount++;
+                            addLog(`> SUCESSO: ${name} adicionado.`, 'success');
+                            
+                            const totalToProcess = categoriesToProcess.length * quantity;
+                            const currentOverallSuccess = (categoriesToProcess.indexOf(currentCat) * quantity) + successCount;
+                            setProgress((currentOverallSuccess / totalToProcess) * 100);
                         }
 
+                        if (successCount < quantity) await new Promise(r => setTimeout(r, 8000));
+
                     } catch (err: any) {
-                        let errorMsg = err.message || 'Erro desconhecido';
-                        addLog(`> ERRO em ${name}: ${errorMsg}`, 'error');
-                        
-                        if (errorMsg.includes('403') || errorMsg.includes('API key')) {
-                            addLog("ERRO CRÍTICO: Chave de API rejeitada ou revogada pelo Google.", "error");
-                            setShouldStop(true);
-                            break;
-                        }
-                    }
-                    
-                    const totalItems = categoriesToProcess.length * quantity;
-                    const itemsProcessedSoFar = (categoriesToProcess.indexOf(currentCat) * quantity) + (i + 1);
-                    setProgress((itemsProcessedSoFar / totalItems) * 100);
-                    
-                    if (i < recipeNames.length - 1) {
-                        await new Promise(r => setTimeout(r, 8000));
+                        addLog(`> Falha em ${name}: ${err.message}`, 'error');
+                        if (err.message.includes('403')) { setShouldStop(true); break; }
                     }
                 }
                 
+                if (successCount < quantity && !shouldStop) {
+                    addLog(`Alerta: Categoria [${currentCat}] finalizada com ${successCount}/${quantity}.`, 'warning');
+                }
+
                 if (categoriesToProcess.indexOf(currentCat) < categoriesToProcess.length - 1 && !shouldStop) {
-                    addLog("Pausa de transição entre categorias (15s)...", "warning");
+                    addLog("Trocando categoria. Cool-down (15s)...", "warning");
                     await new Promise(r => setTimeout(r, 15000));
                 }
             }
 
-            addLog(`--- PROCESSO CONCLUÍDO ---`, 'separator');
+            addLog(`--- OPERAÇÃO FINALIZADA ---`, 'separator');
 
         } catch (error: any) {
-            addLog(`ERRO NO SISTEMA: ${error.message}`, 'error');
+            addLog(`ERRO FATAL: ${error.message}`, 'error');
         } finally {
             setIsGenerating(false);
         }
@@ -207,55 +249,87 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     return (
         <div className="fixed inset-0 z-[250] bg-black/90 flex items-center justify-center p-4 animate-fadeIn" onClick={() => closeModal('contentFactory')}>
-            <div className="bg-slate-900 w-full max-w-2xl rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-900 w-full max-w-2xl rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col h-[85vh]" onClick={e => e.stopPropagation()}>
                 
                 <div className="p-4 border-b border-slate-700 bg-slate-800 flex justify-between items-center">
-                    <h2 className="text-white font-bold text-lg flex items-center gap-2">
-                        <span className="material-symbols-outlined text-green-400">factory</span>
-                        Fábrica de Conteúdo (Safe Mode)
-                    </h2>
+                    <div className="flex flex-col">
+                        <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                            <span className="material-symbols-outlined text-green-400">factory</span>
+                            Fábrica de Conteúdo
+                        </h2>
+                        <span className="text-[10px] text-gray-500 uppercase font-black">Versão Contextual 2025</span>
+                    </div>
                     <button onClick={() => closeModal('contentFactory')} className="text-gray-400 hover:text-white">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
 
-                <div className="p-4 bg-slate-800/50 flex gap-4 items-end border-b border-slate-700">
-                    <div className="flex-1">
-                        <label className="text-xs text-gray-400 uppercase font-bold block mb-1">Categoria</label>
-                        <select 
-                            value={category} 
-                            onChange={e => setCategory(e.target.value)}
-                            disabled={isGenerating}
-                            className="w-full bg-slate-700 text-white border-slate-600 rounded-lg h-10 px-3 text-sm"
-                        >
-                            {categoriesOptions.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
+                {/* --- MENSAGEM DE LEMBRETE DA IA --- */}
+                {upcomingHoliday && (
+                    <div className="mx-4 mt-4 bg-blue-900/40 border border-blue-500/30 rounded-xl p-3 flex items-center gap-4 animate-fadeIn">
+                        <div className="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center shrink-0 shadow-lg">
+                            <span className="material-symbols-outlined text-white">event_upcoming</span>
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Dica de Planejamento</p>
+                            <p className="text-xs text-white/90">A IA identificou que o <strong>{upcomingHoliday}</strong> está próximo. Que tal abastecer essa categoria hoje?</p>
+                        </div>
                     </div>
-                    <div className="w-32">
-                        <label className="text-xs text-gray-400 uppercase font-bold block mb-1">Qtd / Cat</label>
-                        <input 
-                            type="number" 
-                            value={quantity} 
-                            onChange={e => setQuantity(parseInt(e.target.value))}
-                            disabled={isGenerating}
-                            min={1} max={50}
-                            className="w-full bg-slate-700 text-white border-slate-600 rounded-lg h-10 px-3"
-                        />
+                )}
+
+                <div className="p-4 bg-slate-800/50 flex flex-col gap-4 border-b border-slate-700">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs text-gray-400 uppercase font-bold block mb-1">Categoria</label>
+                            <select 
+                                value={category} 
+                                onChange={e => setCategory(e.target.value)}
+                                disabled={isGenerating}
+                                className="w-full bg-slate-700 text-white border-slate-600 rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                            >
+                                {categoriesOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-400 uppercase font-bold block mb-1">Meta de Inéditos</label>
+                            <input 
+                                type="number" 
+                                value={quantity} 
+                                onChange={e => setQuantity(parseInt(e.target.value))}
+                                disabled={isGenerating}
+                                min={1} max={50}
+                                className="w-full bg-slate-700 text-white border-slate-600 rounded-lg h-10 px-3 focus:ring-2 focus:ring-green-500 outline-none"
+                            />
+                        </div>
                     </div>
+
+                    {/* CAMPO SAZONAL MANUAL */}
+                    {(category === "Sazonal / Datas Comemorativas" || category === "--- TODAS AS CATEGORIAS ---") && (
+                        <div className="animate-fadeIn">
+                            <label className="text-xs text-blue-400 uppercase font-bold block mb-1">Definir Tema da Data (Manual)</label>
+                            <input 
+                                type="text"
+                                value={customSazonal}
+                                onChange={e => setCustomSazonal(e.target.value)}
+                                disabled={isGenerating}
+                                placeholder={upcomingHoliday ? `Ex: ${upcomingHoliday}, Inverno...` : "Ex: Natal, Festa Junina, Pascoa..."}
+                                className="w-full bg-slate-700/50 text-white border-blue-500/30 rounded-lg h-10 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-gray-600"
+                            />
+                        </div>
+                    )}
+
                     <button 
                         onClick={isGenerating ? () => setShouldStop(true) : handleStart}
-                        className={`h-10 px-6 rounded-lg font-bold flex items-center gap-2 transition-colors ${isGenerating ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'} ${isGuest ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`h-12 w-full rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xl ${isGenerating ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'} ${isGuest ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
                     >
-                        <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'play_arrow'}</span>
-                        {isGenerating ? 'Parar' : 'Iniciar'}
+                        <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'bolt'}</span>
+                        {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento'}
                     </button>
                 </div>
 
-                {isGenerating && (
-                    <div className="h-1 bg-slate-700 w-full">
-                        <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                    </div>
-                )}
+                <div className="h-1.5 bg-slate-700 w-full">
+                    <div className="h-full bg-green-500 transition-all duration-300 shadow-[0_0_10px_#22c55e]" style={{ width: `${progress}%` }}></div>
+                </div>
 
                 <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-[11px] space-y-1 scrollbar-hide">
                     {logs.map((log, i) => (
@@ -263,7 +337,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             log.type === 'error' ? 'text-red-500 font-bold bg-red-500/10 p-1 rounded' : 
                             log.type === 'success' ? 'text-green-400' : 
                             log.type === 'warning' ? 'text-yellow-500 italic' : 
-                            log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800 font-bold' : 
+                            log.type === 'separator' ? 'text-blue-400 pt-3 border-t border-slate-800 font-black' : 
                             'text-gray-400'
                         }`}>
                             {log.text}

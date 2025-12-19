@@ -23,6 +23,7 @@ import { OffersModal } from '../OffersModal';
 import { AdminOffersModal } from '../AdminOffersModal';
 import { AdminRecipesModal } from '../AdminRecipesModal';
 import { AdminReviewsModal } from '../AdminReviewsModal';
+import { AdminScheduleModal } from '../AdminScheduleModal'; // NOVO
 import { SavePurchaseModal } from '../SavePurchaseModal';
 import { HistoryModal } from '../HistoryModal';
 import { AuthModal } from '../AuthModal';
@@ -42,7 +43,7 @@ import { TeamReportsModal } from './TeamReportsModal';
 import { ArcadeModal } from '../arcade/ArcadeModal'; 
 import { UnitConverterModal } from '../UnitConverterModal';
 import { AdminContentFactoryModal } from '../AdminContentFactoryModal';
-import { RecipeSelectionModal } from '../RecipeSelectionModal'; // NOVO
+import { RecipeSelectionModal } from '../RecipeSelectionModal'; 
 
 interface AppModalsProps {
     sharedListData: any;
@@ -110,6 +111,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <AdminOffersModal isOpen={app.isAdminModalOpen} onClose={() => app.closeModal('admin')} />
             <AdminRecipesModal isOpen={app.isAdminRecipesModalOpen} onClose={() => app.closeModal('adminRecipes')} />
             <AdminReviewsModal isOpen={app.isAdminReviewsModalOpen} onClose={() => app.closeModal('adminReviews')} />
+            <AdminScheduleModal /> 
             <AdminContentFactoryModal /> 
             <ManageTeamModal />
             <AdminInviteModal />

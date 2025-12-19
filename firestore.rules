@@ -14,9 +14,14 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      // O próprio usuário pode ler e escrever seus dados
       allow read, write: if request.auth.uid == userId;
+      // Administradores podem listar e ler dados de outros usuários para gestão de equipe
+      allow read: if isAdmin();
+      
       match /{allSubcollections=**} {
         allow read, write: if request.auth.uid == userId;
+        allow read: if isAdmin();
       }
     }
 
@@ -27,9 +32,7 @@ service cloud.firestore {
 
     match /global_recipes/{recipeId} {
       allow read: if true;
-      // Qualquer usuário logado pode sugerir/criar uma receita que NÃO existe
       allow create: if isSignedIn();
-      // Apenas admins podem sobrescrever (update) ou apagar (delete)
       allow update, delete: if isAdmin();
     }
 
@@ -61,6 +64,11 @@ service cloud.firestore {
     
     match /feedbacks/{feedbackId} {
       allow create: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }
