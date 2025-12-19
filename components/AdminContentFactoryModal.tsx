@@ -50,7 +50,10 @@ export const AdminContentFactoryModal: React.FC = () => {
         "Bolos", 
         "Carnes", 
         "Lanches", 
-        "Brasileira Clássica"
+        "Brasileira Clássica",
+        "Comida Japonesa",
+        "Comida Árabe",
+        "Hambúrgueres & Sanduíches"
     ];
 
     const fetchCategoryStats = async () => {

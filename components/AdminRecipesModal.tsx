@@ -51,7 +51,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         try {
             const ai = new GoogleGenAI({ apiKey });
             
-            // Forçamos o modelo a entender que ele é APENAS um classificador de tags
             const result = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: `Gere 3 etiquetas curtas de categoria para: "${recipe.name}"`,
@@ -72,7 +71,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                 }
             }));
 
-            // Com o Schema, a resposta vem garantida no formato { tags: [...] }
             const data = JSON.parse(result.text || '{"tags":[]}');
             const suggestedTags: string[] = data.tags || [];
             
@@ -92,7 +90,16 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     };
 
     const processedRecipes = useMemo(() => {
-        let filtered = recipes.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        const lowerSearch = searchTerm.toLowerCase();
+        
+        // Filtro aprimorado: Nome OU Tags
+        let filtered = recipes.filter(r => {
+            const nameMatch = r.name.toLowerCase().includes(lowerSearch);
+            const tagsMatch = r.tags?.some(tag => tag.toLowerCase().includes(lowerSearch));
+            return nameMatch || tagsMatch;
+        });
+
+        // Ordenação: Itens sem tags primeiro para incentivar a organização
         return filtered.sort((a, b) => {
             const hasTagsA = (a.tags && a.tags.length >= 2) ? 1 : 0;
             const hasTagsB = (b.tags && b.tags.length >= 2) ? 1 : 0;
@@ -126,7 +133,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
                         <input 
                             type="text" 
-                            placeholder="Buscar no acervo..." 
+                            placeholder="Buscar por nome ou categoria (ex: japonesa, massa)..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-surface-dark text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-primary/50 outline-none transition-all text-sm font-medium"

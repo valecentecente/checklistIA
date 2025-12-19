@@ -422,7 +422,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // Ordena por score e retorna (Excluindo as que tiverem score muito baixo se houver opções)
         const sorted = scored.sort((a, b) => b.score - a.score);
         
-        // Se o usuário for restrito (Vegano/Veg) e sobrar muito pouca coisa, relaxamos a regra no final da lista
         return sorted.map(s => s.recipe);
     }, [scheduleRules, user?.dietaryPreferences]);
 
@@ -700,48 +699,70 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
         if (!db || !queryStr || queryStr.length < 2) return [];
         try {
-            const normalizedQuery = queryStr.charAt(0).toUpperCase() + queryStr.slice(1).toLowerCase();
             const searchKeywords = generateKeywords(queryStr);
+            const lowerQuery = queryStr.toLowerCase();
             
+            // 1. Busca por Palavras-Chave (Keywords de nome)
+            let keywordResults: FullRecipe[] = [];
             if (searchKeywords.length > 0) {
-                const q = query(
+                const qKey = query(
                     collection(db, 'global_recipes'),
                     where('keywords', 'array-contains-any', searchKeywords.slice(0, 10)),
-                    limit(15) 
+                    limit(20)
                 );
-                const snapshot = await getDocs(q);
-                if (!snapshot.empty) {
-                    const results: FullRecipe[] = [];
-                    snapshot.forEach(doc => {
-                        const data = doc.data() as FullRecipe;
-                        if (data.name) {
-                            results.push({ ...data, imageSource: 'cache' });
-                        }
-                    });
-                    results.sort((a, b) => {
-                        const countMatches = (r: FullRecipe) => {
-                            if (!r.keywords) return 0;
-                            return r.keywords.filter(k => searchKeywords.includes(k)).length;
-                        };
-                        return countMatches(b) - countMatches(a);
-                    });
-                    return results; 
-                }
+                const snapKey = await getDocs(qKey);
+                snapKey.forEach(doc => {
+                    const data = doc.data() as FullRecipe;
+                    if (data.name) keywordResults.push({ ...data, imageSource: 'cache' });
+                });
             }
 
-            const qFallback = query(
+            // 2. Busca por Tags (Categorias)
+            let tagResults: FullRecipe[] = [];
+            const qTag = query(
                 collection(db, 'global_recipes'),
-                where('name', '>=', normalizedQuery),
-                where('name', '<=', normalizedQuery + '\uf8ff'),
-                limit(5)
+                where('tags', 'array-contains-any', searchKeywords.map(k => k.toLowerCase()).slice(0, 10)),
+                limit(20)
             );
-            const snapshotFallback = await getDocs(qFallback);
-            const fallbackResults: FullRecipe[] = [];
-            snapshotFallback.forEach(doc => {
+            const snapTag = await getDocs(qTag);
+            snapTag.forEach(doc => {
                 const data = doc.data() as FullRecipe;
-                if (data.name) fallbackResults.push({ ...data, imageSource: 'cache' });
+                if (data.name) tagResults.push({ ...data, imageSource: 'cache' });
             });
-            return fallbackResults;
+
+            // 3. Mesclar e Remover Duplicatas
+            const mergedMap = new Map<string, FullRecipe>();
+            [...keywordResults, ...tagResults].forEach(r => {
+                mergedMap.set(r.name.toLowerCase(), r);
+            });
+            
+            const results = Array.from(mergedMap.values());
+
+            // 4. Ordenação por relevância (Matches)
+            results.sort((a, b) => {
+                const score = (r: FullRecipe) => {
+                    let s = 0;
+                    const nameL = r.name.toLowerCase();
+                    const tagsL = r.tags?.map(t => t.toLowerCase()) || [];
+                    
+                    // Prioridade máxima: Nome exato contém o termo
+                    if (nameL.includes(lowerQuery)) s += 100;
+                    
+                    // Prioridade alta: Tags contêm o termo
+                    if (tagsL.some(t => t.includes(lowerQuery))) s += 50;
+
+                    // Keywords match
+                    searchKeywords.forEach(k => {
+                        if (r.keywords?.includes(k)) s += 10;
+                        if (tagsL.includes(k.toLowerCase())) s += 5;
+                    });
+
+                    return s;
+                };
+                return score(b) - score(a);
+            });
+
+            return results.slice(0, 15);
 
         } catch (error) {
             console.error("Erro ao buscar receitas globais:", error);
