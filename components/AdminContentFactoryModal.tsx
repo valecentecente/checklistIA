@@ -205,6 +205,9 @@ export const AdminContentFactoryModal: React.FC = () => {
                     addLog("> Gerando [" + (successCount + 1) + "/" + quantity + "]: " + name, 'info');
                     
                     try {
+                        // Pequeno delay preventivo antes de cada chamada para evitar burst
+                        await new Promise(r => setTimeout(r, 2000));
+
                         const detailPrompt = "Gere a receita completa para '" + name + "' em JSON. Formato: { 'name': '" + name + "', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'v', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': ['tag1'] }";
 
                         const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -212,6 +215,9 @@ export const AdminContentFactoryModal: React.FC = () => {
                             contents: detailPrompt,
                             config: { responseMimeType: "application/json" }
                         }));
+
+                        // Delay entre texto e imagem (imagem consome mais cota RPM/RPD)
+                        await new Promise(r => setTimeout(r, 4000));
 
                         const recipeData = JSON.parse(detailRes.text || "{}");
                         const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -249,22 +255,29 @@ export const AdminContentFactoryModal: React.FC = () => {
                             const currentOverallIndex = selectedCategories.indexOf(currentCat);
                             setProgress(((currentOverallIndex * quantity + successCount) / totalToProcess) * 100);
                         }
-                        if (successCount < quantity) await new Promise(r => setTimeout(r, 8000));
+                        
+                        // Delay de "respiro" após o sucesso total de um item
+                        await new Promise(r => setTimeout(r, 10000));
+
                     } catch (err: any) {
-                        addLog("> Falha: " + name, 'error');
-                        if (err.message.includes('429')) {
-                             addLog("Limite de cota atingido. Aguardando 30 segundos...", 'warning');
-                             await new Promise(r => setTimeout(r, 30000));
-                             attemptCount--; // Tenta o mesmo item de novo
+                        const errStr = JSON.stringify(err);
+                        addLog("> Falha em " + name + ". IA ocupada ou limite excedido.", 'error');
+                        
+                        if (errStr.includes('403')) { 
+                            addLog("Acesso negado (403). Parando produção.", 'error');
+                            setShouldStop(true); 
+                            break; 
                         }
-                        if (err.message.includes('403')) { setShouldStop(true); break; }
+                        
+                        // Se falhou, esperamos um pouco mais antes de ir para o próximo nome da lista
+                        await new Promise(r => setTimeout(r, 15000));
                     }
                 }
             }
             addLog("--- OPERAÇÃO FINALIZADA ---", 'separator');
             fetchCategoryStats(); 
         } catch (error: any) {
-            addLog("ERRO FATAL", 'error');
+            addLog("ERRO FATAL NA PRODUÇÃO", 'error');
         } finally {
             setIsGenerating(false);
         }
