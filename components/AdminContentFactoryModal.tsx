@@ -45,6 +45,7 @@ export const AdminContentFactoryModal: React.FC = () => {
         "Sucos",
         "Fit / Saudável", 
         "Vegano", 
+        "Sem Glúten",
         "Drinks", 
         "Bolos", 
         "Carnes", 
@@ -248,6 +249,11 @@ export const AdminContentFactoryModal: React.FC = () => {
                         if (successCount < quantity) await new Promise(r => setTimeout(r, 8000));
                     } catch (err: any) {
                         addLog("> Falha: " + name, 'error');
+                        if (err.message.includes('429')) {
+                             addLog("Limite de cota atingido. Aguardando 30 segundos...", 'warning');
+                             await new Promise(r => setTimeout(r, 30000));
+                             attemptCount--; // Tenta o mesmo item de novo
+                        }
                         if (err.message.includes('403')) { setShouldStop(true); break; }
                     }
                 }
