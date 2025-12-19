@@ -174,25 +174,26 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 6): Promise<any> => {
+export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 8): Promise<any> => {
     try {
         return await fn();
     } catch (error: any) {
-        const errorStr = JSON.stringify(error) || error?.toString() || '';
+        const errorStr = (JSON.stringify(error) || error?.toString() || '').toLowerCase();
         const isQuotaError = 
             error?.status === 429 || 
             errorStr.includes('429') || 
-            errorStr.includes('RESOURCE_EXHAUSTED') ||
-            errorStr.includes('QUOTA_EXCEEDED') ||
-            error?.message?.toLowerCase().includes('quota');
+            errorStr.includes('quota') ||
+            errorStr.includes('resource_exhausted') ||
+            errorStr.includes('rate limit');
                              
         if (retries > 0 && isQuotaError) {
-            // Aumentando o delay exponencialmente: 10s, 20s, 30s... + jitter
-            const baseDelay = (7 - retries) * 12000; 
-            const jitter = Math.random() * 8000;
+            // Aumentando o delay drasticamente para dar tempo da cota renovar no Google AI Studio
+            // Intervalos: 20s, 35s, 50s, 65s...
+            const baseDelay = (9 - retries) * 15000; 
+            const jitter = Math.random() * 5000;
             const finalDelay = baseDelay + jitter;
             
-            console.warn(`[IA] Limite de cota atingido. Tentativa ${7-retries}/6. Aguardando ${Math.round(finalDelay/1000)}s...`);
+            console.warn(`[IA] Limite atingido. Aguardando ${Math.round(finalDelay/1000)}s para renovação da cota.`);
             await new Promise(resolve => setTimeout(resolve, finalDelay));
             return callGenAIWithRetry(fn, retries - 1);
         }

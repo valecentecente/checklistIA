@@ -9,7 +9,7 @@ import type { FullRecipe } from '../types';
 
 interface FactoryLog {
     text: string;
-    type: 'info' | 'error' | 'success' | 'separator' | 'warning';
+    type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota';
 }
 
 interface CategoryStat {
@@ -107,7 +107,7 @@ export const AdminContentFactoryModal: React.FC = () => {
         }
     }, [logs]);
 
-    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'separator' | 'warning' = 'info') => {
+    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota' = 'info') => {
         setLogs(prev => [...prev, { text: msg, type }]);
     };
 
@@ -159,7 +159,8 @@ export const AdminContentFactoryModal: React.FC = () => {
         setLogs([]);
         setProgress(0);
 
-        addLog("--- INICIANDO PRODUÇÃO EM LOTE ---", 'separator');
+        addLog("--- MODO SEGURO: ABASTECIMENTO COM RESPIRO LONGO ---", 'separator');
+        addLog("Objetivo: Evitar bloqueio de cota do Google Gemini.", 'info');
 
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -172,109 +173,119 @@ export const AdminContentFactoryModal: React.FC = () => {
                     holidayTheme = customSazonal || upcomingHoliday || "Próximo Feriado";
                 }
 
-                addLog("PROCESSANDO: " + currentCat, 'separator');
+                addLog("CATEGORIA ATUAL: " + currentCat, 'separator');
                 
                 const listPrompt = "Gere uma lista JSON com " + (quantity * 2) + " nomes das receitas mais populares da categoria '" + currentCat + "' no Brasil. " + (holidayTheme ? "Foco total no tema: " + holidayTheme : "") + ". Retorne apenas o JSON array de strings.";
 
-                const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                    model: 'gemini-3-flash-preview',
-                    contents: listPrompt,
-                    config: { responseMimeType: "application/json" }
-                }));
+                try {
+                    const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: listPrompt,
+                        config: { responseMimeType: "application/json" }
+                    }));
 
-                const recipeNames: string[] = JSON.parse(listResponse.text || "[]");
-                
-                let successCount = 0;
-                let attemptCount = 0;
-
-                while (successCount < quantity && attemptCount < recipeNames.length) {
-                    if (shouldStop) break;
-                    const name = recipeNames[attemptCount];
-                    attemptCount++;
-                    const docId = name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
+                    const recipeNames: string[] = JSON.parse(listResponse.text || "[]");
                     
-                    if (db) {
-                        const docRef = doc(db, 'global_recipes', docId);
-                        const docSnap = await getDoc(docRef);
-                        if (docSnap.exists()) {
-                            addLog("> Ignorado: " + name + " (já existe)", 'warning');
-                            continue;
-                        }
-                    }
-                    
-                    addLog("> Gerando [" + (successCount + 1) + "/" + quantity + "]: " + name, 'info');
-                    
-                    try {
-                        // Pequeno delay preventivo antes de cada chamada para evitar burst
-                        await new Promise(r => setTimeout(r, 2000));
+                    let successCount = 0;
+                    let attemptCount = 0;
 
-                        const detailPrompt = "Gere a receita completa para '" + name + "' em JSON. Formato: { 'name': '" + name + "', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'v', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': ['tag1'] }";
-
-                        const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
-                            model: 'gemini-3-flash-preview',
-                            contents: detailPrompt,
-                            config: { responseMimeType: "application/json" }
-                        }));
-
-                        // Delay entre texto e imagem (imagem consome mais cota RPM/RPD)
-                        await new Promise(r => setTimeout(r, 4000));
-
-                        const recipeData = JSON.parse(detailRes.text || "{}");
-                        const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
-                            model: 'gemini-2.5-flash-image',
-                            contents: { parts: [{ text: "Foto profissional de alta gastronomia: " + (recipeData.imageQuery || name) }] },
-                            config: { responseModalities: [Modality.IMAGE] }
-                        }));
-
-                        let imageUrl = null;
-                        if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-                            const rawBase64 = imageRes.candidates[0].content.parts[0].inlineData.data;
-                            imageUrl = await compressImage("data:image/jpeg;base64," + rawBase64);
-                        }
-
-                        const finalTags = Array.from(new Set([
-                            ...(recipeData.tags || []), 
-                            currentCat.toLowerCase().replace(' / datas comemorativas', ''),
-                            ...(holidayTheme ? [holidayTheme.toLowerCase()] : []),
-                            'factory_v3'
-                        ]));
-
+                    while (successCount < quantity && attemptCount < recipeNames.length) {
+                        if (shouldStop) break;
+                        const name = recipeNames[attemptCount];
+                        attemptCount++;
+                        const docId = name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
+                        
                         if (db) {
-                            await setDoc(doc(db, 'global_recipes', docId), {
-                                ...recipeData,
-                                imageUrl,
-                                imageSource: 'genai',
-                                keywords: generateKeywords(name),
-                                tags: finalTags,
-                                createdAt: serverTimestamp()
-                            }, { merge: true });
-                            
-                            successCount++;
-                            addLog("> SUCESSO: " + name, 'success');
-                            const totalToProcess = selectedCategories.length * quantity;
-                            const currentOverallIndex = selectedCategories.indexOf(currentCat);
-                            setProgress(((currentOverallIndex * quantity + successCount) / totalToProcess) * 100);
+                            const docRef = doc(db, 'global_recipes', docId);
+                            const docSnap = await getDoc(docRef);
+                            if (docSnap.exists()) {
+                                addLog("> Já existe no acervo: " + name, 'warning');
+                                continue;
+                            }
                         }
                         
-                        // Delay de "respiro" após o sucesso total de um item
-                        await new Promise(r => setTimeout(r, 10000));
+                        addLog("> Produzindo [" + (successCount + 1) + "/" + quantity + "]: " + name, 'info');
+                        
+                        try {
+                            // 1. Respiro preventivo antes de pedir os detalhes (Texto)
+                            await new Promise(r => setTimeout(r, 5000));
 
-                    } catch (err: any) {
-                        const errStr = JSON.stringify(err);
-                        addLog("> Falha em " + name + ". IA ocupada ou limite excedido.", 'error');
-                        
-                        if (errStr.includes('403')) { 
-                            addLog("Acesso negado (403). Parando produção.", 'error');
-                            setShouldStop(true); 
-                            break; 
+                            const detailPrompt = "Gere a receita completa para '" + name + "' em JSON. Formato: { 'name': '" + name + "', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'v', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': ['tag1'] }";
+
+                            const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
+                                model: 'gemini-3-flash-preview',
+                                contents: detailPrompt,
+                                config: { responseMimeType: "application/json" }
+                            }));
+
+                            // 2. RESPIRO LONGO antes da imagem (O passo mais pesado)
+                            addLog("  ~ IA preparando os ingredientes (Aguardando 12s)...", 'info');
+                            await new Promise(r => setTimeout(r, 12000));
+
+                            const recipeData = JSON.parse(detailRes.text || "{}");
+                            const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
+                                model: 'gemini-2.5-flash-image',
+                                contents: { parts: [{ text: "Foto profissional de alta gastronomia, close-up, luz natural: " + (recipeData.imageQuery || name) }] },
+                                config: { responseModalities: [Modality.IMAGE] }
+                            }));
+
+                            let imageUrl = null;
+                            if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+                                const rawBase64 = imageRes.candidates[0].content.parts[0].inlineData.data;
+                                imageUrl = await compressImage("data:image/jpeg;base64," + rawBase64);
+                            }
+
+                            const finalTags = Array.from(new Set([
+                                ...(recipeData.tags || []), 
+                                currentCat.toLowerCase().replace(' / datas comemorativas', ''),
+                                ...(holidayTheme ? [holidayTheme.toLowerCase()] : []),
+                                'factory_v3'
+                            ]));
+
+                            if (db) {
+                                await setDoc(doc(db, 'global_recipes', docId), {
+                                    ...recipeData,
+                                    imageUrl,
+                                    imageSource: 'genai',
+                                    keywords: generateKeywords(name),
+                                    tags: finalTags,
+                                    createdAt: serverTimestamp()
+                                }, { merge: true });
+                                
+                                successCount++;
+                                addLog("> PRATO FINALIZADO: " + name, 'success');
+                                const totalToProcess = selectedCategories.length * quantity;
+                                const currentOverallIndex = selectedCategories.indexOf(currentCat);
+                                setProgress(((currentOverallIndex * quantity + successCount) / totalToProcess) * 100);
+                            }
+                            
+                            // 3. Respiro final de ciclo para limpar o cache de RPM (Requisições Por Minuto)
+                            addLog("  ~ Recarregando créditos da API (Aguardando 20s)...", 'quota');
+                            await new Promise(r => setTimeout(r, 20000));
+
+                        } catch (err: any) {
+                            const errStr = (JSON.stringify(err) || err?.toString() || '').toLowerCase();
+                            
+                            if (errStr.includes('429') || errStr.includes('quota')) {
+                                addLog("⚠️ LIMITE ATINGIDO MESMO COM RESPIRO. Pausa de 60 segundos...", 'quota');
+                                await new Promise(r => setTimeout(r, 60000));
+                                attemptCount--; // Tenta o mesmo item de novo
+                            } else if (errStr.includes('403')) { 
+                                addLog("Acesso negado. Verifique o console do Google Cloud.", 'error');
+                                setShouldStop(true); 
+                                break; 
+                            } else {
+                                addLog("> Erro no item " + name + ". Pulando...", 'error');
+                                await new Promise(r => setTimeout(r, 10000));
+                            }
                         }
-                        
-                        // Se falhou, esperamos um pouco mais antes de ir para o próximo nome da lista
-                        await new Promise(r => setTimeout(r, 15000));
                     }
+                } catch (catErr: any) {
+                    addLog("Erro crítico na categoria. Pulando...", 'error');
+                    await new Promise(r => setTimeout(r, 15000));
                 }
             }
-            addLog("--- OPERAÇÃO FINALIZADA ---", 'separator');
+            addLog("--- OPERAÇÃO CONCLUÍDA ---", 'separator');
             fetchCategoryStats(); 
         } catch (error: any) {
             addLog("ERRO FATAL NA PRODUÇÃO", 'error');
@@ -325,7 +336,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                     </div>
                     <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 ${isGenerating ? 'bg-red-600' : 'bg-green-600'}`}>
                         <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'bolt'}</span>
-                        {isGenerating ? 'Parar' : 'Abastecer (' + selectedCategories.length + ')'}
+                        {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento (' + selectedCategories.length + ')'}
                     </button>
                 </div>
                 <div className="h-1.5 bg-slate-700 w-full shrink-0">
@@ -333,7 +344,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                 </div>
                 <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-[11px] space-y-1 scrollbar-hide">
                     {logs.map((log, i) => (
-                        <p key={i} className={`break-words ${log.type === 'error' ? 'text-red-500' : log.type === 'success' ? 'text-green-400' : log.type === 'warning' ? 'text-yellow-500' : log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800' : 'text-gray-400'}`}>
+                        <p key={i} className={`break-words ${log.type === 'error' ? 'text-red-500' : log.type === 'success' ? 'text-green-400' : log.type === 'warning' ? 'text-yellow-500' : log.type === 'quota' ? 'text-orange-400 font-bold bg-orange-400/5 p-1 rounded' : log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800' : 'text-gray-400'}`}>
                             {log.text}
                         </p>
                     ))}
