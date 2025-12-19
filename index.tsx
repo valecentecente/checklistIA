@@ -442,6 +442,12 @@ const AppContent: React.FC = () => {
         </button>
     );
 
+    // Estilo do Background Pattern Global (Maior e Suave)
+    const globalPatternStyle = {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='150' height='150' viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23F97316' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M20 30c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm80 40c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm-70-10c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm110 50c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM60 140c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm100-120c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM25 140c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50-100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm40-20c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zm-10 100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50 40c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zM60 60c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm-12-20c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60-30c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60 60c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zM20 70c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4z'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundSize: '150px 150px'
+    };
+
     if (isMobileLandscape) {
         return (
             <div className="fixed inset-0 z-[9999] bg-[#121212] flex flex-col items-center justify-center p-8 text-center animate-fadeIn">
@@ -564,8 +570,11 @@ const AppContent: React.FC = () => {
                     </div>
                 )}
 
-                <main className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300 ${showSessionBar ? (app.isFocusMode ? 'pt-20' : 'pt-40 lg:pt-20') : (app.isFocusMode ? 'pt-4' : 'pt-28 lg:pt-4')}`}>
-                    <div className="flex flex-col gap-4">
+                <main 
+                    className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300 ${showSessionBar ? (app.isFocusMode ? 'pt-20' : 'pt-40 lg:pt-20') : (app.isFocusMode ? 'pt-4' : 'pt-28 lg:pt-4')}`}
+                    style={globalPatternStyle}
+                >
+                    <div className="flex flex-col gap-4 relative z-10">
                         {app.budget !== null && !showHomeView && (
                             <div className="flex flex-col gap-4 rounded-xl bg-surface-light p-5 shadow-sm dark:bg-surface-dark">
                                 <div className="flex items-center justify-between"><p className="text-base font-semibold">Resumo do Orçamento</p><span>{formattedTotal} de {formatCurrency(app.budget)}</span></div>
