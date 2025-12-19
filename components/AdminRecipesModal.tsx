@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { db } from '../firebase';
 import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import type { FullRecipe } from '../types';
@@ -16,7 +16,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     
-    // Estado para controlar qual receita está sendo processada pela IA individualmente
     const [processingId, setProcessingId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -44,36 +43,49 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     };
 
     const handleSingleRecipeAITagging = async (recipe: RecipeWithId) => {
-        if (processingId) return; // Evita múltiplos cliques simultâneos em itens diferentes
+        if (processingId) return;
         
         setProcessingId(recipe.id);
         const apiKey = process.env.API_KEY as string;
 
         try {
             const ai = new GoogleGenAI({ apiKey });
-            const ingredientsText = recipe.ingredients?.map(ing => ing.detailedName).join(', ') || '';
-            const prompt = `Analise o prato "${recipe.name}" (Ingredientes: ${ingredientsText}). 
-            Gere exatamente 3 tags curtas e precisas para filtragem (ex: Massa, Fit, Jantar). 
-            Retorne apenas um JSON array de strings.`;
-
+            
+            // Forçamos o modelo a entender que ele é APENAS um classificador de tags
             const result = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: prompt,
-                config: { responseMimeType: "application/json" }
+                contents: `Gere 3 etiquetas curtas de categoria para: "${recipe.name}"`,
+                config: { 
+                    systemInstruction: "Você é um assistente de banco de dados. Sua ÚNICA função é gerar etiquetas (tags) para pratos. PROIBIDO gerar receitas, ingredientes ou modos de preparo.",
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            tags: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                description: "Lista com exatamente 3 tags curtas (ex: Massa, Fit, Jantar)"
+                            }
+                        },
+                        required: ["tags"]
+                    }
+                }
             }));
 
-            const suggestedTags: string[] = JSON.parse(result.text || "[]");
+            // Com o Schema, a resposta vem garantida no formato { tags: [...] }
+            const data = JSON.parse(result.text || '{"tags":[]}');
+            const suggestedTags: string[] = data.tags || [];
             
-            if (db) {
+            if (db && suggestedTags.length > 0) {
                 await updateDoc(doc(db, 'global_recipes', recipe.id), { 
                     tags: suggestedTags.map(t => t.toLowerCase()),
                     keywords: generateKeywords(recipe.name)
                 });
+                showToast(`Etiquetas atualizadas: ${suggestedTags.join(', ')}`);
             }
-            showToast(`Tags geradas: ${suggestedTags.join(', ')}`);
         } catch (err: any) {
             console.error(err);
-            showToast("Erro ao gerar tags com IA.");
+            showToast("Erro na IA. Tente novamente.");
         } finally {
             setProcessingId(null);
         }
@@ -122,7 +134,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                         {searchTerm && (
                             <button 
                                 onClick={() => setSearchTerm('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center"
                             >
                                 <span className="material-symbols-outlined text-lg">close</span>
                             </button>
@@ -149,7 +161,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                         <div className="aspect-square bg-gray-200 dark:bg-gray-800 relative overflow-hidden">
                                             {recipe.imageUrl ? <img src={recipe.imageUrl} className="w-full h-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-4xl">image_not_supported</span></div>}
                                             
-                                            {/* Action Buttons Overlay */}
                                             <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button 
                                                     onClick={() => handleDelete(recipe.id, recipe.name)} 
@@ -161,7 +172,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                                     onClick={() => handleSingleRecipeAITagging(recipe)} 
                                                     disabled={isThisProcessing}
                                                     className={`w-8 h-8 ${isThisProcessing ? 'bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90`}
-                                                    title="Gerar 3 Tags com IA"
+                                                    title="Identificar Tags com IA"
                                                 >
                                                     <span className={`material-symbols-outlined text-sm ${isThisProcessing ? 'animate-spin' : ''}`}>
                                                         {isThisProcessing ? 'sync' : 'auto_fix_high'}
@@ -188,7 +199,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                             </div>
                                         </div>
                                         
-                                        {/* Overlay de processamento individual */}
                                         {isThisProcessing && (
                                             <div className="absolute inset-0 bg-blue-600/20 backdrop-blur-[1px] flex items-center justify-center">
                                                 <div className="bg-white dark:bg-slate-900 rounded-full p-2 shadow-xl border border-blue-500">
