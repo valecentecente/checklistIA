@@ -46,6 +46,24 @@ export const RecipeSelectionModal: React.FC = () => {
         await toggleFavorite(recipe);
     };
 
+    const handleShare = async (e: React.MouseEvent, recipe: FullRecipe) => {
+        e.stopPropagation();
+        const shareData = {
+            title: `ChecklistIA: ${recipe.name}`,
+            text: `Olha essa receita que encontrei no ChecklistIA!`,
+            url: window.location.origin
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {}
+        } else {
+            await navigator.clipboard.writeText(window.location.origin);
+            showToast("Link do app copiado!");
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col justify-center items-center animate-fadeIn backdrop-blur-sm">
             
@@ -69,7 +87,7 @@ export const RecipeSelectionModal: React.FC = () => {
                 {/* 1. Results Cards */}
                 {recipeSearchResults.map((recipe, idx) => {
                     const isSaved = isFavorite(recipe.name);
-                    const fakeRating = "5.0"; // Padronizado conforme pedido
+                    const fakeRating = "5.0"; 
 
                     return (
                         <div 
@@ -84,24 +102,47 @@ export const RecipeSelectionModal: React.FC = () => {
                                     backgroundColor: '#222'
                                 }}
                             ></div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-90"></div>
-                            <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-start text-white">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[10px]">check</span> {fakeRating}
+                            
+                            {/* Overlay de Vinheta Superior e Inferior para legibilidade */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20 opacity-90"></div>
+                            
+                            <div className="absolute bottom-0 left-0 w-full p-7 flex items-end justify-between text-white gap-4">
+                                {/* Bloco de Texto à Esquerda - VALORIZADO */}
+                                <div className="flex flex-col items-start flex-1 min-w-0 pb-1">
+                                    <h3 className="text-2xl sm:text-3xl font-black leading-[0.9] drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-3 uppercase italic tracking-tighter mb-4 transition-transform group-hover:-translate-y-1">
+                                        {recipe.name}
+                                    </h3>
+
+                                    <div className="flex items-center gap-2 animate-fadeIn">
+                                        <div className="bg-blue-600 text-white text-[10px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-xl border border-white/10">
+                                            <span className="material-symbols-outlined text-[12px] font-black">check</span> {fakeRating}
+                                        </div>
+                                        <div className="bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wide border border-white/10 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[12px]">schedule</span>
+                                            {recipe.prepTimeInMinutes || 30} MIN
+                                        </div>
                                     </div>
-                                    <span className="bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-md text-[9px] font-bold">
-                                        {recipe.prepTimeInMinutes || 30} MIN
-                                    </span>
                                 </div>
-                                <h3 className="text-xl font-black leading-tight mb-4 drop-shadow-lg line-clamp-2 uppercase italic">{recipe.name}</h3>
-                                <div className="flex items-center justify-between w-full">
-                                    <button onClick={(e) => handleToggleFavorite(e, recipe)} className={`h-11 w-11 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all ${isSaved ? 'bg-red-600 border-red-500' : 'bg-black/30'}`}>
-                                        <span className={`material-symbols-outlined text-xl ${isSaved ? 'font-variation-FILL-1' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>favorite</span>
+
+                                {/* Coluna de Ações à Direita */}
+                                <div className="flex flex-col gap-4 shrink-0">
+                                    {/* Botão de Share */}
+                                    <button 
+                                        onClick={(e) => handleShare(e, recipe)}
+                                        className="h-12 w-12 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/20 shadow-2xl"
+                                    >
+                                        <span className="material-symbols-outlined text-2xl">share</span>
                                     </button>
-                                    <div className="h-12 w-12 rounded-full bg-white text-blue-600 flex items-center justify-center shadow-lg group-hover:bg-blue-50">
-                                        <span className="material-symbols-outlined text-2xl font-black">add</span>
-                                    </div>
+
+                                    {/* Botão Favoritos (Lugar do antigo '+') */}
+                                    <button 
+                                        onClick={(e) => handleToggleFavorite(e, recipe)} 
+                                        className={`h-12 w-12 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 transition-all active:scale-90 shadow-2xl ${isSaved ? 'bg-red-600 border-red-500' : 'bg-white/10 hover:bg-white/20'}`}
+                                    >
+                                        <span className={`material-symbols-outlined text-2xl ${isSaved ? 'font-variation-FILL-1 animate-heartbeat' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
+                                            favorite
+                                        </span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
