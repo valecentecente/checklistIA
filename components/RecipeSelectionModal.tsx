@@ -1,9 +1,23 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useAuth } from '../contexts/AuthContext';
 import type { FullRecipe } from '../types';
+
+// EQUIPE CHECKLIST IA - Fotos Limpas e Carismáticas
+const STAFF_MEMBERS = [
+    { id: 1, url: 'https://images.unsplash.com/photo-1590650153855-d9e808231d41?auto=format&fit=crop&w=800&q=80' },
+    { id: 2, url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=80' },
+    { id: 3, url: 'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&w=800&q=80' },
+    { id: 4, url: 'https://images.unsplash.com/photo-1556740734-7f9583b77544?auto=format&fit=crop&w=800&q=80' },
+    { id: 5, url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=800&q=80' },
+    { id: 6, url: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=800&q=80' },
+    { id: 7, url: 'https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=800&q=80' },
+    { id: 8, url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80' },
+    { id: 9, url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80' },
+    { id: 10, url: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80' }
+];
 
 export const RecipeSelectionModal: React.FC = () => {
     const { 
@@ -19,10 +33,13 @@ export const RecipeSelectionModal: React.FC = () => {
 
     const { toggleFavorite, isFavorite } = useShoppingList();
     const { user } = useAuth();
-    
     const [customOrder, setCustomOrder] = useState('');
 
-    // Sincroniza o pedido customizado com o que o usuário acabou de buscar
+    const staffMember = useMemo(() => {
+        const randomIndex = Math.floor(Math.random() * STAFF_MEMBERS.length);
+        return STAFF_MEMBERS[randomIndex];
+    }, [isRecipeSelectionModalOpen]);
+
     useEffect(() => {
         if (isRecipeSelectionModalOpen) {
             setCustomOrder(currentSearchTerm);
@@ -36,17 +53,10 @@ export const RecipeSelectionModal: React.FC = () => {
         closeModal('recipeSelection');
     };
 
-    const handleGenerateNew = (term: string) => {
-        const finalTerm = term.trim() || currentSearchTerm;
-        showToast(`O Chef IA recebeu seu pedido: ${finalTerm}`);
-        fetchRecipeDetails(finalTerm);
-        closeModal('recipeSelection');
-    };
-
     const handleToggleFavorite = async (e: React.MouseEvent, recipe: FullRecipe) => {
         e.stopPropagation();
         if (!user) {
-            showToast("Faça login para salvar receitas.");
+            showToast("Faça login para favoritar!");
             openModal('auth');
             return;
         }
@@ -55,99 +65,90 @@ export const RecipeSelectionModal: React.FC = () => {
 
     const handleShare = async (e: React.MouseEvent, recipe: FullRecipe) => {
         e.stopPropagation();
-        const shareData = {
-            title: `ChecklistIA: ${recipe.name}`,
-            text: `Olha essa receita que encontrei no ChecklistIA!`,
-            url: window.location.origin
-        };
+        const shareText = `Confira esta receita de ${recipe.name} no ChecklistIA!`;
+        const shareUrl = `https://checklistia.com.br/?recipe=${encodeURIComponent(recipe.name)}`;
 
         if (navigator.share) {
             try {
-                await navigator.share(shareData);
+                await navigator.share({
+                    title: 'ChecklistIA',
+                    text: shareText,
+                    url: shareUrl,
+                });
             } catch (err) {}
         } else {
-            await navigator.clipboard.writeText(window.location.origin);
-            showToast("Link do app copiado!");
+            await navigator.clipboard.writeText(shareUrl);
+            showToast("Link da receita copiado!");
         }
+    };
+
+    const handleGenerateNew = (term: string) => {
+        const finalTerm = term.trim() || currentSearchTerm;
+        showToast(`Pedido anotado! Preparando...`);
+        fetchRecipeDetails(finalTerm);
+        closeModal('recipeSelection');
     };
 
     const hasResults = recipeSearchResults.length > 0;
 
     return (
-        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col justify-center items-center animate-fadeIn backdrop-blur-sm">
+        <div className="fixed inset-0 z-[200] bg-black flex flex-col justify-center items-center animate-fadeIn">
             
-            {/* Header Compacto */}
+            {/* Header Minimalista */}
             <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-50">
-                <div className="flex flex-col bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-                    <span className="text-gray-300 text-[10px] uppercase tracking-widest font-black">
-                        {hasResults ? 'Acervo Encontrado' : 'Acervo Vazio'}
-                    </span>
-                    <h2 className="text-white text-lg font-black capitalize truncate max-w-[200px]">{currentSearchTerm}</h2>
+                <div className="bg-black/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                    <h2 className="text-white text-sm font-black uppercase tracking-tighter italic">
+                        {hasResults ? 'Acervo' : 'Pedido Personalizado'}
+                    </h2>
                 </div>
                 <button 
                     onClick={() => closeModal('recipeSelection')}
-                    className="bg-white/10 hover:bg-red-500 text-white rounded-full p-2 transition-all backdrop-blur-md border border-white/20"
+                    className="bg-white/10 hover:bg-red-500 text-white rounded-full p-2 transition-all border border-white/10"
                 >
                     <span className="material-symbols-outlined">close</span>
                 </button>
             </div>
 
-            {/* Horizontal Carousel */}
-            <div className="w-full flex overflow-x-auto snap-x snap-mandatory gap-6 px-8 pb-8 pt-4 scrollbar-hide items-center h-[75vh]">
+            {/* Carousel */}
+            <div className="w-full flex overflow-x-auto snap-x snap-mandatory gap-6 px-8 pb-10 scrollbar-hide items-center h-[85vh]">
                 
-                {/* 1. Results Cards (if any) */}
+                {/* 1. Cards do Acervo */}
                 {recipeSearchResults.map((recipe, idx) => {
-                    const isSaved = isFavorite(recipe.name);
-                    const fakeRating = "5.0"; 
-
+                    const isFav = isFavorite(recipe.name);
                     return (
                         <div 
                             key={idx} 
                             onClick={() => handleSelect(recipe)}
-                            className="snap-center shrink-0 w-[85vw] sm:w-[320px] h-[65vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl cursor-pointer group border border-white/10 transition-transform active:scale-95 bg-[#1a1a1a]"
+                            className="snap-center shrink-0 w-[85vw] sm:w-[320px] h-[70vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl cursor-pointer group border border-white/10 transition-transform active:scale-95 bg-[#1a1a1a]"
                         >
-                            <div 
-                                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-                                style={{ 
-                                    backgroundImage: recipe.imageUrl ? `url(${recipe.imageUrl})` : 'none',
-                                    backgroundColor: '#222'
-                                }}
-                            ></div>
+                            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${recipe.imageUrl})` }}></div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20"></div>
                             
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20 opacity-90"></div>
-                            
-                            <div className="absolute bottom-0 left-0 w-full p-7 flex items-end justify-between text-white gap-4">
-                                <div className="flex flex-col items-start flex-1 min-w-0 pb-1">
-                                    <h3 className="text-2xl sm:text-3xl font-black leading-[0.9] drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-3 uppercase italic tracking-tighter mb-4 transition-transform group-hover:-translate-y-1">
+                            {/* TEXTO E BOTÕES UNIFICADOS NA BASE PARA ALINHAMENTO PERFEITO */}
+                            <div className="absolute bottom-0 left-0 w-full p-8 flex justify-between items-end gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-2xl font-black text-white leading-none uppercase italic tracking-tighter mb-2 line-clamp-2 drop-shadow-lg">
                                         {recipe.name}
                                     </h3>
-
-                                    <div className="flex items-center gap-2 animate-fadeIn">
-                                        <div className="bg-blue-600 text-white text-[10px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-xl border border-white/10">
-                                            <span className="material-symbols-outlined text-[12px] font-black">check</span> {fakeRating}
-                                        </div>
-                                        <div className="bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wide border border-white/10 flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[12px]">schedule</span>
-                                            {recipe.prepTimeInMinutes || 30} MIN
-                                        </div>
-                                    </div>
+                                    <span className="text-[10px] font-bold text-blue-400 drop-shadow-md">CLIQUE PARA VER</span>
                                 </div>
-
-                                <div className="flex flex-col gap-4 shrink-0">
+                                
+                                <div className="flex flex-col gap-3 shrink-0 z-30">
                                     <button 
-                                        onClick={(e) => handleShare(e, recipe)}
-                                        className="h-12 w-12 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/20 shadow-2xl"
+                                        onClick={(e) => handleToggleFavorite(e, recipe)}
+                                        className={`w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 ${
+                                            isFav ? 'bg-red-500 text-white' : 'bg-black/40 text-white hover:bg-black/60'
+                                        }`}
                                     >
-                                        <span className="material-symbols-outlined text-2xl">share</span>
-                                    </button>
-
-                                    <button 
-                                        onClick={(e) => handleToggleFavorite(e, recipe)} 
-                                        className={`h-12 w-12 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 transition-all active:scale-90 shadow-2xl ${isSaved ? 'bg-red-600 border-red-500' : 'bg-white/10 hover:bg-white/20'}`}
-                                    >
-                                        <span className={`material-symbols-outlined text-2xl ${isSaved ? 'font-variation-FILL-1 animate-heartbeat' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
+                                        <span className={`material-symbols-outlined text-xl ${isFav ? 'font-variation-FILL-1' : ''}`} style={ isFav ? { fontVariationSettings: "'FILL' 1" } : {} }>
                                             favorite
                                         </span>
+                                    </button>
+                                    <button 
+                                        onClick={(e) => handleShare(e, recipe)}
+                                        className="w-11 h-11 rounded-full bg-black/40 text-white flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 hover:bg-black/60"
+                                    >
+                                        <span className="material-symbols-outlined text-xl">share</span>
                                     </button>
                                 </div>
                             </div>
@@ -155,101 +156,76 @@ export const RecipeSelectionModal: React.FC = () => {
                     );
                 })}
 
-                {/* 2. THE WAITRESS CARD (The Fallback) */}
+                {/* 2. CARD DA GARÇONETE */}
                 <div 
-                    className={`snap-center shrink-0 w-[85vw] sm:w-[320px] h-[65vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border-2 ${!hasResults ? 'border-blue-500' : 'border-blue-500/30'}`}
+                    className="snap-center shrink-0 w-[85vw] sm:w-[320px] h-[70vh] relative rounded-[3rem] overflow-hidden shadow-2xl bg-[#0a0a0a] border border-white/10"
                 >
+                    {/* FOTO HERO */}
                     <div 
-                        className="absolute inset-0 bg-cover bg-center transition-transform duration-[40s] animate-slowZoom"
-                        style={{ 
-                            backgroundImage: 'url("https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&w=800&q=80")',
-                            filter: 'contrast(1.05) saturate(1.1)'
-                        }}
+                        className="absolute inset-0 bg-cover bg-center animate-slowZoom"
+                        style={{ backgroundImage: `url("${staffMember.url}")` }}
                     ></div>
 
-                    <div className="absolute top-[42%] left-[30%] z-40 scale-110 drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]">
-                         <div className="bg-white/95 backdrop-blur-md px-3 py-1 rounded-md border-b-2 border-slate-300 shadow-xl flex items-center gap-1.5 -rotate-2 transform hover:rotate-0 transition-transform">
-                             <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center ring-2 ring-blue-100">
-                                <span className="material-symbols-outlined text-white text-[9px] font-black">check</span>
+                    {/* CRACHÁ DISCRETO NO CANTO */}
+                    <div className="absolute top-8 left-8 z-40 opacity-80 scale-75 origin-top-left">
+                         <div className="bg-white px-2 py-1 rounded shadow-xl flex items-center gap-1.5 border-b-2 border-slate-300">
+                             <div className="w-3 h-3 bg-blue-600 rounded-full flex items-center justify-center">
+                                <span className="material-symbols-outlined text-white text-[8px] font-black">check</span>
                              </div>
-                             <span className="text-[9px] font-black text-gray-900 tracking-tighter uppercase">
+                             <span className="text-[8px] font-black text-gray-900 tracking-tighter uppercase">
                                 Checklist<span className="text-blue-600">IA</span>
                              </span>
                          </div>
                     </div>
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                    {/* GRADIENTE DE FUNDO APENAS NO RODAPÉ */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
 
-                    <div className="absolute inset-0 p-6 flex flex-col items-center justify-end text-center">
-                        {!hasResults && (
-                            <div className="absolute top-10 left-0 right-0 px-8 animate-fadeIn">
-                                <div className="bg-blue-600 text-white p-4 rounded-2xl shadow-2xl border border-white/20">
-                                    <p className="text-xs font-black uppercase tracking-widest mb-1">Nada encontrado no acervo</p>
-                                    <p className="text-[11px] opacity-90 leading-tight">Mas não se preocupe! A Garçonete pode criar essa receita para você agora mesmo.</p>
-                                </div>
-                            </div>
-                        )}
+                    {/* INTERFACE DE PEDIDO LIMPA */}
+                    <div className="absolute inset-x-0 bottom-0 p-8 flex flex-col items-center">
+                        <p className="text-white text-lg font-black italic tracking-tighter uppercase mb-6 animate-pulse">
+                            Faça seu pedido
+                        </p>
 
-                        <div className="w-full bg-black/40 backdrop-blur-xl rounded-3xl p-4 border border-white/20 shadow-2xl mb-2 relative overflow-hidden group">
-                             <div className="absolute -top-[100%] left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent skew-y-12"></div>
-                             
-                             <div className="relative z-10">
-                                <label className="block text-left mb-2">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest ml-1">Pedido à Garçonete</span>
-                                        <span className="material-symbols-outlined text-blue-400 text-sm animate-bounce">pan_tool_alt</span>
-                                    </div>
-                                    <input 
-                                        type="text"
-                                        value={customOrder}
-                                        onChange={(e) => setCustomOrder(e.target.value)}
-                                        placeholder="O que deseja pedir hoje?"
-                                        className="w-full bg-transparent border-0 border-b border-white/20 text-white placeholder:text-white/40 focus:ring-0 focus:border-blue-400 text-sm font-bold h-9 px-0 transition-all text-center"
-                                    />
-                                </label>
-
-                                <button 
-                                    onClick={() => handleGenerateNew(customOrder)}
-                                    disabled={!customOrder.trim()}
-                                    className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale"
-                                >
-                                    CRIAR RECEITA E FOTO (IA)
-                                </button>
-                             </div>
+                        <div className="w-full bg-white/10 backdrop-blur-2xl rounded-3xl p-2 border border-white/20 shadow-2xl mb-2 flex items-center gap-2 pr-4">
+                            <input 
+                                type="text"
+                                value={customOrder}
+                                onChange={(e) => setCustomOrder(e.target.value)}
+                                placeholder="Deseja algo especial?"
+                                className="flex-1 bg-transparent border-0 text-white placeholder:text-white/30 focus:ring-0 text-sm font-bold h-12 px-4"
+                            />
+                            <button 
+                                onClick={() => handleGenerateNew(customOrder)}
+                                disabled={!customOrder.trim()}
+                                className="h-10 w-10 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl shadow-lg transition-all active:scale-90 flex items-center justify-center disabled:opacity-30"
+                            >
+                                <span className="material-symbols-outlined">send</span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <div className="snap-center shrink-0 w-8"></div>
             </div>
-            
-            <div className="flex flex-col items-center gap-2 mt-4">
-                <p className="text-white/60 text-[10px] animate-pulse flex items-center gap-2 font-black uppercase tracking-widest">
-                    <span className="material-symbols-outlined text-sm">keyboard_double_arrow_left</span>
-                    Arraste para o lado para mais opções
-                </p>
-                <div className="flex gap-1.5">
-                    {[1,2,3].map(i => (
-                        <div key={i} className={`h-1 rounded-full ${i === 3 ? 'w-4 bg-primary' : 'w-1 bg-white/20'}`}></div>
-                    ))}
-                </div>
+
+            {/* Indicador de Swipe */}
+            <div className="flex gap-1.5 mb-8">
+                <div className="h-1 w-4 bg-primary rounded-full"></div>
+                <div className="h-1 w-1 bg-white/20 rounded-full"></div>
+                <div className="h-1 w-1 bg-white/20 rounded-full"></div>
             </div>
 
             <style>{`
                 @keyframes slowZoom {
                     from { transform: scale(1); }
-                    to { transform: scale(1.15); }
+                    to { transform: scale(1.1); }
                 }
                 .animate-slowZoom {
-                    animation: slowZoom 60s infinite alternate ease-in-out;
+                    animation: slowZoom 40s infinite alternate ease-in-out;
                 }
-                .scrollbar-hide::-webkit-scrollbar {
-                    display: none;
-                }
-                .scrollbar-hide {
-                    -ms-overflow-style: none;
-                    scrollbar-width: none;
-                }
+                .scrollbar-hide::-webkit-scrollbar { display: none; }
+                .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
         </div>
     );

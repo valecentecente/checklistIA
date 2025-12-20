@@ -23,7 +23,6 @@ const SUGGESTED_TAGS = [
 ];
 
 export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails, isLoading, error, onClose }) => {
-  const { handleRecipeSearch } = useApp();
   const [recipeName, setRecipeName] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -45,26 +44,26 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
       setRecipeName(randomTag);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = recipeName.trim();
     if (trimmedInput && !isLoading) {
-      // Agora apenas busca, nunca gera automaticamente aqui
-      await handleRecipeSearch(trimmedInput);
+      // Agora o processo é estritamente de consulta ao acervo
+      onFetchDetails(trimmedInput);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4 animate-fadeIn" onClick={onClose}>
         <div className="relative flex w-full max-w-md flex-col overflow-visible rounded-xl bg-[#fcfaf8] dark:bg-background-dark shadow-2xl dark:shadow-primary/10 animate-slideUp" onClick={(e) => e.stopPropagation()}>
-            {/* Top App Bar */}
+            {/* Top App Bar - Identidade de Biblioteca/Acervo */}
             <div className="flex items-center bg-[#fcfaf8] dark:bg-background-dark p-4 pb-2 justify-between border-b border-[#e7dbcf] dark:border-primary/20 rounded-t-xl">
                 <div className="flex items-center gap-2">
                     <div className="flex items-center justify-center text-[#1b140d] dark:text-background-light">
-                        <span className="material-symbols-outlined text-primary" style={{fontSize: '28px'}}>auto_awesome</span>
+                        <span className="material-symbols-outlined text-blue-600 dark:text-blue-400" style={{fontSize: '28px'}}>menu_book</span>
                     </div>
                     <h2 className="text-lg font-bold leading-tight tracking-[-0.015em] text-[#1b140d] dark:text-white">
-                        Receitas <span className="text-blue-600 dark:text-blue-400">IA</span>
+                        Acervo Checklist<span className="text-blue-600 dark:text-blue-400">IA</span>
                     </h2>
                 </div>
                 <div className="flex items-center justify-end">
@@ -76,14 +75,14 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
 
             <form onSubmit={handleSubmit} className="overflow-visible">
                 <div className="p-4 pb-2">
-                    <p className="pb-3 pt-1 text-center text-base font-normal leading-normal text-[#1b140d] dark:text-gray-300">
-                        Encontre receitas incríveis em nosso acervo inteligente para sua próxima compra.
+                    <p className="pb-3 pt-1 text-center text-sm font-normal leading-normal text-[#1b140d] dark:text-gray-300">
+                        Busque por pratos ou ingredientes em nossa base de dados inteligente.
                     </p>
                 </div>
 
                 <div className="flex max-w-full flex-col gap-4 px-4 py-3 relative" ref={wrapperRef}>
                     <label className="flex w-full flex-col">
-                        <p className="pb-2 text-base font-medium leading-normal text-[#1b140d] dark:text-gray-300">Nome do prato ou ingrediente</p>
+                        <p className="pb-2 text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 ml-1">O que você procura?</p>
                         <div className="group flex w-full items-center rounded-xl border border-[#e7dbcf] dark:border-primary/50 focus-within:ring-2 focus-within:ring-primary/50 relative bg-[#fcfaf8] dark:bg-background-dark shadow-sm transition-all">
                             <span className="material-symbols-outlined absolute left-4 text-gray-400 dark:text-gray-500 pointer-events-none">search</span>
                             
@@ -109,7 +108,7 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
                                     type="button" 
                                     onClick={handleDiceClick}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-primary/80 hover:text-primary dark:text-orange-400/80 dark:hover:text-orange-400 transition-all hover:bg-orange-50 dark:hover:bg-white/10 rounded-xl group"
-                                    title="Estou com sorte: Usar sugestão"
+                                    title="Dica aleatória"
                                 >
                                     <span className="material-symbols-outlined transition-transform duration-700 ease-out group-hover:rotate-[360deg]" style={{fontSize: '24px'}}>
                                         casino
@@ -146,10 +145,10 @@ export const RecipeAssistant: React.FC<RecipeAssistantProps> = ({ onFetchDetails
                         {isLoading ? (
                             <>
                             <LoadingSpinner />
-                            Buscando...
+                            Pesquisando...
                             </>
                         ) : (
-                            'Buscar'
+                            'Pesquisar'
                         )}
                     </button>
                 </div>

@@ -96,7 +96,16 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <ProductDetailsModal /> 
             <AddItemForm isOpen={app.isAddItemModalOpen} onClose={() => app.closeModal('addItem')} onAddItem={handleAddItem} />
             <EditItemForm isOpen={!!app.editingItemId} onClose={app.cancelEdit} onUpdate={updateItem} onDeleteItem={deleteItem} item={editingItem} />
-            {app.isRecipeAssistantModalOpen && <RecipeAssistant onClose={() => app.closeModal('recipeAssistant')} onFetchDetails={(name) => app.fetchRecipeDetails(name)} isLoading={app.isRecipeLoading} error={app.recipeError} />}
+            
+            {app.isRecipeAssistantModalOpen && (
+                <RecipeAssistant 
+                    onClose={() => app.closeModal('recipeAssistant')} 
+                    onFetchDetails={(name) => app.handleRecipeSearch(name)} 
+                    isLoading={app.isSearchingAcervo} 
+                    error={app.recipeError} 
+                />
+            )}
+            
             <BudgetForm isOpen={app.isBudgetModalOpen} onClose={() => app.closeModal('budget')} currentBudget={app.budget} onSetBudget={app.setBudget} onClearBudget={app.clearBudget} />
             {app.selectedRecipe && <RecipeModal recipe={app.selectedRecipe} onClose={app.closeRecipe} onImageGenerated={app.handleRecipeImageGenerated} />}
             {app.duplicateInfo && <DuplicateItemModal {...app.duplicateInfo} />}

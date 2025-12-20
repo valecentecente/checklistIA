@@ -83,6 +83,7 @@ interface AppContextType {
     selectedRecipe: FullRecipe | null;
     setSelectedRecipe: (recipe: FullRecipe | null) => void; 
     isRecipeLoading: boolean;
+    isSearchingAcervo: boolean; // NOVO: Separado para evitar confusão com geração
     recipeError: string | null;
     fetchRecipeDetails: (recipeName: string, imageBase64?: string, autoAdd?: boolean) => Promise<void>;
     handleRecipeImageGenerated: (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => void;
@@ -288,6 +289,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [fullRecipes, setFullRecipes] = useState<Record<string, FullRecipe>>({});
     const [selectedRecipe, setSelectedRecipe] = useState<FullRecipe | null>(null);
     const [isRecipeLoading, setIsRecipeLoading] = useState(false);
+    const [isSearchingAcervo, setIsSearchingAcervo] = useState(false); // NOVO
     const [recipeError, setRecipeError] = useState<string | null>(null);
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
@@ -616,8 +618,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
 
-        const recipeName = typeof input === 'string' ? input : input.name;
-        fetchRecipeDetails(recipeName, undefined, false);
+        // Se chegou aqui e não tem ingredientes, não abrimos o modal ou geramos automaticamente.
+        // O acervo deve ser autossuficiente nesta etapa.
+        showToast("Receita em manutenção no acervo.");
     };
 
     const closeRecipe = () => setSelectedRecipe(null);
@@ -792,36 +795,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, []);
 
     const handleRecipeSearch = async (term: string) => {
-        setIsRecipeLoading(true); 
+        setIsSearchingAcervo(true); // Estado separado
         try {
             const results = await searchGlobalRecipes(term);
-            
-            // CIRURGIA: Sempre abre o modal de seleção. Se results for [], a Garçonete será o único card.
             setRecipeSearchResults(results);
             setCurrentSearchTerm(term);
             closeModal('recipeAssistant'); 
             openModal('recipeSelection'); 
-            
         } catch (error) {
             setRecipeSearchResults([]);
             setCurrentSearchTerm(term);
             closeModal('recipeAssistant');
             openModal('recipeSelection');
         } finally {
-            setIsRecipeLoading(false);
+            setIsSearchingAcervo(false);
         }
     };
 
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
         if (recipeName && !imageBase64) {
-            setIsRecipeLoading(true);
             try {
                 const localMatch = getCachedRecipe(recipeName);
                 if (localMatch && localMatch.ingredients && localMatch.ingredients.length > 0) {
                     setSelectedRecipe(localMatch);
                     setFullRecipes(prev => ({...prev, [localMatch.name]: localMatch}));
                     closeModal('recipeAssistant');
-                    setIsRecipeLoading(false);
                     if (autoAdd) addRecipeToShoppingList(localMatch);
                     return;
                 }
@@ -830,7 +828,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (!apiKey) {
             setRecipeError("Chave de IA não configurada.");
-            setIsRecipeLoading(false);
             return;
         }
 
@@ -1073,7 +1070,7 @@ Format:
         installPromptEvent, handleInstall, handleDismissInstall, isPWAInstallVisible,
         budget, setBudget, clearBudget,
         toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
-        fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
+        fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
         editingItemId, startEdit, cancelEdit,
         duplicateInfo, setDuplicateInfo,
         groupingMode, setGroupingMode, isOrganizing, toggleGrouping,
