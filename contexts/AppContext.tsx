@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot } from 'firebase/firestore';
@@ -9,7 +10,7 @@ import { useAuth } from './AuthContext';
 export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
-const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 Horas de cache para economizar cota
+const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 Horas de cache
 
 const SURVIVAL_RECIPES: FullRecipe[] = [
     {
@@ -28,7 +29,7 @@ const SURVIVAL_RECIPES: FullRecipe[] = [
         imageQuery: "espaguete",
         servings: "2", prepTimeInMinutes: 15, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80",
-        tags: ["massa", "almoço"]
+        tags: ["massa", "almoço", "rápido"]
     },
     {
         name: "Salada Tropical",
@@ -37,7 +38,7 @@ const SURVIVAL_RECIPES: FullRecipe[] = [
         imageQuery: "salada",
         servings: "2", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
-        tags: ["salada", "fit"]
+        tags: ["salada", "fit", "saudável"]
     }
 ];
 
@@ -242,12 +243,6 @@ export const generateKeywords = (text: string): string[] => {
         .filter(word => word.length > 2 && !stopWords.includes(word)); 
 };
 
-// Palavras proibidas para dietas restritivas
-const FORBIDDEN_WORDS: Record<string, string[]> = {
-    'vegan': ['carne', 'frango', 'peixe', 'ovo', 'leite', 'queijo', 'presunto', 'bacon', 'linguiça', 'mel', 'suíno', 'picanha', 'costela', 'filé', 'file', 'isca', 'camarão', 'camarao', 'salmão', 'bacalhau'],
-    'vegetarian': ['carne', 'frango', 'peixe', 'bacon', 'linguiça', 'suíno', 'picanha', 'costela', 'filé', 'file', 'isca', 'camarão', 'camarao', 'salmão', 'bacalhau', 'presunto']
-};
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
     const { user, pendingAdminInvite } = useAuth();
@@ -336,62 +331,91 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
-    const isDrinkRecipe = useCallback((r: FullRecipe) => {
-        const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
-        const drinkTerms = ['suco', 'drink', 'vitamina', 'coquetel', 'bebida', 'smoothie', 'café', 'chá', 'limonada', 'batida'];
-        return drinkTerms.some(t => text.includes(t));
-    }, []);
+    // --- LÓGICA DE FILTRAGEM DE COLEÇÕES ---
+    const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
+        const pool = globalRecipeCache;
+        if (pool.length === 0) return [];
 
-    // --- CARREGAMENTO INICIAL BLINDADO (CACHE-FIRST) ---
+        switch(categoryKey) {
+            case 'top10': 
+                return pool.slice(0, 15);
+            case 'fast': 
+                return pool.filter(r => r.prepTimeInMinutes && r.prepTimeInMinutes <= 30);
+            case 'healthy':
+                return pool.filter(r => r.tags?.some(t => ['fit', 'saudável', 'salada', 'nutritivo', 'vegano', 'fruta'].includes(t.toLowerCase())));
+            case 'cheap':
+                return pool.filter(r => r.cost === 'Baixo');
+            case 'dessert':
+                return pool.filter(r => r.tags?.some(t => ['sobremesa', 'doce', 'bolo', 'torta'].includes(t.toLowerCase())));
+            case 'new':
+                return pool.slice(0, 10);
+            case 'random':
+                return shuffleArray(pool).slice(0, 5);
+            default:
+                return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
+        }
+    }, [globalRecipeCache]);
+
+    // --- CARREGAMENTO INICIAL (CACHE-FIRST + TIMEOUT GUARD) ---
     useEffect(() => {
         if (!db) return;
         const loadData = async () => {
             const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
             let fallbackCache = null;
 
+            // 1. Carregamento imediato do cache do localStorage para evitar UI vazia
             if (cachedString) {
                 try {
                     const cache = JSON.parse(cachedString);
                     fallbackCache = cache; 
+                    // Explicitly cast to FullRecipe[] to avoid 'unknown[]' errors
+                    setAllRecipesPool((cache.pool as FullRecipe[]) || SURVIVAL_RECIPES);
+                    setGlobalRecipeCache((cache.cache as FullRecipe[]) || SURVIVAL_RECIPES);
+                    setTotalRecipeCount(cache.count || 0);
+                    
                     const isExpired = (Date.now() - cache.timestamp) > RECIPE_CACHE_TTL;
-                    if (!isExpired) {
-                        setAllRecipesPool(cache.pool);
-                        setGlobalRecipeCache(cache.cache);
-                        setTotalRecipeCount(cache.count);
-                        return; // Cache válido! Não gasta cota.
-                    }
+                    if (!isExpired) return; // Cache ainda válido, evita hits na rede
                 } catch (e) { localStorage.removeItem(RECIPE_CACHE_KEY); }
             }
 
+            // 2. Tenta atualizar do Firestore com um GUARD de 3 segundos para não travar o app
             try {
-                // Tenta carregar do banco
-                const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(80));
-                const snapshotFetch = await getDocs(qFetch);
-                const fetched: FullRecipe[] = [];
-                snapshotFetch.forEach(doc => {
-                    const data = doc.data() as FullRecipe;
-                    if (data.name && data.imageUrl) fetched.push({ ...data, imageSource: 'cache' });
-                });
+                const networkPromise = (async () => {
+                    const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
+                    const snapshotFetch = await getDocs(qFetch);
+                    const fetched: FullRecipe[] = [];
+                    snapshotFetch.forEach(doc => {
+                        const data = doc.data() as FullRecipe;
+                        // Cast whole object literal as FullRecipe to ensure property compliance
+                        if (data.name && data.imageUrl) fetched.push({ ...data, imageSource: 'cache' } as FullRecipe);
+                    });
 
-                const pool = fetched.length > 0 ? shuffleArray(fetched) : (fallbackCache?.pool || SURVIVAL_RECIPES);
-                setAllRecipesPool(pool);
-                setGlobalRecipeCache(fetched.length > 0 ? fetched : (fallbackCache?.cache || SURVIVAL_RECIPES));
-                
-                const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
-                const totalCount = countSnapshot.data().count;
-                setTotalRecipeCount(totalCount);
+                    const pool = fetched.length > 0 ? shuffleArray(fetched) : (fallbackCache?.pool as FullRecipe[] || SURVIVAL_RECIPES);
+                    setAllRecipesPool(pool);
+                    setGlobalRecipeCache(fetched.length > 0 ? fetched : (fallbackCache?.cache as FullRecipe[] || SURVIVAL_RECIPES));
+                    
+                    const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
+                    const totalCount = countSnapshot.data().count;
+                    setTotalRecipeCount(totalCount);
 
-                localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({
-                    timestamp: Date.now(),
-                    pool, cache: fetched, count: totalCount
-                }));
+                    localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({
+                        timestamp: Date.now(),
+                        pool, cache: fetched, count: totalCount
+                    }));
+                })();
+
+                // Se a rede demorar mais que 3s, o app continua com o que tinha no localStorage
+                await Promise.race([
+                    networkPromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
+                ]);
+
             } catch (error: any) {
-                console.warn("Firestore Quota/Network error. Using fallback.", error.message);
-                // Se der erro de cota, usa o que tiver em memória ou sobrevivência
+                console.warn("Firestore sluggish/offline. Using local data.", error.message);
                 if (fallbackCache) {
-                    setAllRecipesPool(fallbackCache.pool);
-                    setGlobalRecipeCache(fallbackCache.cache);
-                    setTotalRecipeCount(fallbackCache.count);
+                    setAllRecipesPool((fallbackCache.pool as FullRecipe[]) || SURVIVAL_RECIPES);
+                    setGlobalRecipeCache((fallbackCache.cache as FullRecipe[]) || SURVIVAL_RECIPES);
+                    setTotalRecipeCount(fallbackCache.count || 0);
                 }
             }
         };
@@ -562,7 +586,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let results: FullRecipe[] = [];
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
-            snap.forEach(doc => results.push({ ...doc.data() as FullRecipe, imageSource: 'cache' }));
+            // Construct as FullRecipe explicitly to ensure type compliance
+            snap.forEach(doc => results.push({ ...doc.data(), imageSource: 'cache' } as FullRecipe));
             return results;
         } catch (error) { return []; }
     }, []);
@@ -595,8 +620,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 config: { responseMimeType: "application/json" }
             }));
 
+            // Use 'any' type for raw details to handle spread with defaults safely
             const details = JSON.parse(response.text || "{}");
-            const fullData: FullRecipe = { ...details, name: details.name || recipeName, keywords: generateKeywords(details.name || recipeName) };
+            // Explicitly provide all required FullRecipe properties to satisfy TypeScript
+            const fullData: FullRecipe = { 
+                name: details.name || recipeName,
+                ingredients: details.ingredients || [],
+                instructions: details.instructions || [],
+                imageQuery: details.imageQuery || '',
+                servings: details.servings || '',
+                prepTimeInMinutes: details.prepTimeInMinutes || 0,
+                difficulty: details.difficulty || 'Médio',
+                cost: details.cost || 'Médio',
+                ...details, 
+                keywords: generateKeywords(details.name || recipeName) 
+            };
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             closeModal('recipeAssistant');
@@ -645,21 +683,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         closeModal('options');
     }, [groupingMode, items, itemCategories, apiKey]);
 
-    const fetchThemeSuggestions = async (key: string) => {
-        setCurrentTheme(key);
-        setRecipeSuggestions([]);
+    const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
+        setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
+        setRecipeSuggestions([] as FullRecipe[]);
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
-            let suggestions = featuredRecipes.slice(0, 10);
+            const suggestions = getCategoryRecipes(key);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }
     };
 
-    // Fix: Added missing implementation for clearIncomingList
     const clearIncomingList = useCallback(() => setIncomingList(null), []);
 
-    // Fix: Added missing implementation for handleExploreRecipeClick
     const handleExploreRecipeClick = useCallback((recipe: string | FullRecipe) => {
         const recipeName = typeof recipe === 'string' ? recipe : recipe.name;
         if (!user) {
@@ -668,18 +704,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             openModal('auth');
             return;
         }
-        // If there are items or a list name, ask if adding to current or starting new
         if (items.length > 0 || currentMarketName) {
             setPendingExploreRecipe(recipeName);
             openModal('recipeDecision');
         } else {
-            // Empty list: Start shopping (prompt for name) then it will handle the pending recipe
             setPendingExploreRecipe(recipeName);
             openModal('startShopping');
         }
     }, [user, items.length, currentMarketName, showToast, openModal]);
-
-    const normalizeString = (str: string) => str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
     const value = {
         ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme,
@@ -693,7 +725,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
-        getCategoryRecipes: (k: string) => [], getCategoryRecipesSync: (k: string) => [], getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
+        getCategoryRecipes, getCategoryRecipesSync: (k: string) => [] as FullRecipe[], getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
         pendingAction, setPendingAction, selectedProduct, openProductDetails: (p: Offer) => {}, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

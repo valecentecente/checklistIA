@@ -1,11 +1,13 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from 'firebase/firestore';
 
 // --- CONFIGURAÇÃO DO NOVO PROJETO: ChecklistIA ---
-// Atualizado com as credenciais fornecidas pelo usuário
-
 const firebaseConfig = {
   apiKey: "AIzaSyA5JGHsJUjJhoxeShn2282rQ0yfeGJ4-OA",
   authDomain: "checklistiaweb.firebaseapp.com",
@@ -19,26 +21,22 @@ const firebaseConfig = {
 // Verifica se a configuração foi feita
 const isConfigured = firebaseConfig.apiKey !== "" && firebaseConfig.projectId !== "";
 
-if (!isConfigured) {
-    console.warn("⚠️ AVISO: O Firebase ainda não foi configurado corretamente.");
-} else {
-    console.log(`Firebase Conectado: ${firebaseConfig.projectId}`);
-}
-
 // Inicializa o Firebase
 const app = isConfigured ? initializeApp(firebaseConfig) : undefined;
 const auth = app ? getAuth(app) : undefined;
-const db = app ? getFirestore(app) : undefined;
 
-// Configuração Explícita de Persistência (Segurança/UX)
+// Inicialização Robusta do Firestore com Cache Persistente (Blindagem contra erros de rede)
+const db = app ? initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+}) : undefined;
+
+// Configuração de Persistência de Autenticação
 if (auth) {
-    setPersistence(auth, browserLocalPersistence)
-        .then(() => {
-            // Persistência configurada com sucesso
-        })
-        .catch((error) => {
-            console.error("Erro ao definir persistência do Firebase:", error);
-        });
+    setPersistence(auth, browserLocalPersistence).catch((error) => {
+        console.error("Erro ao definir persistência do Firebase Auth:", error);
+    });
 }
 
 export { auth, db, isConfigured as isFirebaseConfigured };

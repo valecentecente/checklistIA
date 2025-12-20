@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord } from '../types';
@@ -127,12 +128,13 @@ interface AppContextType {
     
     addRecipeToShoppingList: (recipe: FullRecipe) => Promise<void>;
     showPWAInstallPromptIfAvailable: () => void;
+    getCategoryRecipesSync: (categoryKey: string) => FullRecipe[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, addHistoricItem } = useShoppingList();
+    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
     const { user } = useAuth();
 
     const [modalStates, setModalStates] = useState({
@@ -186,7 +188,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [isSharedSession, setIsSharedSession] = useState(false);
     const [historyActiveTab, setHistoryActiveTab] = useState<'my' | 'received'>('my');
     const [isHomeViewActive, setHomeViewActive] = useState(true); // Default Home
-    const [isFocusMode, setFocusMode] = useState(false);
     
     // Recipe Discovery
     const [featuredRecipes, setFeaturedRecipes] = useState<FullRecipe[]>([]);
@@ -402,7 +403,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             parts.push({ text: systemPrompt });
 
             const response: GenerateContentResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: { parts },
                 config: {
                     responseMimeType: "application/json",
@@ -420,8 +421,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const finalRecipeName = recipeDetails.name || recipeName || "Receita Identificada";
             
-            // Define a receita completa
-            const fullRecipeData: FullRecipe = { name: finalRecipeName, ...recipeDetails };
+            // Providing default values for required FullRecipe properties
+            const fullRecipeData: FullRecipe = { 
+                name: finalRecipeName,
+                ingredients: recipeDetails.ingredients || [],
+                instructions: recipeDetails.instructions || [],
+                imageQuery: recipeDetails.imageQuery || '',
+                servings: recipeDetails.servings || '',
+                prepTimeInMinutes: recipeDetails.prepTimeInMinutes || 0,
+                difficulty: recipeDetails.difficulty || 'Médio',
+                cost: recipeDetails.cost || 'Médio',
+                ...recipeDetails
+            };
             setFullRecipes(prev => ({...prev, [finalRecipeName]: fullRecipeData}));
             
             // Abre o modal da receita
@@ -476,7 +487,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue e Peixaria", "🧀 Frios e Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene Pessoal", "🐾 Pets", "🏠 Utilidades Domésticas", "❓ Outros" ];
                 
                 const response: GenerateContentResponse = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
+                    model: 'gemini-3-flash-preview',
                     contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Use APENAS estas categorias: ${categories.join(', ')}. Retorne JSON array: [{"itemName": "Nome", "category": "Categoria"}]`,
                     config: {
                         responseMimeType: "application/json",
@@ -538,18 +549,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const fetchThemeSuggestions = async (prompt: string) => {
         setCurrentTheme(prompt);
-        setRecipeSuggestions([]);
+        setRecipeSuggestions([] as FullRecipe[]);
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         
         try {
             const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: `Sugira 5 receitas para o tema: "${prompt}". Retorne JSON: [{"name": "Nome", "description": "Breve descrição em 10 palavras"}]`,
+                model: 'gemini-3-flash-preview',
+                contents: `Sugira 5 receitas para o tema: "${prompt}". Retorne JSON completo: [{"name": "Nome", "ingredients": [], "instructions": [], "imageQuery": "desc", "servings": "X", "prepTimeInMinutes": 30, "difficulty": "Médio", "cost": "Médio"}]`,
                 config: { responseMimeType: "application/json" }
             });
-            const suggestions = JSON.parse(response.text || "[]");
+            // Construct mapping to ensure all properties are explicitly initialized for TS
+            const suggestionsRaw = JSON.parse(response.text || "[]");
+            const suggestions: FullRecipe[] = (suggestionsRaw as any[]).map(s => ({
+                name: s.name || '',
+                ingredients: s.ingredients || [],
+                instructions: s.instructions || [],
+                imageQuery: s.imageQuery || '',
+                servings: s.servings || '',
+                prepTimeInMinutes: s.prepTimeInMinutes || 0,
+                difficulty: s.difficulty || 'Médio',
+                cost: s.cost || 'Médio',
+                ...s
+            } as FullRecipe));
             setRecipeSuggestions(suggestions);
         } catch (error) {
             console.error("Erro ao buscar sugestões:", error);
@@ -583,7 +606,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isFocusMode, setFocusMode,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList,
-        showPWAInstallPromptIfAvailable
+        showPWAInstallPromptIfAvailable,
+        getCategoryRecipesSync: (k: string) => [] as FullRecipe[]
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

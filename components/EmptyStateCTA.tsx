@@ -9,12 +9,11 @@ interface EmptyStateCTAProps {
 }
 
 export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssistant, onShowBudget }) => {
-    const { featuredRecipes, fetchThemeSuggestions, showRecipe, totalRecipeCount, getCategoryRecipes, openModal, showToast } = useApp();
+    const { featuredRecipes, fetchThemeSuggestions, showRecipe, getCategoryRecipes, openModal, showToast } = useApp();
     const { user } = useAuth();
     const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
     const displayRecipes = featuredRecipes;
-    const showCategories = totalRecipeCount >= 5;
 
     // Helper interno para identificar se é bebida (diversidade visual)
     const isLiquid = (r: any) => {
@@ -44,11 +43,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         const baseCategories = [
             { id: 'top10', label: "Em Alta", key: "top10" },
             { id: 'fast', label: "Rápidas", key: "fast" },
-            { id: 'new', label: "Novidades", key: "new" },
             { id: 'cheap', label: "Econômicas", key: "cheap" },
             { id: 'healthy', label: "Saudáveis", key: "healthy" },
             { id: 'dessert', label: "Sobremesas", key: "dessert" },
-            { id: 'random', label: "Surpresa", key: "random" },
+            { id: 'new', label: "Novidades", key: "new" },
         ];
 
         const usedImageUrls = new Set<string>(displayRecipes.map(r => r.imageUrl).filter(Boolean) as string[]);
@@ -57,14 +55,13 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             const recipes = getCategoryRecipes(cat.key);
             const count = recipes.length;
             
-            // Lógica de Diversidade Visual: Tenta achar uma receita sólida para a capa primeiro
+            // Prioriza receitas sólidas para a capa para ficar mais apetitoso
             let uniqueRecipe = recipes.find(r => 
                 r.imageUrl && 
                 !usedImageUrls.has(r.imageUrl) && 
-                !isLiquid(r) // Prioriza sólidos
+                !isLiquid(r) 
             );
 
-            // Se não achar um sólido novo, pega qualquer um novo
             if (!uniqueRecipe) {
                 uniqueRecipe = recipes.find(r => r.imageUrl && !usedImageUrls.has(r.imageUrl));
             }
@@ -115,7 +112,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     const getHeroTitle = () => {
         const month = new Date().getMonth();
         if (month === 11) return "Especial de Natal";
-        if (month === 0) return "Receitas de Verão";
         const hour = new Date().getHours();
         if (hour < 11) return "Bom dia! Café da Manhã";
         if (hour < 15) return "Hora do Almoço";
@@ -130,6 +126,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
             </div>
 
+            {/* BANNER PRINCIPAL */}
             {displayRecipes.length > 0 ? (
                 <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group">
                     {displayRecipes.map((recipe, index) => (
@@ -178,25 +175,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                         </div>
                     )}
                 </div>
-            ) : (
-                <div 
-                    onClick={handleAiClick}
-                    className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group cursor-pointer bg-gradient-to-br from-orange-400 to-red-500"
-                >
-                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/food.png')] opacity-10"></div>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-white">
-                        <div className="bg-white/20 p-3 sm:p-4 rounded-full mb-2 sm:mb-3 backdrop-blur-sm animate-pulse">
-                            <span className="material-symbols-outlined text-3xl sm:text-4xl">menu_book</span>
-                        </div>
-                        <h2 className="text-xl sm:text-2xl font-bold mb-1">Livro de Receitas</h2>
-                        <p className="text-xs sm:text-sm font-medium opacity-90 max-w-[260px] sm:max-w-[300px] leading-relaxed">
-                            Crie a primeira receita e inspire a comunidade!
-                        </p>
-                    </div>
-                </div>
-            )}
+            ) : null}
 
-            {categories.length > 0 && showCategories && (
+            {/* EXPLORAR COLEÇÕES (AS QUE ESTAVAM FALTANDO) */}
+            {categories.length > 0 && (
                 <div className="animate-fadeIn">
                     <div className="flex items-center justify-between px-1 mb-3">
                         <h3 className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">Explorar Coleções</h3>
@@ -235,6 +217,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             )}
 
+            {/* BOTÕES DE AÇÃO */}
             <div className="grid grid-cols-2 gap-3">
                 <button 
                     onClick={handleAiClick}
