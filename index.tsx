@@ -113,7 +113,6 @@ const AppContent: React.FC = () => {
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
     const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
     
-    // Estados para edição inline do mercado
     const [isEditingMarketName, setIsEditingMarketName] = useState(false);
     const [tempMarketName, setTempMarketName] = useState('');
     const marketInputRef = useRef<HTMLInputElement>(null);
@@ -279,10 +278,6 @@ const AppContent: React.FC = () => {
         app.closeModal('savePurchase');
         app.setHomeViewActive(true);
         app.showToast("Sua compra foi salva!");
-        if (app.installPromptEvent && !sessionStorage.getItem('pwa_offered_contextual')) {
-            sessionStorage.setItem('pwa_offered_contextual', 'true');
-            app.showPWAInstallPromptIfAvailable();
-        }
     }, [savePurchase, app]);
 
     const handleFinishWithoutSaving = useCallback(async () => {
@@ -396,7 +391,6 @@ const AppContent: React.FC = () => {
         }
     };
     
-    // Função para ativar edição inline do mercado
     const startEditingMarketName = (e: React.MouseEvent) => {
         e.stopPropagation();
         setTempMarketName(app.currentMarketName || "Minha Lista");
@@ -410,8 +404,9 @@ const AppContent: React.FC = () => {
         setIsEditingMarketName(false);
     };
 
-    const showHomeView = (items.length === 0 && !app.currentMarketName) || app.isHomeViewActive;
-    const showSessionBar = ((items.length > 0 || app.currentMarketName) && !app.isHomeViewActive);
+    // Lógica simplificada: Se isHomeViewActive for verdade, mostra a home. Caso contrário, mostra a lista.
+    const showHomeView = app.isHomeViewActive;
+    const showSessionBar = !app.isHomeViewActive;
 
     const NavButton: React.FC<{ 
         icon: string | React.ReactNode; 
@@ -442,7 +437,6 @@ const AppContent: React.FC = () => {
         </button>
     );
 
-    // Estilo do Background Pattern Global (Maior e Suave)
     const globalPatternStyle = {
         backgroundImage: `url("data:image/svg+xml,%3Csvg width='150' height='150' viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23F97316' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M20 30c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm80 40c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm-70-10c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm110 50c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM60 140c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm100-120c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM25 140c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50-100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm40-20c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zm-10 100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50 40c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zM60 60c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm-12-20c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60-30c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60 60c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zM20 70c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4z'/%3E%3C/g%3E%3C/svg%3E")`,
         backgroundSize: '150px 150px'
@@ -601,7 +595,7 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="favorite" label="Favoritos" onClick={() => { if (!user) app.openModal('auth'); else app.openModal('favorites'); }} active={app.isFavoritesModalOpen} /></div>
                         <div className="flex-1 h-full flex items-center justify-center relative">
-                            <button onClick={() => { if (app.isHomeViewActive) { app.setHomeViewActive(false); if (items.length === 0 && !app.currentMarketName) app.openModal('addItem'); } else { app.openModal('addItem'); } }} className={`absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl ring-4 ring-white/50 dark:ring-black/20 backdrop-blur-sm transition-all active:scale-95 ${app.theme === 'christmas' ? 'bg-[#165B33]' : (app.theme === 'newyear' ? 'bg-amber-500' : 'bg-gradient-to-br from-primary to-orange-600')}`}>
+                            <button onClick={() => { if (app.isHomeViewActive) { app.setHomeViewActive(false); } else { app.openModal('addItem'); } }} className={`absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl ring-4 ring-white/50 dark:ring-black/20 backdrop-blur-sm transition-all active:scale-95 ${app.theme === 'christmas' ? 'bg-[#165B33]' : (app.theme === 'newyear' ? 'bg-amber-500' : 'bg-gradient-to-br from-primary to-orange-600')}`}>
                                 {app.isHomeViewActive ? (<span className="material-symbols-outlined" style={{ fontSize: '32px' }}>shopping_cart</span>) : (<span className="material-symbols-outlined" style={{ fontSize: '32px' }}>add</span>)}
                             </button>
                         </div>

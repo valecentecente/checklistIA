@@ -32,9 +32,13 @@ export const WebSidebarLeft: React.FC = () => {
     const [isAdminExpanded, setIsAdminExpanded] = useState(false);
 
     const isListActive = items.length > 0 || !!app.currentMarketName;
+    
     const handleMainAction = () => {
-        app.setHomeViewActive(false);
-        app.openModal('addItem');
+        if (app.isHomeViewActive) {
+            app.setHomeViewActive(false);
+        } else {
+            app.openModal('addItem');
+        }
     };
 
     const handleProtectedAction = (action: () => void, intent?: string) => {

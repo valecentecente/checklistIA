@@ -53,9 +53,11 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
             
             const result = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: `Gere 3 etiquetas curtas de categoria para: "${recipe.name}"`,
+                contents: `Analise a receita "${recipe.name}" e gere aproximadamente 20 etiquetas (tags) estratégicas divididas em: 
+                1. Ingredientes principais, 2. Métodos de preparo (assado, frito, etc), 
+                3. Ocasião (domingo, festa, etc), 4. Perfil de sabor/textura (cremoso, picante, etc).`,
                 config: { 
-                    systemInstruction: "Você é um assistente de banco de dados. Sua ÚNICA função é gerar etiquetas (tags) para pratos. PROIBIDO gerar receitas, ingredientes ou modos de preparo.",
+                    systemInstruction: "Você é um assistente de banco de dados gastronômico. Sua ÚNICA função é gerar um array denso de etiquetas (tags) para o prato informado. PROIBIDO gerar receitas completas. Retorne apenas o JSON.",
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.OBJECT,
@@ -63,7 +65,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             tags: {
                                 type: Type.ARRAY,
                                 items: { type: Type.STRING },
-                                description: "Lista com exatamente 3 tags curtas (ex: Massa, Fit, Jantar)"
+                                description: "Lista com aproximadamente 20 tags variadas e estratégicas."
                             }
                         },
                         required: ["tags"]
@@ -79,7 +81,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     tags: suggestedTags.map(t => t.toLowerCase()),
                     keywords: generateKeywords(recipe.name)
                 });
-                showToast(`Etiquetas atualizadas: ${suggestedTags.join(', ')}`);
+                showToast(`Enriquecimento concluído! ${suggestedTags.length} etiquetas geradas.`);
             }
         } catch (err: any) {
             console.error(err);
@@ -92,18 +94,17 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const processedRecipes = useMemo(() => {
         const lowerSearch = searchTerm.toLowerCase();
         
-        // Filtro aprimorado: Nome OU Tags
         let filtered = recipes.filter(r => {
             const nameMatch = r.name.toLowerCase().includes(lowerSearch);
             const tagsMatch = r.tags?.some(tag => tag.toLowerCase().includes(lowerSearch));
             return nameMatch || tagsMatch;
         });
 
-        // Ordenação: Itens sem tags primeiro para incentivar a organização
+        // Ordenação: Itens com poucas tags primeiro para incentivar o enriquecimento
         return filtered.sort((a, b) => {
-            const hasTagsA = (a.tags && a.tags.length >= 2) ? 1 : 0;
-            const hasTagsB = (b.tags && b.tags.length >= 2) ? 1 : 0;
-            return hasTagsA - hasTagsB; 
+            const tagsA = a.tags?.length || 0;
+            const tagsB = b.tags?.length || 0;
+            return tagsA - tagsB; 
         });
     }, [recipes, searchTerm]);
 
@@ -120,7 +121,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             <span className="material-symbols-outlined text-orange-400">menu_book</span>
                             Gestão de Acervo
                         </h2>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Database & IA Tags Manager</p>
+                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">IA Granular Tagging Engine</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors">
                         <span className="material-symbols-outlined">close</span>
@@ -133,7 +134,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
                         <input 
                             type="text" 
-                            placeholder="Buscar por nome ou categoria (ex: japonesa, massa)..." 
+                            placeholder="Buscar por nome ou categoria (ex: morango, assado)..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-surface-dark text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-primary/50 outline-none transition-all text-sm font-medium"
@@ -149,7 +150,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     </div>
                     <div className="flex items-center text-[10px] font-bold text-gray-500 gap-4 px-2 uppercase shrink-0">
                         <span>Total: {recipes.length}</span>
-                        <span className="text-orange-500 bg-orange-500/10 px-2 py-1 rounded">Incompletas: {recipes.filter(r => !r.tags || r.tags.length < 2).length}</span>
+                        <span className="text-blue-500 bg-blue-500/10 px-2 py-1 rounded">Média de Tags: {Math.round(recipes.reduce((acc, r) => acc + (r.tags?.length || 0), 0) / (recipes.length || 1))}</span>
                     </div>
                 </div>
 
@@ -160,11 +161,11 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                             {processedRecipes.map((recipe) => {
-                                const needsTags = !recipe.tags || recipe.tags.length < 2;
+                                const isPoorlyTagged = !recipe.tags || recipe.tags.length < 10;
                                 const isThisProcessing = processingId === recipe.id;
 
                                 return (
-                                    <div key={recipe.id} className={`bg-white dark:bg-surface-dark rounded-xl shadow-sm overflow-hidden border transition-all flex flex-col group relative ${needsTags ? 'border-orange-300 dark:border-orange-900 bg-orange-50/10' : 'border-gray-200 dark:border-gray-700'}`}>
+                                    <div key={recipe.id} className={`bg-white dark:bg-surface-dark rounded-xl shadow-sm overflow-hidden border transition-all flex flex-col group relative ${isPoorlyTagged ? 'border-orange-300 dark:border-orange-900 bg-orange-50/5' : 'border-gray-200 dark:border-gray-700'}`}>
                                         <div className="aspect-square bg-gray-200 dark:bg-gray-800 relative overflow-hidden">
                                             {recipe.imageUrl ? <img src={recipe.imageUrl} className="w-full h-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-4xl">image_not_supported</span></div>}
                                             
@@ -179,19 +180,19 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                                     onClick={() => handleSingleRecipeAITagging(recipe)} 
                                                     disabled={isThisProcessing}
                                                     className={`w-8 h-8 ${isThisProcessing ? 'bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90`}
-                                                    title="Identificar Tags com IA"
+                                                    title="Enriquecer com IA (Grid Mestre)"
                                                 >
                                                     <span className={`material-symbols-outlined text-sm ${isThisProcessing ? 'animate-spin' : ''}`}>
-                                                        {isThisProcessing ? 'sync' : 'auto_fix_high'}
+                                                        {isThisProcessing ? 'sync' : 'auto_awesome'}
                                                     </span>
                                                 </button>
                                             </div>
                                         </div>
                                         <div className="p-3 flex flex-col flex-1">
                                             <h3 className="font-bold text-[11px] text-gray-800 dark:text-gray-200 line-clamp-2 mb-2 leading-tight uppercase">{recipe.name}</h3>
-                                            <div className="mt-auto flex flex-wrap gap-1">
+                                            <div className="mt-auto flex flex-wrap gap-1 max-h-12 overflow-hidden">
                                                 {recipe.tags && recipe.tags.length > 0 ? (
-                                                    recipe.tags.slice(0, 3).map((t, i) => (
+                                                    recipe.tags.slice(0, 5).map((t, i) => (
                                                         <span key={i} className="bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 text-[8px] px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700 font-bold uppercase">{t}</span>
                                                     ))
                                                 ) : (
@@ -200,10 +201,13 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                                         Sem Tags
                                                     </span>
                                                 )}
-                                                {needsTags && recipe.tags && recipe.tags.length > 0 && (
-                                                    <span className="text-blue-500 text-[8px] font-black uppercase">● Incompleta</span>
+                                                {recipe.tags && recipe.tags.length > 5 && (
+                                                    <span className="text-gray-400 text-[8px] font-bold">+{recipe.tags.length - 5}</span>
                                                 )}
                                             </div>
+                                            {isPoorlyTagged && (
+                                                <span className="text-orange-500 text-[8px] font-black uppercase mt-1">● Requer Enriquecimento</span>
+                                            )}
                                         </div>
                                         
                                         {isThisProcessing && (

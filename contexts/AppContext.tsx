@@ -187,8 +187,6 @@ export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 8): P
             errorStr.includes('rate limit');
                              
         if (retries > 0 && isQuotaError) {
-            // Aumentando o delay drasticamente para dar tempo da cota renovar no Google AI Studio
-            // Intervalos: 20s, 35s, 50s, 65s...
             const baseDelay = (9 - retries) * 15000; 
             const jitter = Math.random() * 5000;
             const finalDelay = baseDelay + jitter;
@@ -752,16 +750,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const tagsL = r.tags?.map(t => t.toLowerCase()) || [];
                     
                     // Prioridade máxima: Nome exato contém o termo
-                    if (nameL.includes(lowerQuery)) s += 100;
+                    if (nameL.includes(lowerQuery)) s += 200;
                     
-                    // Prioridade alta: Tags contêm o termo
-                    if (tagsL.some(t => t.includes(lowerQuery))) s += 50;
-
-                    // Keywords match
+                    // Interseção de Termos (Otimizado para buscas como "doce morango")
+                    let intersectionCount = 0;
                     searchKeywords.forEach(k => {
-                        if (r.keywords?.includes(k)) s += 10;
-                        if (tagsL.includes(k.toLowerCase())) s += 5;
+                        const lowK = k.toLowerCase();
+                        const tagMatch = tagsL.some(t => t.includes(lowK));
+                        const nameMatch = nameL.includes(lowK);
+                        if (tagMatch || nameMatch) {
+                            intersectionCount++;
+                            s += tagMatch ? 50 : 20; // Bônus base por termo
+                        }
                     });
+
+                    // Bônus MASSIVO se o item possuir TODOS os termos buscados (Interseção Perfeita)
+                    if (intersectionCount >= searchKeywords.length && searchKeywords.length > 1) {
+                        s += 500;
+                    }
 
                     return s;
                 };
@@ -830,7 +836,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  systemPrompt += ` Analise a imagem e gere a receita.`;
             }
 
-            systemPrompt += `\nIMPORTANTE: Retorne APENAS o objeto JSON puro.
+            systemPrompt += `\nIMPORTANTE: 
+            1. Retorne APENAS o objeto JSON puro.
+            2. Gere aproximadamente 20 etiquetas (tags) estratégicas divididas em blocos: Ingredientes Chave, Métodos (assado, etc), Ocasião, e Sabor/Textura.
 Format:
 {
   "name": "Nome",
@@ -841,7 +849,8 @@ Format:
   "prepTimeInMinutes": 30,
   "difficulty": "Fácil",
   "cost": "Médio",
-  "isAlcoholic": false 
+  "isAlcoholic": false,
+  "tags": ["tag1", "tag2", ...]
 }`;
 
             const parts: any[] = [];

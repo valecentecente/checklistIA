@@ -159,8 +159,8 @@ export const AdminContentFactoryModal: React.FC = () => {
         setLogs([]);
         setProgress(0);
 
-        addLog("--- MODO SEGURO: ABASTECIMENTO COM RESPIRO LONGO ---", 'separator');
-        addLog("Objetivo: Evitar bloqueio de cota do Google Gemini.", 'info');
+        addLog("--- MODO SEGURO: ABASTECIMENTO COM TAGS GRANULARES ---", 'separator');
+        addLog("Objetivo: Gerar inventário rico com ~20 tags por item.", 'info');
 
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -210,7 +210,11 @@ export const AdminContentFactoryModal: React.FC = () => {
                             // 1. Respiro preventivo antes de pedir os detalhes (Texto)
                             await new Promise(r => setTimeout(r, 5000));
 
-                            const detailPrompt = "Gere a receita completa para '" + name + "' em JSON. Formato: { 'name': '" + name + "', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'v', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': ['tag1'] }";
+                            const detailPrompt = `Gere a receita completa para '${name}' em JSON. 
+                            IMPORTANTE: Gere aproximadamente 20 etiquetas (tags) estratégicas divididas em: 
+                            1. Ingredientes principais, 2. Métodos de preparo (assado, frito, etc), 
+                            3. Ocasião (domingo, festa, etc), 4. Perfil de sabor/textura (cremoso, picante, etc).
+                            Formato: { 'name': '${name}', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'v', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': ['tag1', 'tag2', ...] }`;
 
                             const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-3-flash-preview',
@@ -219,7 +223,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             }));
 
                             // 2. RESPIRO LONGO antes da imagem (O passo mais pesado)
-                            addLog("  ~ IA preparando os ingredientes (Aguardando 12s)...", 'info');
+                            addLog("  ~ IA tagueando e preparando foto (Aguardando 12s)...", 'info');
                             await new Promise(r => setTimeout(r, 12000));
 
                             const recipeData = JSON.parse(detailRes.text || "{}");
@@ -239,7 +243,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 ...(recipeData.tags || []), 
                                 currentCat.toLowerCase().replace(' / datas comemorativas', ''),
                                 ...(holidayTheme ? [holidayTheme.toLowerCase()] : []),
-                                'factory_v3'
+                                'factory_v4_granular'
                             ]));
 
                             if (db) {
@@ -253,7 +257,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 }, { merge: true });
                                 
                                 successCount++;
-                                addLog("> PRATO FINALIZADO: " + name, 'success');
+                                addLog("> PRATO FINALIZADO (" + finalTags.length + " tags): " + name, 'success');
                                 const totalToProcess = selectedCategories.length * quantity;
                                 const currentOverallIndex = selectedCategories.indexOf(currentCat);
                                 setProgress(((currentOverallIndex * quantity + successCount) / totalToProcess) * 100);
