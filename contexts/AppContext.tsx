@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -51,12 +50,11 @@ const shuffleArray = <T,>(array: T[]): T[] => {
     return shuffled;
 };
 
-// Helper centralizado para ID de documento - CRUCIAL PARA SINCRONIA
 const getRecipeDocId = (name: string) => {
     return name.trim().toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
-        .replace(/[\/\s]+/g, '-') // substitui espaços e barras por hífen
-        .replace(/[^a-z0-9-]/g, '') // remove caracteres especiais
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+        .replace(/[\/\s]+/g, '-') 
+        .replace(/[^a-z0-9-]/g, '') 
         .slice(0, 80);
 };
 
@@ -254,7 +252,7 @@ export const generateKeywords = (text: string): string[] => {
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
-    const { user, pendingAdminInvite } = useAuth();
+    const { user } = useAuth();
 
     const [modalStates, setModalStates] = useState({
         isAddItemModalOpen: false, isBudgetModalOpen: false, isRecipeAssistantModalOpen: false,
@@ -340,7 +338,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
-    // --- LÓGICA DE FILTRAGEM DE COLEÇÕES ---
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
         const pool = globalRecipeCache;
         if (pool.length === 0) return [];
@@ -365,7 +362,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [globalRecipeCache]);
 
-    // --- CARREGAMENTO INICIAL (CACHE-FIRST + TIMEOUT GUARD) ---
     useEffect(() => {
         if (!db) return;
         const loadData = async () => {
@@ -374,11 +370,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             if (cachedString) {
                 try {
-                    const cache = JSON.parse(cachedString);
+                    // Fix type error on line 359 by defining the expected shape of cached object and handling assignments safely
+                    const cache = JSON.parse(cachedString) as { pool?: FullRecipe[], cache?: FullRecipe[], count?: number, timestamp: number };
                     fallbackCache = cache; 
-                    setAllRecipesPool((cache.pool as FullRecipe[]) || SURVIVAL_RECIPES);
-                    setGlobalRecipeCache((cache.cache as FullRecipe[]) || SURVIVAL_RECIPES);
-                    setTotalRecipeCount(cache.count || 0);
+                    
+                    if (cache.pool) setAllRecipesPool(cache.pool);
+                    if (cache.cache) setGlobalRecipeCache(cache.cache);
+                    if (typeof cache.count === 'number') setTotalRecipeCount(cache.count);
                     
                     const isExpired = (Date.now() - cache.timestamp) > RECIPE_CACHE_TTL;
                     if (!isExpired) return; 
@@ -394,15 +392,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         const data = docSnap.data() as any;
                         if (data && data.name && data.imageUrl) {
                             fetched.push({ 
+                                ...data,
                                 name: data.name,
                                 ingredients: data.ingredients || [],
                                 instructions: data.instructions || [],
                                 imageQuery: data.imageQuery || data.name,
                                 servings: data.servings || '2 porções',
                                 prepTimeInMinutes: data.prepTimeInMinutes || 30,
-                                difficulty: data.difficulty || 'Médio',
-                                cost: data.cost || 'Médio',
-                                ...data,
+                                difficulty: (data.difficulty === 'Fácil' || data.difficulty === 'Médio' || data.difficulty === 'Difícil' ? data.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+                                cost: (data.cost === 'Baixo' || data.cost === 'Médio' || data.cost === 'Alto' ? data.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
                                 imageSource: 'cache' 
                             } as FullRecipe);
                         }
@@ -607,7 +605,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
         if (!db || !queryStr || queryStr.length < 2) return [];
         try {
-            const keywords = generateKeywords(queryStr);
+            const keywords: string[] = generateKeywords(queryStr);
             if (keywords.length === 0) return [];
             let results: FullRecipe[] = [];
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
@@ -616,21 +614,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const data = docSnap.data() as any;
                 if (data && data.name) {
                     results.push({ 
-                        name: data.name,
-                        ingredients: data.ingredients || [],
-                        instructions: data.instructions || [],
-                        imageQuery: data.imageQuery || data.name,
-                        servings: data.servings || '2',
-                        prepTimeInMinutes: data.prepTimeInMinutes || 30,
-                        difficulty: data.difficulty || 'Médio',
-                        cost: data.cost || 'Médio',
                         ...data,
+                        name: String(data.name || ''),
+                        ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
+                        instructions: Array.isArray(data.instructions) ? data.instructions : [],
+                        imageQuery: String(data.imageQuery || data.name || ''),
+                        servings: String(data.servings || '2'),
+                        prepTimeInMinutes: Number(data.prepTimeInMinutes || 30),
+                        difficulty: (data.difficulty === 'Fácil' || data.difficulty === 'Médio' || data.difficulty === 'Difícil' ? data.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+                        cost: (data.cost === 'Baixo' || data.cost === 'Médio' || data.cost === 'Alto' ? data.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
                         imageSource: 'cache' 
                     } as FullRecipe);
                 }
             });
             return results;
-        } catch (error) { return []; }
+        } catch (error) { 
+            console.error("Search error:", error);
+            return []; 
+        }
     }, []);
 
     const handleRecipeSearch = async (term: string) => {
@@ -687,19 +688,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const rawText = sanitizeJsonString(response.text || "{}");
             const details = JSON.parse(rawText);
             
-            // O NOME FINAL DA RECEITA PODE SER DIFERENTE DO BUSCADO
             const finalName = details.name || recipeName;
 
             const fullData: FullRecipe = { 
+                ...details,
                 name: finalName,
                 ingredients: details.ingredients || [],
                 instructions: details.instructions || [],
                 imageQuery: details.imageQuery || finalName,
                 servings: details.servings || '2 porções',
                 prepTimeInMinutes: details.prepTimeInMinutes || 30,
-                difficulty: details.difficulty || 'Médio',
-                cost: details.cost || 'Médio',
-                ...details, 
+                difficulty: (details.difficulty === 'Fácil' || details.difficulty === 'Médio' || details.difficulty === 'Difícil' ? details.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+                cost: (details.cost === 'Baixo' || details.cost === 'Médio' || details.cost === 'Alto' ? details.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
                 keywords: generateKeywords(finalName) 
             };
             
@@ -707,7 +707,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setSelectedRecipe(fullData);
             closeModal('recipeAssistant');
 
-            // PERSISTÊNCIA NO ACERVO GLOBAL USANDO O NOME REFINADO PELA IA
             if (db) {
                 const docId = getRecipeDocId(fullData.name);
                 await setDoc(doc(db, 'global_recipes', docId), {
@@ -717,21 +716,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }, { merge: true }).catch(() => console.warn("Acervo offline ao salvar texto."));
             }
 
-            // GERAÇÃO DA FOTO USANDO O NOME OFICIAL
             if (fullData.imageQuery) {
                 generateSingleRecipeImage(fullData.name, fullData.imageQuery);
             }
 
             if (autoAdd) await addRecipeToShoppingList(fullData);
         } catch (e: any) { 
-            console.error("Erro na geração de receita:", e);
+            console.error("Erro na generation de receita:", e);
             setRecipeError("O Chef está ocupado ou a conexão falhou. Tente em instantes."); 
         } finally { 
             setIsRecipeLoading(false); 
         }
     }, [apiKey]); 
 
-    // Função para comprimir imagem e garantir que caiba no Firestore
     const compressImage = (base64Str: string): Promise<string> => {
         return new Promise((resolve) => {
             const img = new Image();
@@ -765,7 +762,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const ai = new GoogleGenAI({ apiKey });
             const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash-image',
-                contents: { parts: [{ text: "Fotografia profissional de comida, luz natural, alta resolução, apetitoso: " + queryText }] },
+                contents: { parts: [{ text: "Fotografia profissional de comida, luz natural, alta resolution, apetitoso: " + queryText }] },
                 config: { responseModalities: [Modality.IMAGE] }
             }));
 

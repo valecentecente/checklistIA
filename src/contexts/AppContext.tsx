@@ -567,8 +567,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 config: { responseMimeType: "application/json" }
             });
             // Fixed potentially unknown return from JSON.parse and mapped it to FullRecipe array correctly
+            // Added explicit cast to handle unknown response from parser as FullRecipe[]
             const suggestionsRaw = JSON.parse(response.text || "[]") as any[];
-            const suggestions: FullRecipe[] = suggestionsRaw.map((s: any) => ({
+            const suggestions: FullRecipe[] = (suggestionsRaw || []).map((s: any): FullRecipe => ({
                 name: String(s.name || ''),
                 ingredients: Array.isArray(s.ingredients) ? s.ingredients : [],
                 instructions: Array.isArray(s.instructions) ? s.instructions : [],
@@ -577,8 +578,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 prepTimeInMinutes: Number(s.prepTimeInMinutes || 0),
                 difficulty: (s.difficulty === 'Fácil' || s.difficulty === 'Médio' || s.difficulty === 'Difícil') ? s.difficulty : 'Médio',
                 cost: (s.cost === 'Baixo' || s.cost === 'Médio' || s.cost === 'Alto') ? s.cost : 'Médio',
-                ...s
-            } as FullRecipe));
+            }));
             setRecipeSuggestions(suggestions);
         } catch (error) {
             console.error("Erro ao buscar sugestões:", error);

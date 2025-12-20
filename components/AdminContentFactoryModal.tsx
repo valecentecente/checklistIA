@@ -41,7 +41,9 @@ export const AdminContentFactoryModal: React.FC = () => {
         "Café da Manhã", 
         "Almoço Rápido", 
         "Sobremesas", 
+        "Sorvetes",
         "Massas", 
+        "Pizzas",
         "Sucos",
         "Fit / Saudável", 
         "Vegano", 
@@ -207,7 +209,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                         addLog("> Produzindo [" + (successCount + 1) + "/" + quantity + "]: " + name, 'info');
                         
                         try {
-                            // 1. Respiro preventivo antes de pedir os detalhes (Texto)
                             await new Promise(r => setTimeout(r, 5000));
 
                             const detailPrompt = `Gere a receita completa para '${name}' em JSON. 
@@ -222,7 +223,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 config: { responseMimeType: "application/json" }
                             }));
 
-                            // 2. RESPIRO LONGO antes da imagem (O passo mais pesado)
                             addLog("  ~ IA tagueando e preparando foto (Aguardando 12s)...", 'info');
                             await new Promise(r => setTimeout(r, 12000));
 
@@ -263,7 +263,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 setProgress(((currentOverallIndex * quantity + successCount) / totalToProcess) * 100);
                             }
                             
-                            // 3. Respiro final de ciclo para limpar o cache de RPM (Requisições Por Minuto)
                             addLog("  ~ Recarregando créditos da API (Aguardando 20s)...", 'quota');
                             await new Promise(r => setTimeout(r, 20000));
 
@@ -273,7 +272,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             if (errStr.includes('429') || errStr.includes('quota')) {
                                 addLog("⚠️ LIMITE ATINGIDO MESMO COM RESPIRO. Pausa de 60 segundos...", 'quota');
                                 await new Promise(r => setTimeout(r, 60000));
-                                attemptCount--; // Tenta o mesmo item de novo
+                                attemptCount--; 
                             } else if (errStr.includes('403')) { 
                                 addLog("Acesso negado. Verifique o console do Google Cloud.", 'error');
                                 setShouldStop(true); 
@@ -322,7 +321,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-900/50 p-3 rounded-xl border border-slate-700 max-h-40 overflow-y-auto">
                             {categoryStats.map(stat => (
-                                <label key={stat.name} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedCategories.includes(stat.name) ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
+                                <label key={stat.name} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedCategories.includes(stat.name) ? 'bg-green-50/10 border-green-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
                                     <input type="checkbox" checked={selectedCategories.includes(stat.name)} onChange={() => toggleCategory(stat.name)} disabled={isGenerating} className="rounded border-slate-600 text-green-500" />
                                     <div className="flex justify-between items-center w-full">
                                         <span className={`text-xs font-bold ${stat.count < 6 ? 'text-orange-400' : 'text-gray-300'}`}>{stat.count < 6 ? '⚠️ ' : ''}{stat.name}</span>

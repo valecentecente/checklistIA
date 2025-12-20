@@ -15,13 +15,11 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
 
     const displayRecipes = featuredRecipes;
 
-    // Helper interno para identificar se é bebida (diversidade visual)
     const isLiquid = (r: any) => {
         const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
         return ['suco', 'drink', 'vitamina', 'coquetel', 'bebida', 'smoothie', 'café', 'chá', 'limonada', 'batida'].some(t => text.includes(t));
     };
 
-    // Auto-rotate banners
     useEffect(() => {
         if (displayRecipes.length <= 1) return;
         const interval = setInterval(() => {
@@ -42,6 +40,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     const categories = useMemo(() => {
         const baseCategories = [
             { id: 'top10', label: "Em Alta", key: "top10" },
+            { id: 'icecream', label: "Sorvetes", key: "sorvetes" },
             { id: 'fast', label: "Rápidas", key: "fast" },
             { id: 'cheap', label: "Econômicas", key: "cheap" },
             { id: 'healthy', label: "Saudáveis", key: "healthy" },
@@ -55,7 +54,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             const recipes = getCategoryRecipes(cat.key);
             const count = recipes.length;
             
-            // Prioriza receitas sólidas para a capa para ficar mais apetitoso
             let uniqueRecipe = recipes.find(r => 
                 r.imageUrl && 
                 !usedImageUrls.has(r.imageUrl) && 
@@ -126,7 +124,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
             </div>
 
-            {/* BANNER PRINCIPAL */}
             {displayRecipes.length > 0 ? (
                 <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group">
                     {displayRecipes.map((recipe, index) => (
@@ -177,7 +174,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             ) : null}
 
-            {/* EXPLORAR COLEÇÕES (AS QUE ESTAVAM FALTANDO) */}
             {categories.length > 0 && (
                 <div className="animate-fadeIn">
                     <div className="flex items-center justify-between px-1 mb-3">
@@ -217,7 +213,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             )}
 
-            {/* BOTÕES DE AÇÃO */}
             <div className="grid grid-cols-2 gap-3">
                 <button 
                     onClick={handleAiClick}
