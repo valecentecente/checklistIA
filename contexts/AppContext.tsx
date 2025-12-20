@@ -1,7 +1,7 @@
 
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule } from '../types';
 import { useShoppingList } from './ShoppingListContext';
@@ -49,6 +49,15 @@ const shuffleArray = <T,>(array: T[]): T[] => {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
+};
+
+// Helper centralizado para ID de documento - CRUCIAL PARA SINCRONIA
+const getRecipeDocId = (name: string) => {
+    return name.trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+        .replace(/[\/\s]+/g, '-') // substitui espaços e barras por hífen
+        .replace(/[^a-z0-9-]/g, '') // remove caracteres especiais
+        .slice(0, 80);
 };
 
 interface AppContextType {
@@ -361,7 +370,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!db) return;
         const loadData = async () => {
             const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
-            let fallbackCache = null;
+            let fallbackCache: any = null;
 
             if (cachedString) {
                 try {
@@ -381,9 +390,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
                     const snapshotFetch = await getDocs(qFetch);
                     const fetched: FullRecipe[] = [];
-                    snapshotFetch.forEach(doc => {
-                        const data = doc.data() as FullRecipe;
-                        if (data.name && data.imageUrl) fetched.push({ ...data, imageSource: 'cache' } as FullRecipe);
+                    snapshotFetch.forEach(docSnap => {
+                        const data = docSnap.data() as any;
+                        if (data && data.name && data.imageUrl) {
+                            fetched.push({ 
+                                name: data.name,
+                                ingredients: data.ingredients || [],
+                                instructions: data.instructions || [],
+                                imageQuery: data.imageQuery || data.name,
+                                servings: data.servings || '2 porções',
+                                prepTimeInMinutes: data.prepTimeInMinutes || 30,
+                                difficulty: data.difficulty || 'Médio',
+                                cost: data.cost || 'Médio',
+                                ...data,
+                                imageSource: 'cache' 
+                            } as FullRecipe);
+                        }
                     });
 
                     const pool = fetched.length > 0 ? shuffleArray(fetched) : (fallbackCache?.pool as FullRecipe[] || SURVIVAL_RECIPES);
@@ -571,6 +593,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
         setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
         setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
+        
+        if (db) {
+            const docId = getRecipeDocId(recipeName);
+            updateDoc(doc(db, 'global_recipes', docId), {
+                imageUrl,
+                imageSource: source,
+                updatedAt: serverTimestamp()
+            }).catch(() => console.warn("Erro ao atualizar imagem no acervo."));
+        }
     };
 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
@@ -581,7 +612,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let results: FullRecipe[] = [];
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
-            snap.forEach(doc => results.push({ ...doc.data(), imageSource: 'cache' } as FullRecipe));
+            snap.forEach(docSnap => {
+                const data = docSnap.data() as any;
+                if (data && data.name) {
+                    results.push({ 
+                        name: data.name,
+                        ingredients: data.ingredients || [],
+                        instructions: data.instructions || [],
+                        imageQuery: data.imageQuery || data.name,
+                        servings: data.servings || '2',
+                        prepTimeInMinutes: data.prepTimeInMinutes || 30,
+                        difficulty: data.difficulty || 'Médio',
+                        cost: data.cost || 'Médio',
+                        ...data,
+                        imageSource: 'cache' 
+                    } as FullRecipe);
+                }
+            });
             return results;
         } catch (error) { return []; }
     }, []);
@@ -597,7 +644,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } finally { setIsSearchingAcervo(false); }
     };
 
-    // Helper para limpar JSON de blocos de Markdown e garantir validade
     const sanitizeJsonString = (str: string) => {
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
@@ -609,7 +655,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const ai = new GoogleGenAI({ apiKey });
             
-            // PROMPT BLINDADO: Exige conteúdo e proíbe arrays vazios
             let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita completa, deliciosa e detalhada para: "${recipeName}".
             REGRAS OBRIGATÓRIAS:
             1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
@@ -642,24 +687,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const rawText = sanitizeJsonString(response.text || "{}");
             const details = JSON.parse(rawText);
             
+            // O NOME FINAL DA RECEITA PODE SER DIFERENTE DO BUSCADO
+            const finalName = details.name || recipeName;
+
             const fullData: FullRecipe = { 
-                name: details.name || recipeName,
+                name: finalName,
                 ingredients: details.ingredients || [],
                 instructions: details.instructions || [],
-                imageQuery: details.imageQuery || recipeName,
+                imageQuery: details.imageQuery || finalName,
                 servings: details.servings || '2 porções',
                 prepTimeInMinutes: details.prepTimeInMinutes || 30,
                 difficulty: details.difficulty || 'Médio',
                 cost: details.cost || 'Médio',
                 ...details, 
-                keywords: generateKeywords(details.name || recipeName) 
+                keywords: generateKeywords(finalName) 
             };
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             closeModal('recipeAssistant');
 
-            // GERAÇÃO AUTOMÁTICA DE IMAGEM IMEDIATA
+            // PERSISTÊNCIA NO ACERVO GLOBAL USANDO O NOME REFINADO PELA IA
+            if (db) {
+                const docId = getRecipeDocId(fullData.name);
+                await setDoc(doc(db, 'global_recipes', docId), {
+                    ...fullData,
+                    tags: [...(fullData.tags || []), 'gerada_pelo_usuario'],
+                    createdAt: serverTimestamp()
+                }, { merge: true }).catch(() => console.warn("Acervo offline ao salvar texto."));
+            }
+
+            // GERAÇÃO DA FOTO USANDO O NOME OFICIAL
             if (fullData.imageQuery) {
                 generateSingleRecipeImage(fullData.name, fullData.imageQuery);
             }
@@ -671,9 +729,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } finally { 
             setIsRecipeLoading(false); 
         }
-    }, [apiKey, generateKeywords]); 
+    }, [apiKey]); 
 
-    // Função interna para gerar foto individual
+    // Função para comprimir imagem e garantir que caiba no Firestore
+    const compressImage = (base64Str: string): Promise<string> => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.src = base64Str;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 600; 
+                let width = img.width;
+                let height = img.height;
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                } else {
+                    resolve(base64Str);
+                }
+            };
+            img.onerror = () => resolve(base64Str);
+        });
+    };
+
     const generateSingleRecipeImage = async (recipeName: string, queryText: string) => {
         if (!apiKey) return;
         try {
@@ -686,10 +771,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
                 const rawBase64 = imageRes.candidates[0].content.parts[0].inlineData.data;
-                const binaryString = atob(rawBase64);
-                // Compressão leve no cliente se necessário, aqui usamos o base64 direto para rapidez
-                const imageUrl = "data:image/jpeg;base64," + rawBase64;
-                handleRecipeImageGenerated(recipeName, imageUrl, 'genai');
+                const compressedUrl = await compressImage("data:image/jpeg;base64," + rawBase64);
+                handleRecipeImageGenerated(recipeName, compressedUrl, 'genai');
             }
         } catch (error) {
             console.warn("Falha ao gerar imagem para:", recipeName);
@@ -743,11 +826,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
-            // Added explicit type to fix 'unknown[]' assignment error
             const suggestions: FullRecipe[] = getCategoryRecipes(key);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }
     };
+
+    const getCategoryRecipesSync = useCallback((categoryKey: string): FullRecipe[] => {
+        return getCategoryRecipes(categoryKey);
+    }, [getCategoryRecipes]);
 
     const clearIncomingList = useCallback(() => setIncomingList(null), []);
 
@@ -780,7 +866,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
-        getCategoryRecipes, getCategoryRecipesSync: (k: string) => [] as FullRecipe[], getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
+        getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
         pendingAction, setPendingAction, selectedProduct, openProductDetails: (p: Offer) => {}, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

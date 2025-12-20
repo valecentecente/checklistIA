@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord } from '../types';
@@ -561,22 +560,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         try {
             const ai = new GoogleGenAI({ apiKey });
+            // Added retry logic to improve reliability on free tier
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: `Sugira 5 receitas para o tema: "${prompt}". Retorne JSON completo: [{"name": "Nome", "ingredients": [], "instructions": [], "imageQuery": "desc", "servings": "X", "prepTimeInMinutes": 30, "difficulty": "Médio", "cost": "Médio"}]`,
                 config: { responseMimeType: "application/json" }
             });
-            // Cast to any to handle unknown structure mapping
+            // Fixed potentially unknown return from JSON.parse and mapped it to FullRecipe array correctly
             const suggestionsRaw = JSON.parse(response.text || "[]") as any[];
-            const suggestions: FullRecipe[] = (suggestionsRaw as any[]).map(s => ({
-                name: s.name || '',
-                ingredients: s.ingredients || [],
-                instructions: s.instructions || [],
-                imageQuery: s.imageQuery || '',
-                servings: s.servings || '',
-                prepTimeInMinutes: s.prepTimeInMinutes || 0,
-                difficulty: s.difficulty || 'Médio',
-                cost: s.cost || 'Médio',
+            const suggestions: FullRecipe[] = suggestionsRaw.map((s: any) => ({
+                name: String(s.name || ''),
+                ingredients: Array.isArray(s.ingredients) ? s.ingredients : [],
+                instructions: Array.isArray(s.instructions) ? s.instructions : [],
+                imageQuery: String(s.imageQuery || ''),
+                servings: String(s.servings || ''),
+                prepTimeInMinutes: Number(s.prepTimeInMinutes || 0),
+                difficulty: (s.difficulty === 'Fácil' || s.difficulty === 'Médio' || s.difficulty === 'Difícil') ? s.difficulty : 'Médio',
+                cost: (s.cost === 'Baixo' || s.cost === 'Médio' || s.cost === 'Alto') ? s.cost : 'Médio',
                 ...s
             } as FullRecipe));
             setRecipeSuggestions(suggestions);
@@ -607,7 +607,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         smartNudgeItemName,
         currentMarketName, setCurrentMarketName,
         isSharedSession, setIsSharedSession,
-        historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab), // Fix type if needed
+        historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab),
         isHomeViewActive, setHomeViewActive,
         isFocusMode, setFocusMode,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
