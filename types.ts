@@ -51,6 +51,8 @@ export interface RecipeDetails {
 }
 
 export interface FullRecipe {
+  // Fix: added id property to FullRecipe
+  id?: string;
   name: string;
   ingredients: {
     simplifiedName: string;
@@ -177,4 +179,17 @@ export interface ActivityLog {
     targetName: string; 
     details?: string;
     timestamp: any;
+}
+
+export interface Invitation {
+    id: string;
+    fromUid: string;
+    fromName: string;
+    toUid: string;
+    toDisplayName?: string;
+    toPhotoURL?: string | null;
+    listId: string;
+    status: 'pending' | 'accepted' | 'rejected';
+    createdAt: any;
+    marketName?: string;
 }

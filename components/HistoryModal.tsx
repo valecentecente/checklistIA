@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { PurchaseRecord, HistoricItem, AuthorMetadata, ReceivedListRecord } from '../types';
 import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface HistoryModalProps {
     isOpen: boolean;
@@ -38,10 +39,9 @@ const ReceivedListItem: React.FC<{ record: ReceivedListRecord; onProfileClick: (
     const formattedDate = receivedDate.toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
     return (
-        <button onClick={onClick} className={`w-full text-left p-4 rounded-lg bg-surface-light dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border border-border-light dark:border-border-dark flex items-center gap-4 relative ${!record.read ? 'border-l-4 border-l-primary' : ''}`}>
-            {/* Indicador de não lido (opcional, já que a borda ajuda) */}
+        <button onClick={onClick} className={`w-full text-left p-4 rounded-lg bg-surface-light dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border border-border-light dark:border-border-dark flex items-center gap-4 relative ${!record.read ? 'border-l-4 border-l-primary shadow-sm' : ''}`}>
             {!record.read && (
-                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shadow-sm"></span>
             )}
             
             {record.author && (
@@ -111,8 +111,9 @@ const SocialProfileModal: React.FC<{ author: AuthorMetadata; onClose: () => void
 };
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, history, onRepeatPurchase, onAddItem, formatCurrency }) => {
-    const { receivedHistory, shareListWithEmail, markReceivedListAsRead, searchUser } = useShoppingList();
-    const { showToast, historyActiveTab, setHistoryActiveTab } = useApp();
+    const { receivedHistory, shareListWithEmail, markReceivedListAsRead, searchUser, items: currentList } = useShoppingList();
+    const { pendingAdminInvite } = useAuth();
+    const { showToast, historyActiveTab, setHistoryActiveTab, setHomeViewActive, openModal } = useApp();
     const [activeTab, setActiveTab] = useState<'my' | 'received'>(historyActiveTab);
     const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRecord | null>(null);
     const [selectedProfile, setSelectedProfile] = useState<AuthorMetadata | null>(null);
@@ -122,13 +123,11 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
     const [shareIdentifier, setShareIdentifier] = useState('');
     const [isSharing, setIsSharing] = useState(false);
     
-    // Novo Estado para o fluxo de busca e confirmação
     const [shareStep, setShareStep] = useState<'input' | 'confirm' | 'result'>('input');
     const [foundUser, setFoundUser] = useState<AuthorMetadata | null>(null);
     const [shareResult, setShareResult] = useState<{ type: 'direct' | 'link', url?: string, recipient?: string } | null>(null);
     const [notFoundError, setNotFoundError] = useState(false);
 
-    // Sincronizar activeTab com o estado global ao abrir
     useEffect(() => {
         if (isOpen) {
             setActiveTab(historyActiveTab);
@@ -136,15 +135,13 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
     }, [isOpen, historyActiveTab]);
 
     const handleClose = () => {
-        setHistoryActiveTab('my'); // Reseta para 'my' ao fechar
+        setHistoryActiveTab('my');
         onClose();
         setTimeout(() => {
             setSelectedPurchase(null);
             setSelectedProfile(null);
             setActiveTab('my');
             setIsShareModalOpen(false);
-            
-            // Reset share states
             setShareResult(null);
             setShareIdentifier('');
             setShareStep('input');
@@ -153,47 +150,46 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
         }, 300);
     }
     
+    const handleReactivate = (purchase: PurchaseRecord) => {
+        const performReactivation = () => {
+            onRepeatPurchase(purchase);
+            setHomeViewActive(false);
+            onClose();
+        };
+
+        if (currentList.length > 0) {
+            if (window.confirm("Você já tem itens na lista atual. Deseja adicionar os itens desta compra à lista existente?")) {
+                performReactivation();
+            }
+        } else {
+            performReactivation();
+        }
+    };
+
     if (!isOpen) return null;
 
-    // Etapa 1: Buscar Usuário
     const handleSearchUser = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!shareIdentifier.trim()) return;
-
         setIsSharing(true);
         setNotFoundError(false);
-
         try {
             const user = await searchUser(shareIdentifier);
             if (user) {
                 setFoundUser(user);
                 setShareStep('confirm');
-            } else {
-                setNotFoundError(true);
-            }
-        } catch (error) {
-            console.error("Erro na busca:", error);
-            setNotFoundError(true);
-        } finally {
-            setIsSharing(false);
-        }
+            } else { setNotFoundError(true); }
+        } catch (error) { setNotFoundError(true); } finally { setIsSharing(false); }
     };
 
-    // Etapa 2: Confirmar e Enviar
     const handleConfirmShare = async () => {
         if (!selectedPurchase || !foundUser) return;
-        
         setIsSharing(true);
         try {
             const result = await shareListWithEmail(selectedPurchase, shareIdentifier);
             if (result.success) {
-                setShareResult({ 
-                    type: result.type, 
-                    url: result.shareUrl,
-                    recipient: result.recipientName 
-                });
+                setShareResult({ type: result.type, url: result.shareUrl, recipient: result.recipientName });
                 setShareStep('result');
-                
                 if (result.type === 'direct') {
                     showToast("Lista enviada com sucesso!");
                     setTimeout(() => {
@@ -204,12 +200,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                     }, 2500);
                 }
             }
-        } catch (error) {
-            console.error("Share error:", error);
-            showToast("Erro ao compartilhar.");
-        } finally {
-            setIsSharing(false);
-        }
+        } catch (error) { showToast("Erro ao compartilhar."); } finally { setIsSharing(false); }
     };
 
     const handleCopyInvite = async () => {
@@ -225,12 +216,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
         url.searchParams.set('share_id', record.shareId);
         window.history.pushState({}, '', url.toString());
         window.dispatchEvent(new Event('popstate'));
-        
-        // Marca como lido ao clicar
-        if (!record.read) {
-            markReceivedListAsRead(record.id);
-        }
-        
+        if (!record.read) { markReceivedListAsRead(record.id); }
         onClose();
     };
 
@@ -254,10 +240,17 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                 </button>
                             </header>
                             <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-black/20">
-                                <button onClick={() => onRepeatPurchase(selectedPurchase)} className="w-full flex items-center justify-center gap-2 h-12 mb-4 rounded-xl bg-primary text-white font-bold shadow-md hover:bg-primary/90 transition-colors">
-                                    <span className="material-symbols-outlined">replay</span> Repetir Compra
+                                {/* BOTÃO DE RETOMAR */}
+                                <button 
+                                    onClick={() => handleReactivate(selectedPurchase)} 
+                                    className="w-full flex items-center justify-center gap-3 h-14 mb-4 rounded-2xl bg-blue-600 text-white font-black shadow-lg hover:bg-blue-700 transition-all active:scale-95"
+                                >
+                                    <span className="material-symbols-outlined !text-3xl">settings_backup_restore</span> 
+                                    RETOMAR ESTA LISTA
                                 </button>
+                                
                                 <div className="flex flex-col gap-2">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-1">Itens desta compra</p>
                                     {selectedPurchase.items.map((item, idx) => (
                                         <div key={idx} className="flex justify-between items-center p-4 rounded-xl bg-white dark:bg-surface-dark shadow-sm border border-border-light dark:border-border-dark">
                                             <div className="flex flex-col flex-1 min-w-0 pr-4">
@@ -285,119 +278,36 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                             {isShareModalOpen && (
                                 <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fadeIn">
                                     <div className="bg-white dark:bg-surface-dark w-full max-w-xs rounded-2xl p-6 shadow-2xl animate-slideUp relative">
-                                        <button 
-                                            onClick={() => { 
-                                                setIsShareModalOpen(false); 
-                                                setShareResult(null); 
-                                                setShareIdentifier(''); 
-                                                setShareStep('input');
-                                                setFoundUser(null);
-                                                setNotFoundError(false);
-                                            }} 
-                                            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-600"
-                                        >
+                                        <button onClick={() => { setIsShareModalOpen(false); setShareResult(null); setShareIdentifier(''); setShareStep('input'); setFoundUser(null); setNotFoundError(false); }} className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-600">
                                             <span className="material-symbols-outlined">close</span>
                                         </button>
-                                        
                                         <h3 className="text-xl font-bold text-center mb-4 text-text-primary-light dark:text-text-primary-dark">Compartilhar Lista</h3>
-                                        
-                                        {/* ETAPA 1: INPUT E BUSCA */}
                                         {shareStep === 'input' && (
                                             <form onSubmit={handleSearchUser}>
                                                 <p className="text-sm text-center text-gray-500 mb-4">Envie para o app de outra pessoa.</p>
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="E-mail ou @username" 
-                                                    value={shareIdentifier}
-                                                    onChange={(e) => setShareIdentifier(e.target.value)}
-                                                    className={`form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border h-12 px-4 mb-2 transition-colors ${notFoundError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 dark:border-gray-700 focus:border-primary focus:ring-primary/20'}`}
-                                                    required
-                                                />
-                                                
-                                                {notFoundError && (
-                                                    <div className="text-xs text-red-500 mb-3 flex items-center gap-1 justify-center animate-fadeIn">
-                                                        <span className="material-symbols-outlined text-sm">error</span>
-                                                        Usuário não encontrado.
-                                                    </div>
-                                                )}
-                                                
-                                                <button 
-                                                    type="submit" 
-                                                    disabled={isSharing}
-                                                    className="w-full h-12 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 flex items-center justify-center gap-2 mt-2"
-                                                >
-                                                    {isSharing ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : (
-                                                        <>
-                                                            <span className="material-symbols-outlined">search</span> Buscar
-                                                        </>
-                                                    )}
+                                                <input type="text" placeholder="E-mail ou @username" value={shareIdentifier} onChange={(e) => setShareIdentifier(e.target.value)} className={`form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border h-12 px-4 mb-2 transition-colors ${notFoundError ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}`} required />
+                                                {notFoundError && <div className="text-xs text-red-500 mb-3 text-center">Usuário não encontrado.</div>}
+                                                <button type="submit" disabled={isSharing} className="w-full h-12 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 flex items-center justify-center gap-2 mt-2">
+                                                    {isSharing ? 'Buscando...' : 'Buscar'}
                                                 </button>
                                             </form>
                                         )}
-
-                                        {/* ETAPA 2: CONFIRMAÇÃO VISUAL */}
                                         {shareStep === 'confirm' && foundUser && (
-                                            <div className="flex flex-col items-center animate-fadeIn">
+                                            <div className="flex flex-col items-center">
                                                 <div className="h-20 w-20 rounded-full border-4 border-white shadow-lg overflow-hidden mb-3">
-                                                    {foundUser.photoURL ? (
-                                                        <img src={foundUser.photoURL} alt={foundUser.displayName} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="w-full h-full bg-orange-100 flex items-center justify-center text-primary">
-                                                            <span className="material-symbols-outlined !text-4xl">person</span>
-                                                        </div>
-                                                    )}
+                                                    {foundUser.photoURL ? <img src={foundUser.photoURL} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-orange-100 flex items-center justify-center text-primary"><span className="material-symbols-outlined !text-4xl">person</span></div>}
                                                 </div>
-                                                <h4 className="font-bold text-lg text-text-primary-light dark:text-text-primary-dark">{foundUser.displayName}</h4>
-                                                {foundUser.username && <p className="text-sm text-primary dark:text-orange-400 mb-6">@{foundUser.username}</p>}
-                                                
+                                                <h4 className="font-bold text-lg">{foundUser.displayName}</h4>
                                                 <p className="text-sm text-center text-gray-500 mb-4">Confirmar envio para este usuário?</p>
-
-                                                <button 
-                                                    onClick={handleConfirmShare}
-                                                    disabled={isSharing}
-                                                    className="w-full h-12 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 flex items-center justify-center gap-2 mb-3 shadow-md"
-                                                >
-                                                    {isSharing ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : (
-                                                        <>
-                                                            <span className="material-symbols-outlined">send</span> Confirmar e Enviar
-                                                        </>
-                                                    )}
-                                                </button>
-                                                <button 
-                                                    onClick={() => setShareStep('input')}
-                                                    className="text-sm text-gray-500 hover:text-gray-700 underline"
-                                                >
-                                                    Voltar e buscar outro
-                                                </button>
+                                                <button onClick={handleConfirmShare} disabled={isSharing} className="w-full h-12 bg-green-600 text-white font-bold rounded-xl mb-3 shadow-md">Confirmar e Enviar</button>
+                                                <button onClick={() => setShareStep('input')} className="text-sm text-gray-500 underline">Voltar</button>
                                             </div>
                                         )}
-
-                                        {/* ETAPA 3: RESULTADO */}
                                         {shareStep === 'result' && shareResult && (
-                                            <div className="text-center animate-fadeIn">
-                                                {shareResult.type === 'direct' ? (
-                                                    <div className="flex flex-col items-center">
-                                                        <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-3">
-                                                            <span className="material-symbols-outlined text-4xl text-green-500">check_circle</span>
-                                                        </div>
-                                                        <p className="font-bold text-lg text-text-primary-light dark:text-text-primary-dark">Enviado!</p>
-                                                        <p className="text-sm text-gray-500 mt-1">A lista apareceu no histórico de <span className="font-bold">{shareResult.recipient}</span>.</p>
-                                                    </div>
-                                                ) : (
-                                                    // Fallback caso ocorra algum erro lógico e caia em link (embora a busca devia prevenir isso)
-                                                    <div className="flex flex-col items-center">
-                                                        <span className="material-symbols-outlined text-5xl text-yellow-500 mb-2">link</span>
-                                                        <p className="font-bold text-lg">Envio direto indisponível</p>
-                                                        <p className="text-sm text-gray-500 mb-4">Use o link de convite.</p>
-                                                        <button 
-                                                            onClick={handleCopyInvite}
-                                                            className="w-full h-12 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 flex items-center justify-center gap-2"
-                                                        >
-                                                            <span className="material-symbols-outlined">content_copy</span>
-                                                            Copiar Convite
-                                                        </button>
-                                                    </div>
-                                                )}
+                                            <div className="text-center">
+                                                <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="material-symbols-outlined text-4xl text-green-500">check_circle</span></div>
+                                                <p className="font-bold text-lg">Enviado!</p>
+                                                <p className="text-sm text-gray-500 mt-1">A lista apareceu para <span className="font-bold">{shareResult.recipient}</span>.</p>
                                             </div>
                                         )}
                                     </div>
@@ -408,16 +318,12 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                          <>
                             <header className="flex-shrink-0 bg-surface-light dark:bg-surface-dark border-b border-gray-200 dark:border-gray-700">
                                 <div className="flex items-center justify-between p-4 pb-0">
-                                    <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">Histórico</h2>
+                                    <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">Centro de Mensagens</h2>
                                     <button onClick={handleClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-text-secondary-light dark:text-text-secondary-dark"><span className="material-symbols-outlined">close</span></button>
                                 </div>
                                 <div className="flex px-4 mt-4 gap-6">
                                     <button onClick={() => setActiveTab('my')} className={`pb-3 font-semibold text-sm border-b-2 transition-colors ${activeTab === 'my' ? 'border-primary text-primary' : 'border-transparent text-gray-500 dark:text-gray-400'}`}>Minhas Compras</button>
-                                    <button onClick={() => setActiveTab('received')} className={`pb-3 font-semibold text-sm border-b-2 transition-colors ${activeTab === 'received' ? 'border-primary text-primary' : 'border-transparent text-gray-500 dark:text-gray-400'}`}>
-                                        Recebidos
-                                        {/* Badge na aba se houver não lidos */}
-                                        {/* Essa info não está no props, mas o ReceivedListItem mostra visualmente */}
-                                    </button>
+                                    <button onClick={() => setActiveTab('received')} className={`pb-3 font-semibold text-sm border-b-2 transition-colors ${activeTab === 'received' ? 'border-primary text-primary' : 'border-transparent text-gray-500 dark:text-gray-400'}`}>Recebidos</button>
                                 </div>
                             </header>
                             
@@ -431,28 +337,42 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                         <div className="flex flex-col items-center justify-center h-64 text-center">
                                             <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">history</span>
                                             <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma compra salva ainda.</p>
-                                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Finalize uma lista para vê-la aqui.</p>
                                         </div>
                                     )
                                 ) : (
-                                    receivedHistory.length > 0 ? (
-                                        <div className="flex flex-col gap-3">
-                                            {receivedHistory.map(r => (
-                                                <ReceivedListItem 
-                                                    key={r.id} 
-                                                    record={r} 
-                                                    onProfileClick={(e, author) => { e.stopPropagation(); setSelectedProfile(author); }}
-                                                    onClick={() => handleViewReceived(r)} 
-                                                />
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center h-64 text-center">
-                                            <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">share</span>
-                                            <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma lista recebida.</p>
-                                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">As listas que compartilharem com você aparecerão aqui.</p>
-                                        </div>
-                                    )
+                                    <div className="flex flex-col gap-3">
+                                        {/* UNIFICAÇÃO: Convite de Equipe agora aparece integrado na lista de Recebidos */}
+                                        {pendingAdminInvite && (
+                                            <div className="bg-gradient-to-r from-indigo-600 to-blue-700 p-4 rounded-xl shadow-xl flex items-center gap-4 animate-bounce-y border border-white/20">
+                                                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white shrink-0 backdrop-blur-md">
+                                                    <span className="material-symbols-outlined text-2xl">admin_panel_settings</span>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-black text-white/70 uppercase tracking-widest mb-0.5">Convite Especial</p>
+                                                    <p className="text-sm font-bold text-white">Equipe ChecklistIA</p>
+                                                    <p className="text-[10px] text-white/80 line-clamp-1">De: {pendingAdminInvite.fromName}</p>
+                                                </div>
+                                                <button 
+                                                    onClick={() => { onClose(); setTimeout(() => openModal('adminInvite'), 300); }}
+                                                    className="bg-white text-indigo-700 text-[10px] font-black uppercase px-4 py-2.5 rounded-lg shadow-lg active:scale-95 transition-all"
+                                                >
+                                                    Ver
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Listas Recebidas Normais */}
+                                        {receivedHistory.length > 0 ? (
+                                            receivedHistory.map(r => (
+                                                <ReceivedListItem key={r.id} record={r} onProfileClick={(e, author) => { e.stopPropagation(); setSelectedProfile(author); }} onClick={() => handleViewReceived(r)} />
+                                            ))
+                                        ) : !pendingAdminInvite && (
+                                            <div className="flex flex-col items-center justify-center h-64 text-center">
+                                                <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">share</span>
+                                                <p className="text-gray-500 dark:text-gray-400 font-medium">Sua caixa de entrada está vazia.</p>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </main>
                          </>

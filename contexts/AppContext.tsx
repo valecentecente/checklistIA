@@ -22,8 +22,6 @@ interface AppContextType {
     isHistoryModalOpen: boolean;
     isAuthModalOpen: boolean;
     isContactModalOpen: boolean;
-    isTourModalOpen: boolean;
-    isProfileModalOpen: boolean;
     isThemeModalOpen: boolean;
     isSharedListModalOpen: boolean;
     isFeedbackModalOpen: boolean;
@@ -49,6 +47,8 @@ interface AppContextType {
     isUnitConverterModalOpen: boolean; 
     isContentFactoryModalOpen: boolean;
     isRecipeSelectionModalOpen: boolean;
+    isTourModalOpen: boolean;
+    isProfileModalOpen: boolean;
     
     // Modal Controls
     openModal: (modal: string) => void;
@@ -83,7 +83,7 @@ interface AppContextType {
     selectedRecipe: FullRecipe | null;
     setSelectedRecipe: (recipe: FullRecipe | null) => void; 
     isRecipeLoading: boolean;
-    isSearchingAcervo: boolean; // NOVO: Separado para evitar confusão com geração
+    isSearchingAcervo: boolean; 
     recipeError: string | null;
     fetchRecipeDetails: (recipeName: string, imageBase64?: string, autoAdd?: boolean) => Promise<void>;
     handleRecipeImageGenerated: (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => void;
@@ -152,6 +152,7 @@ interface AppContextType {
     setCurrentMarketName: (name: string | null) => void;
     isSharedSession: boolean;
     setIsSharedSession: (isShared: boolean) => void;
+    stopSharing: () => void;
     historyActiveTab: 'my' | 'received';
     setHistoryActiveTab: (tab: 'my' | 'received') => void;
 
@@ -289,7 +290,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [fullRecipes, setFullRecipes] = useState<Record<string, FullRecipe>>({});
     const [selectedRecipe, setSelectedRecipe] = useState<FullRecipe | null>(null);
     const [isRecipeLoading, setIsRecipeLoading] = useState(false);
-    const [isSearchingAcervo, setIsSearchingAcervo] = useState(false); // NOVO
+    const [isSearchingAcervo, setIsSearchingAcervo] = useState(false); 
     const [recipeError, setRecipeError] = useState<string | null>(null);
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
@@ -322,6 +323,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [recipeSearchResults, setRecipeSearchResults] = useState<FullRecipe[]>([]);
     const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
+    // Guideline check: Obtain API key exclusively from environment variable
     const apiKey = process.env.API_KEY as string;
     
     const isSuperAdmin = user?.role === 'admin_l1';
@@ -618,8 +620,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
 
-        // Se chegou aqui e não tem ingredientes, não abrimos o modal ou geramos automaticamente.
-        // O acervo deve ser autossuficiente nesta etapa.
         showToast("Receita em manutenção no acervo.");
     };
 
@@ -669,9 +669,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const generateRecipeImageBackground = async (recipe: FullRecipe) => {
-        if (!apiKey) return;
+        if (!process.env.API_KEY) return;
         try {
-             const ai = new GoogleGenAI({ apiKey });
+             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
              const response: any = await callGenAIWithRetry(() => ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
                  contents: {
@@ -680,31 +680,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  config: { responseModalities: [Modality.IMAGE] },
              }), 3);
 
-             const part = response.candidates?.[0]?.content?.parts?.[0];
-             if (part?.inlineData) {
-                 const base64ImageBytes = part.inlineData.data;
-                 const mimeType = part.inlineData.mimeType || 'image/jpeg';
-                 const generatedUrl = `data:${mimeType};base64,${base64ImageBytes}`;
-                 
-                 handleRecipeImageGenerated(recipe.name, generatedUrl, 'genai');
+             for (const part of response.candidates?.[0]?.content?.parts || []) {
+                if (part.inlineData) {
+                    const base64ImageBytes = part.inlineData.data;
+                    const mimeType = part.inlineData.mimeType || 'image/jpeg';
+                    const generatedUrl = `data:${mimeType};base64,${base64ImageBytes}`;
+                    
+                    handleRecipeImageGenerated(recipe.name, generatedUrl, 'genai');
 
-                 if (db) {
-                     try {
-                         const compressedUrl = await compressImageForStorage(generatedUrl);
-                         const docId = recipe.name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
-                         
-                         await setDoc(doc(db, 'global_recipes', docId), {
-                             ...recipe,
-                             imageUrl: compressedUrl, 
-                             imageSource: 'genai', 
-                             createdAt: serverTimestamp()
-                         }, { merge: true });
-                     } catch (err: any) {
-                         if (!ignorePermissionError(err)) {
-                             console.error("Erro ao salvar no acervo:", err);
-                         }
-                     }
-                 }
+                    if (db) {
+                        try {
+                            const compressedUrl = await compressImageForStorage(generatedUrl);
+                            const docId = recipe.name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
+                            
+                            await setDoc(doc(db, 'global_recipes', docId), {
+                                ...recipe,
+                                imageUrl: compressedUrl, 
+                                imageSource: 'genai', 
+                                createdAt: serverTimestamp()
+                            }, { merge: true });
+                        } catch (err: any) {
+                            if (!ignorePermissionError(err)) {
+                                console.error("Erro ao salvar no acervo:", err);
+                            }
+                        }
+                    }
+                    break;
+                }
              }
         } catch (error) {
             console.warn("Imagem não gerada:", error);
@@ -717,10 +719,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const searchKeywords = generateKeywords(queryStr);
             const lowerQuery = queryStr.toLowerCase();
             
-            // Garantir que temos palavras-chave processadas antes de consultar o Firestore
             if (searchKeywords.length === 0) return [];
 
-            // 1. Busca por Palavras-Chave (Keywords de nome)
             let keywordResults: FullRecipe[] = [];
             const qKey = query(
                 collection(db, 'global_recipes'),
@@ -733,7 +733,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (data.name) keywordResults.push({ ...data, imageSource: 'cache' });
             });
 
-            // 2. Busca por Tags (Categorias)
             let tagResults: FullRecipe[] = [];
             const qTag = query(
                 collection(db, 'global_recipes'),
@@ -743,10 +742,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const snapTag = await getDocs(qTag);
             snapTag.forEach(doc => {
                 const data = doc.data() as FullRecipe;
-                if (data.name) tagResults.push({ ...data, imageSource: 'cache' });
+                if (data.name) tagResults.push({ ...data, id: doc.id });
             });
 
-            // 3. Mesclar e Remover Duplicatas
             const mergedMap = new Map<string, FullRecipe>();
             [...keywordResults, ...tagResults].forEach(r => {
                 mergedMap.set(r.name.toLowerCase(), r);
@@ -754,17 +752,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             
             const results = Array.from(mergedMap.values());
 
-            // 4. Ordenação por relevância (Matches)
             results.sort((a, b) => {
                 const score = (r: FullRecipe) => {
                     let s = 0;
                     const nameL = r.name.toLowerCase();
                     const tagsL = r.tags?.map(t => t.toLowerCase()) || [];
                     
-                    // Prioridade máxima: Nome exato contém o termo
                     if (nameL.includes(lowerQuery)) s += 200;
                     
-                    // Interseção de Termos (Otimizado para buscas como "doce morango")
                     let intersectionCount = 0;
                     searchKeywords.forEach(k => {
                         const lowK = k.toLowerCase();
@@ -772,11 +767,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         const nameMatch = nameL.includes(lowK);
                         if (tagMatch || nameMatch) {
                             intersectionCount++;
-                            s += tagMatch ? 50 : 20; // Bônus base por termo
+                            s += tagMatch ? 50 : 20; 
                         }
                     });
 
-                    // Bônus MASSIVO se o item possuir TODOS os termos buscados (Interseção Perfeita)
                     if (intersectionCount >= searchKeywords.length && searchKeywords.length > 1) {
                         s += 500;
                     }
@@ -795,7 +789,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, []);
 
     const handleRecipeSearch = async (term: string) => {
-        setIsSearchingAcervo(true); // Estado separado
+        setIsSearchingAcervo(true); 
         try {
             const results = await searchGlobalRecipes(term);
             setRecipeSearchResults(results);
@@ -826,7 +820,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             } catch (e) {}
         }
 
-        if (!apiKey) {
+        if (!process.env.API_KEY) {
             setRecipeError("Chave de IA não configurada.");
             return;
         }
@@ -834,7 +828,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsRecipeLoading(true);
         setRecipeError(null);
         try {
-            const ai = new GoogleGenAI({ apiKey });
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             let systemPrompt = `Você é um assistente culinário especialista. Gere uma receita completa em JSON.`;
             
             if (recipeName && !imageBase64) {
@@ -931,8 +925,8 @@ Format:
             if (itemsToCategorize.length === 0) { setGroupingMode('aisle'); closeModal('options'); return; }
             setIsOrganizing(true);
             try {
-                if (!apiKey) throw new Error("API Key missing");
-                const ai = new GoogleGenAI({ apiKey });
+                if (!process.env.API_KEY) throw new Error("API Key missing");
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue e Peixaria", "🧀 Frios e Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene Pessoal", "🐾 Pets", "🏠 Utilidades Domésticas", "❓ Outros" ];
                 
                 const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -970,6 +964,11 @@ Format:
 
     const handleExploreRecipeClick = (recipe: string | FullRecipe) => {
         showRecipe(recipe);
+    };
+
+    const stopSharing = () => {
+        setIsSharedSession(false);
+        showToast("Sessão individual reativada.");
     };
 
     const getCategoryRecipesSync = useCallback((categoryKey: string): FullRecipe[] => {
@@ -1064,6 +1063,10 @@ Format:
         openModal('productDetails');
     };
 
+    const unreadNotificationCount = useMemo(() => {
+        return unreadReceivedCount + (pendingAdminInvite ? 1 : 0);
+    }, [unreadReceivedCount, pendingAdminInvite]);
+
     const value = {
         ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu,
         theme, setTheme,
@@ -1078,12 +1081,12 @@ Format:
         showStartHerePrompt,
         authTrigger, setAuthTrigger,
         incomingList, clearIncomingList,
-        unreadNotificationCount: unreadReceivedCount,
+        unreadNotificationCount,
         isAdmin,
         isSuperAdmin,
         smartNudgeItemName,
         currentMarketName, setCurrentMarketName,
-        isSharedSession, setIsSharedSession,
+        isSharedSession, setIsSharedSession, stopSharing,
         historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab),
         isHomeViewActive, setHomeViewActive,
         isFocusMode, setFocusMode,

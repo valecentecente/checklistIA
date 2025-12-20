@@ -23,14 +23,13 @@ import { OffersModal } from '../OffersModal';
 import { AdminOffersModal } from '../AdminOffersModal';
 import { AdminRecipesModal } from '../AdminRecipesModal';
 import { AdminReviewsModal } from '../AdminReviewsModal';
-import { AdminScheduleModal } from '../AdminScheduleModal'; // NOVO
+import { AdminScheduleModal } from '../AdminScheduleModal';
 import { SavePurchaseModal } from '../SavePurchaseModal';
 import { HistoryModal } from '../HistoryModal';
 import { AuthModal } from '../AuthModal';
 import { ProfileModal } from '../ProfileModal';
 import { ThemeModal } from '../ThemeModal';
 import { SharedListImportModal } from '../SharedListImportModal';
-import { ReceivedListNotificationModal } from '../ReceivedListNotificationModal';
 import { FeedbackModal } from '../FeedbackModal';
 import { StartShoppingModal } from '../StartShoppingModal';
 import { ShareListModal } from '../ShareListModal';
@@ -90,7 +89,8 @@ export const AppModals: React.FC<AppModalsProps> = ({
         <>
             {app.installPromptEvent && app.isPWAInstallVisible && <PWAInstallPrompt onInstall={app.handleInstall} onDismiss={app.handleDismissInstall} />}
             <ToolsGridModal />
-            <OnboardingTourModal isOpen={app.isTourModalOpen} onClose={() => app.closeModal('Tour')} />
+            {/* Fix: referenced isTourModalOpen from AppContext which is now added to the interface */}
+            <OnboardingTourModal isOpen={app.isTourModalOpen} onClose={() => app.closeModal('tour')} />
             <PreferencesModal isOpen={app.isPreferencesModalOpen} onClose={() => app.closeModal('preferences')} />
             <SmartNudgeModal />
             <ProductDetailsModal /> 
@@ -152,10 +152,13 @@ export const AppModals: React.FC<AppModalsProps> = ({
                 onLoginDemo={loginDemo} 
                 error={authError} 
             />
+            {/* Fix: referenced isProfileModalOpen from AppContext which is now added to the interface */}
             <ProfileModal isOpen={app.isProfileModalOpen} onClose={() => app.closeModal('profile')} />
             <ThemeModal isOpen={app.isThemeModalOpen} onClose={() => app.closeModal('theme')} />
             <SharedListImportModal isOpen={app.isSharedListModalOpen} onClose={() => app.closeModal('sharedList')} onImport={handleImportSharedList} listData={sharedListData} isLoading={isImportingShare} />
-            <ReceivedListNotificationModal />
+            
+            {/* CENTRALIZADO EM RECEBIDOS: ReceivedListNotificationModal removido daqui */}
+            
             <FeedbackModal isOpen={app.isFeedbackModalOpen} onClose={() => app.closeModal('feedback')} />
             <StartShoppingModal 
                 isOpen={app.isStartShoppingModalOpen} 

@@ -13,7 +13,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, onLoginDemo, error }) => {
     const { loginWithEmail, registerWithEmail, resetPassword, clearAuthError, authErrorCode, checkUsernameUniqueness, setAuthError } = useAuth();
-    const { authTrigger, theme, showToast } = useApp();
+    const { authTrigger, showToast } = useApp();
     const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -128,22 +128,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
                     <>
                         {/* UI DE ERROS CRÍTICOS */}
                         {error && (
-                            <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-[90%] z-[60] animate-fadeIn">
+                            <div className="absolute top-0 left-0 right-0 z-[100] animate-fadeIn">
                                 {authErrorCode === 'DOMAIN_ERROR' ? (
-                                    <div className="bg-zinc-900 border-2 border-red-500 text-white p-4 rounded-xl shadow-2xl flex flex-col gap-3">
-                                        <div className="flex items-center gap-2 text-red-400">
-                                            <span className="material-symbols-outlined">domain_disabled</span>
-                                            <span className="font-bold text-sm uppercase">Domínio Bloqueado</span>
+                                    <div className="bg-zinc-900 border-b-4 border-red-500 text-white p-6 shadow-2xl flex flex-col gap-4">
+                                        <div className="flex items-center gap-3 text-red-500">
+                                            <span className="material-symbols-outlined !text-4xl">domain_disabled</span>
+                                            <div className="flex-1">
+                                                <span className="font-black text-sm uppercase block">Domínio não autorizado</span>
+                                                <p className="text-[10px] text-gray-400 leading-tight">Sua chave do Firebase bloqueou o login neste endereço.</p>
+                                            </div>
                                         </div>
-                                        <p className="text-[11px] text-gray-300">Este site não está na lista de domínios autorizados do seu Firebase.</p>
-                                        <div className="bg-black/40 p-2 rounded border border-white/10 flex flex-col gap-1">
-                                            <span className="text-[10px] text-gray-500 uppercase font-bold">Domínio para autorizar:</span>
-                                            <code className="text-xs text-green-400 break-all select-all">{window.location.hostname}</code>
+                                        
+                                        <div className="bg-black/60 p-4 rounded-xl border border-white/10 flex flex-col gap-3">
+                                            <div>
+                                                <span className="text-[10px] text-gray-500 uppercase font-black mb-1 block">Hostname para Autorizar:</span>
+                                                <code className="text-sm text-green-400 break-all select-all font-mono font-bold bg-green-500/10 px-2 py-1 rounded block">{window.location.hostname}</code>
+                                            </div>
+                                            <a 
+                                                href="https://console.firebase.google.com/project/_/authentication/providers" 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="text-[10px] text-blue-400 flex items-center gap-1 hover:underline"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                                Ir para Firebase Console > Auth > Settings
+                                            </a>
                                         </div>
-                                        <button onClick={clearAuthError} className="w-full bg-white/10 hover:bg-white/20 py-2 rounded text-[10px] font-bold uppercase transition-colors">Fechar Aviso</button>
+                                        
+                                        <div className="flex flex-col gap-2">
+                                            <button 
+                                                onClick={() => { clearAuthError(); onLoginDemo(); }} 
+                                                className="w-full bg-primary text-white py-3 rounded-xl text-xs font-black uppercase shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                                            >
+                                                <span className="material-symbols-outlined">person_off</span>
+                                                Entrar como Convidado (Modo Offline)
+                                            </button>
+                                            <button 
+                                                onClick={clearAuthError} 
+                                                className="w-full bg-white/5 hover:bg-white/10 py-2 rounded-lg text-[10px] text-gray-400 font-bold uppercase transition-colors"
+                                            >
+                                                Tentar outro método
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : authErrorCode === 'EMAIL_IN_USE' ? (
-                                    <div className="bg-orange-600 text-white p-3 rounded-xl shadow-xl flex items-center gap-3">
+                                    <div className="bg-orange-600 text-white p-3 rounded-xl shadow-xl flex items-center gap-3 m-4">
                                         <span className="material-symbols-outlined text-xl">info</span>
                                         <div className="flex-1">
                                             <p className="text-xs font-bold">Conta já existente.</p>
@@ -152,13 +181,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
                                         <button onClick={clearAuthError} className="p-1"><span className="material-symbols-outlined text-sm">close</span></button>
                                     </div>
                                 ) : authErrorCode === 'INVALID_CREDENTIALS' ? (
-                                    <div className="bg-red-600 text-white p-4 rounded-xl shadow-xl flex flex-col gap-2">
+                                    <div className="bg-red-600 text-white p-4 rounded-xl shadow-xl flex flex-col gap-2 m-4">
                                         <div className="flex items-center gap-3">
                                             <span className="material-symbols-outlined text-xl">lock_reset</span>
                                             <p className="text-xs font-bold flex-1">Dados incorretos ou conta via Google.</p>
                                             <button onClick={clearAuthError} className="p-1"><span className="material-symbols-outlined text-sm">close</span></button>
                                         </div>
-                                        <p className="text-[10px] opacity-90 leading-tight">Se você já usou o Google, clique abaixo para criar uma senha de e-mail pela primeira vez:</p>
                                         <button 
                                             onClick={() => { setMode('forgot'); clearAuthError(); }} 
                                             className="w-full bg-white/20 hover:bg-white/30 py-1.5 rounded text-[10px] uppercase font-bold transition-all"
@@ -167,7 +195,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="bg-red-500 text-white p-3 rounded-xl shadow-xl flex items-center gap-2">
+                                    <div className="bg-red-500 text-white p-3 rounded-xl shadow-xl flex items-center gap-2 m-4">
                                         <span className="material-symbols-outlined text-lg">error</span>
                                         <p className="text-xs font-bold flex-1">{error}</p>
                                         <button onClick={clearAuthError}><span className="material-symbols-outlined text-sm">close</span></button>

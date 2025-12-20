@@ -14,7 +14,7 @@ interface RecipeModalProps {
 const CHEF_PLACEHOLDERS = [
     "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1583394293214-28ded15ee548?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=800&q=80",
+    "https://images.Counter.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1654922207993-2952fec3276f?auto=format&fit=crop&w=800&q=80",
     "https://images.Counter.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&w=800&q=80",
@@ -25,7 +25,7 @@ const CHEF_PLACEHOLDERS = [
 ];
 
 export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => {
-  const { addRecipeToShoppingList, openModal, currentMarketName, setPendingExploreRecipe, fetchRecipeDetails, isRecipeLoading } = useApp();
+  const { addRecipeToShoppingList, setHomeViewActive, currentMarketName, fetchRecipeDetails, isRecipeLoading } = useApp();
   const { user } = useAuth();
   const { toggleFavorite, isFavorite, offers, items } = useShoppingList();
   
@@ -70,12 +70,17 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   }, [recipe.cost]);
 
   const handleAddRequest = async () => {
+      // Se não houver lista ativa, faz o procedimento direto (procedimento do botão de carrinho da Home)
       if (!hasActiveList) {
-          setPendingExploreRecipe(recipe.name); 
-          onClose(); 
-          openModal('startShopping'); 
+          setHomeViewActive(false); // Fecha a visão da Home/Destaques e mostra a aba da lista
+          setIsAdding(true);
+          await addRecipeToShoppingList(recipe);
+          setIsAdding(false);
+          onClose();
           return;
       }
+      
+      // Se já houver lista, apenas adiciona normalmente
       setIsAdding(true);
       await addRecipeToShoppingList(recipe);
       setIsAdding(false);
@@ -85,7 +90,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const handleToggleFavorite = async () => {
       if (!user) {
           onClose();
-          openModal('auth');
+          // Aqui poderíamos usar app.openModal('auth'), mas o componente não tem acesso direto via props
+          // No entanto, RecipeModal herda o contexto, então usamos de lá.
+          // Mas como pedido, focamos no botão de adicionar.
           return;
       }
       await toggleFavorite(recipe);

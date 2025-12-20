@@ -20,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
-import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog } from '../types';
+import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog, Invitation } from '../types';
 
 interface ShoppingListContextType {
     items: ShoppingItem[];
@@ -28,7 +28,8 @@ interface ShoppingListContextType {
     receivedHistory: ReceivedListRecord[];
     favorites: FullRecipe[];
     offers: Offer[];
-    savedOffers: Offer[]; // NOVO: Lista de ofertas salvas (Meus Checks)
+    savedOffers: Offer[]; 
+    participants: Invitation[];
     formatCurrency: (value: number) => string;
     addItem: (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => Promise<void>;
     addIngredientsBatch: (items: any[]) => Promise<void>;
@@ -47,17 +48,16 @@ interface ShoppingListContextType {
     searchUser: (identifier: string) => Promise<AuthorMetadata | null>;
     shareListWithEmail: (purchase: PurchaseRecord, identifier: string) => Promise<{ success: boolean; type: 'direct' | 'link'; shareUrl?: string; recipientName?: string }>;
     shareListWithPartner: (identifier: string, listToShareId: string) => Promise<{ success: boolean; message: string; inviteId?: string }>;
+    removeParticipant: (invitationId: string) => Promise<void>;
     markReceivedListAsRead: (id: string) => Promise<void>;
     unreadReceivedCount: number;
     toggleFavorite: (recipe: FullRecipe) => Promise<void>;
     isFavorite: (recipeName: string) => boolean;
-    toggleOfferSaved: (offer: Offer) => Promise<void>; // NOVO
-    isOfferSaved: (offerId: string) => boolean; // NOVO
+    toggleOfferSaved: (offer: Offer) => Promise<void>; 
+    isOfferSaved: (offerId: string) => boolean; 
     addReview: (offerId: string, offerName: string, offerImage: string, rating: number, comment: string) => Promise<void>;
     deleteReview: (reviewId: string, offerId: string) => Promise<void>;
     getProductReviews: (offerId: string) => Promise<Review[]>;
-    
-    // Funções de Admin e Logs
     logAdminAction: (actionType: 'create' | 'update' | 'delete' | 'login', targetName: string, details?: string) => Promise<void>;
     getTeamMembers: () => Promise<User[]>;
     getMemberLogs: (userId: string) => Promise<ActivityLog[]>;
@@ -71,8 +71,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [history, setHistory] = useState<PurchaseRecord[]>([]);
     const [receivedHistory, setReceivedHistory] = useState<ReceivedListRecord[]>([]);
     const [favorites, setFavorites] = useState<FullRecipe[]>([]);
-    const [savedOffers, setSavedOffers] = useState<Offer[]>([]); // NOVO
+    const [savedOffers, setSavedOffers] = useState<Offer[]>([]); 
     const [offers, setOffers] = useState<Offer[]>([]);
+    const [participants, setParticipants] = useState<Invitation[]>([]);
 
     const STORAGE_KEY = 'guestShoppingList';
     const HISTORY_STORAGE_KEY = 'guestShoppingHistory';
@@ -96,7 +97,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
     }, [user]);
 
-    // Efeito dedicado para carregar ofertas
     useEffect(() => {
         if (!db) return;
         const qOffers = query(collection(db, 'offers'), orderBy('createdAt', 'desc'));
@@ -107,41 +107,50 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             } as Offer));
             setOffers(loadedOffers);
         }, (error) => {
-            console.warn("Erro ao carregar ofertas (permissão ou rede):", error.message);
+            console.warn("Erro ao carregar ofertas:", error.message);
         });
         return () => unsubscribeOffers();
     }, []);
 
+    // LISTENER DE PARTICIPANTES DA SESSÃO
     useEffect(() => {
-        // Se não houver usuário ou se for usuário offline (guest)
+        if (!user || !db || user.uid.startsWith('offline-user-')) {
+            setParticipants([]);
+            return;
+        }
+
+        const q = query(
+            collection(db, 'invitations'), 
+            where('fromUid', '==', user.uid),
+            where('listId', '==', user.uid)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const loadedParticipants = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Invitation));
+            setParticipants(loadedParticipants);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    useEffect(() => {
         if (!user || user.uid.startsWith('offline-user-')) {
-            // Carrega lista atual
             const storedList = localStorage.getItem(STORAGE_KEY);
             if (storedList) {
-                try {
-                    setItems(JSON.parse(storedList));
-                } catch (e) {
-                    setItems([]);
-                }
-            } else {
-                setItems([]);
-            }
+                try { setItems(JSON.parse(storedList)); } catch (e) { setItems([]); }
+            } else { setItems([]); }
 
-            // Carrega histórico local
             const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
             if (storedHistory) {
-                try {
-                    setHistory(JSON.parse(storedHistory));
-                } catch (e) {
-                    setHistory([]);
-                }
-            } else {
-                setHistory([]);
-            }
+                try { setHistory(JSON.parse(storedHistory)); } catch (e) { setHistory([]); }
+            } else { setHistory([]); }
 
             setReceivedHistory([]);
             setFavorites([]);
-            setSavedOffers([]); // Guest não tem ofertas salvas persistentes por enquanto
+            setSavedOffers([]); 
             return;
         }
 
@@ -189,7 +198,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             setFavorites(loadedFavorites);
         }, (error) => console.warn("Erro ao carregar favoritos:", error.message));
 
-        // NOVO: Carregar Ofertas Salvas (Meus Checks)
         const savedOffersRef = collection(db, `users/${user.uid}/saved_offers`);
         const qSavedOffers = query(savedOffersRef, orderBy('savedAt', 'desc'));
         const unsubscribeSavedOffers = onSnapshot(qSavedOffers, (snapshot) => {
@@ -224,24 +232,10 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         return currentItems.find(i => normalize(i.name) === target);
     }, []);
 
-    const checkDietaryConflict = (itemName: string) => {
-        if (!user || !user.dietaryPreferences) return;
-        const isPlantBased = user.dietaryPreferences.includes('vegan') || user.dietaryPreferences.includes('vegetarian');
-        if (isPlantBased) {
-            const forbiddenKeywords = ['carne', 'frango', 'bacon', 'linguiça', 'bife', 'picanha', 'peixe', 'camarão', 'pernil', 'costela'];
-            const normalizedItem = itemName.toLowerCase();
-            const hasConflict = forbiddenKeywords.some(keyword => normalizedItem.includes(keyword));
-            if (hasConflict) {
-                window.dispatchEvent(new CustomEvent('dietaryConflict', { detail: { itemName } }));
-            }
-        }
-    };
-
     const isOnline = user && !user.uid.startsWith('offline-user-') && db;
 
     const addItem = useCallback(async (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => {
         const activeListId = user ? (user.activeListId || user.uid) : undefined;
-        checkDietaryConflict(item.name);
         const newItem: ShoppingItem = {
             ...item,
             id: isOnline ? '' : Date.now().toString(),
@@ -282,7 +276,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 const itemWithCreator = {
                     ...item,
                     displayPrice: formatCurrency(item.calculatedPrice),
-                    isPurchased: false,
+                    isPurchased: item.isPurchased || false,
                     isNew: true,
                     creatorUid: user.uid || null,
                     creatorDisplayName: user.displayName || null,
@@ -303,7 +297,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 ...item,
                 id: Date.now().toString() + idx,
                 displayPrice: formatCurrency(item.calculatedPrice),
-                isPurchased: false,
+                isPurchased: item.isPurchased || false,
                 isNew: true,
                 responsibleUid: null,
                 responsibleDisplayName: null,
@@ -342,14 +336,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, [user, isOnline]);
 
     const deleteRecipeGroup = useCallback(async (recipeName: string) => {
-        const isOthers = recipeName === '___OTHERS___';
-        const filterFn = (item: ShoppingItem) => {
-            if (isOthers) {
-                return !item.recipeName || item.recipeName.trim() === '';
-            } else {
-                return item.recipeName === recipeName;
-            }
-        };
+        const filterFn = (item: ShoppingItem) => item.recipeName === recipeName;
         if (isOnline && user) {
             const listId = user.activeListId || user.uid;
             const batch = writeBatch(db);
@@ -379,36 +366,45 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, [user, items, isOnline]);
 
     const savePurchase = useCallback(async (marketName: string) => {
+        if (items.length === 0) return;
         const purchasedItems = items.filter(i => i.isPurchased);
-        if (purchasedItems.length === 0) return;
         const total = purchasedItems.reduce((acc, curr) => acc + curr.calculatedPrice, 0);
-        const purchaseRecord: Omit<PurchaseRecord, 'id'> = {
-            date: new Date().toISOString(),
-            marketName: marketName || 'Compra Geral',
-            total,
-            items: purchasedItems.map(i => ({
-                name: i.name,
-                displayPrice: i.displayPrice,
-                calculatedPrice: i.calculatedPrice,
-                details: i.details
-            }))
-        };
+
+        if (purchasedItems.length > 0) {
+            const purchaseRecord: Omit<PurchaseRecord, 'id'> = {
+                date: new Date().toISOString(),
+                marketName: marketName || 'Compra Geral',
+                total,
+                items: purchasedItems.map(i => ({
+                    name: i.name,
+                    displayPrice: i.displayPrice,
+                    calculatedPrice: i.calculatedPrice,
+                    details: i.details
+                }))
+            };
+
+            if (isOnline && user) {
+                const listId = user.activeListId || user.uid;
+                const historyRef = collection(db, `users/${listId}/history`);
+                await addDoc(historyRef, purchaseRecord);
+            } else {
+                const newRecord = { ...purchaseRecord, id: Date.now().toString() } as PurchaseRecord;
+                const updatedHistory = [newRecord, ...history];
+                setHistory(updatedHistory);
+                localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory));
+            }
+        }
+
         if (isOnline && user) {
             const listId = user.activeListId || user.uid;
             const batch = writeBatch(db);
-            const historyRef = collection(db, `users/${listId}/history`);
-            await addDoc(historyRef, purchaseRecord);
-            purchasedItems.forEach(item => {
+            items.forEach(item => {
                 const itemRef = doc(db, `users/${listId}/items`, item.id);
                 batch.delete(itemRef);
             });
             await batch.commit();
         } else {
-            const newRecord = { ...purchaseRecord, id: Date.now().toString() } as PurchaseRecord;
-            const updatedHistory = [newRecord, ...history];
-            setHistory(updatedHistory);
-            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory));
-            setItems(prev => prev.filter(i => !i.isPurchased));
+            setItems([]);
         }
     }, [user, items, isOnline, history]);
 
@@ -420,13 +416,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 const itemsRef = collection(db, `users/${listId}/items`);
                 const querySnapshot = await getDocs(itemsRef);
                 const batch = writeBatch(db);
-                querySnapshot.forEach((doc) => {
-                    batch.delete(doc.ref);
-                });
+                querySnapshot.forEach((doc) => { batch.delete(doc.ref); });
                 await batch.commit();
-            } catch (error) {
-                console.error("Erro ao limpar lista:", error);
-            }
+            } catch (error) { console.error("Erro ao limpar lista:", error); }
         }
     }, [user, isOnline]);
 
@@ -443,14 +435,15 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const repeatPurchase = useCallback(async (purchase: PurchaseRecord) => {
         const itemsToAdd = purchase.items.map(i => ({
             name: i.name,
-            calculatedPrice: 0,
+            calculatedPrice: i.calculatedPrice,
             details: i.details,
-            recipeName: purchase.marketName ? `Repetição: ${purchase.marketName}` : undefined,
+            recipeName: purchase.marketName || 'Retomado',
             isNew: true,
-            isPurchased: false
+            isPurchased: true 
         }));
+        window.dispatchEvent(new CustomEvent('restoreMarketName', { detail: purchase.marketName }));
         await addIngredientsBatch(itemsToAdd);
-        return { message: `${itemsToAdd.length} itens adicionados à lista.` };
+        return { message: `${itemsToAdd.length} itens retomados com sucesso!` };
     }, [addIngredientsBatch]);
 
     const importSharedList = useCallback(async (shareId: string) => {
@@ -461,10 +454,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 return shareDoc.data() as { marketName: string; items: any[]; author?: any };
             }
             return null;
-        } catch (error) {
-            console.error("Error importing list:", error);
-            return null;
-        }
+        } catch (error) { return null; }
     }, []);
 
     const saveReceivedListToHistory = useCallback(async (data: any) => {
@@ -476,9 +466,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                     itemCount: data.items.length,
                     read: false,
                  });
-            } catch (error) {
-                console.error("Error saving received list:", error);
-            }
+            } catch (error) { console.error("Error saving received list:", error); }
         }
     }, [user, isOnline]);
 
@@ -519,9 +507,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                      return publicUserSnap.data() as AuthorMetadata;
                 }
             }
-        } catch (error) {
-            console.error("Error searching user:", error);
-        }
+        } catch (error) { console.error("Error searching user:", error); }
         return null;
     }, []);
 
@@ -531,12 +517,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 const shareData = {
                     marketName: purchase.marketName,
                     items: purchase.items,
-                    author: {
-                        uid: user.uid,
-                        displayName: user.displayName,
-                        photoURL: user.photoURL,
-                        username: user.username
-                    },
+                    author: { uid: user.uid, displayName: user.displayName, photoURL: user.photoURL, username: user.username },
                     createdAt: serverTimestamp()
                 };
                 const shareRef = await addDoc(collection(db, 'shared_lists'), shareData);
@@ -556,10 +537,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                     return { success: true, type: 'direct' as const, shareUrl, recipientName: targetUserData.displayName };
                 }
                 return { success: true, type: 'link' as const, shareUrl };
-            } catch (error) {
-                console.error("Error sharing list:", error);
-                throw error;
-            }
+            } catch (error) { throw error; }
         }
         return { success: false, type: 'link' as const };
     }, [user, searchUser, isOnline]);
@@ -571,16 +549,27 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
              return { success: false, message: "Parceiro(a) não encontrado(a) ou é você mesmo." };
         }
         const inviteRef = await addDoc(collection(db, 'invitations'), {
-            fromUid: user.uid,
-            toUid: partnerData.uid,
-            listId: listToShareId,
-            status: 'pending',
-            marketName: "Lista Compartilhada",
-            createdAt: serverTimestamp(),
+            fromUid: user.uid, 
+            toUid: partnerData.uid, 
+            toDisplayName: partnerData.displayName,
+            toPhotoURL: partnerData.photoURL || null,
+            listId: listToShareId, 
+            status: 'pending', 
+            marketName: "Lista Compartilhada", 
+            createdAt: serverTimestamp(), 
             fromName: user.displayName || 'Alguém'
         });
         return { success: true, message: `Convite enviado para ${partnerData.displayName || 'parceiro(a)'}.`, inviteId: inviteRef.id };
     }, [user, searchUser, isOnline]);
+
+    const removeParticipant = useCallback(async (invitationId: string) => {
+        if (!db) return;
+        try {
+            await deleteDoc(doc(db, 'invitations', invitationId));
+        } catch (error) {
+            console.error("Erro ao remover participante:", error);
+        }
+    }, []);
 
     const normalizeRecipeId = (str: string) => {
         return str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_"); 
@@ -604,12 +593,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 );
                 await setDoc(docRef, { ...sanitizedRecipe, savedAt: serverTimestamp() });
             }
-        } catch (error) {
-            console.error("Error toggling favorite:", error);
-        }
+        } catch (error) { console.error("Error toggling favorite:", error); }
     }, [user, isFavorite, isOnline]);
 
-    // Lógica para Salvar Ofertas (Meus Checks)
     const isOfferSaved = useCallback((offerId: string) => {
         return savedOffers.some(o => o.id === offerId);
     }, [savedOffers]);
@@ -617,120 +603,65 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const toggleOfferSaved = useCallback(async (offer: Offer) => {
         if (!isOnline || !user) return;
         const docRef = doc(db, `users/${user.uid}/saved_offers`, offer.id);
-        
         try {
             if (isOfferSaved(offer.id)) {
                 await deleteDoc(docRef);
             } else {
-                // Remove campos undefined para o Firestore não reclamar
                 const cleanOffer = JSON.parse(JSON.stringify(offer));
-                await setDoc(docRef, { 
-                    ...cleanOffer, 
-                    savedAt: serverTimestamp() 
-                });
+                await setDoc(docRef, { ...cleanOffer, savedAt: serverTimestamp() });
             }
-        } catch (error) {
-            console.error("Erro ao salvar oferta:", error);
-        }
+        } catch (error) { console.error("Erro ao salvar oferta:", error); }
     }, [user, isOfferSaved, isOnline]);
 
-    // LÓGICA DE REVIEWS (CENTRALIZADA E SEGURA - STEP 1)
     const addReview = useCallback(async (offerId: string, offerName: string, offerImage: string, rating: number, comment: string) => {
         if (!isOnline || !user || !db) return;
-
         try {
-            const reviewData: any = {
-                offerId,
-                offerName, // Snapshot do nome do produto para o painel admin
-                offerImage, // Snapshot da imagem
-                userId: user.uid,
-                userName: user.displayName || 'Usuário',
-                userPhotoURL: user.photoURL || null,
-                rating,
-                comment,
-                createdAt: serverTimestamp()
-            };
-            
-            // APENAS ADICIONA A REVIEW. A CLOUD FUNCTION 'updateOfferRating' FARÁ O CÁLCULO.
+            const reviewData: any = { offerId, offerName, offerImage, userId: user.uid, userName: user.displayName || 'Usuário', userPhotoURL: user.photoURL || null, rating, comment, createdAt: serverTimestamp() };
             await addDoc(collection(db, 'reviews'), reviewData);
-
-        } catch (error) {
-            console.error("Erro ao adicionar review:", error);
-            throw error;
-        }
+        } catch (error) { throw error; }
     }, [user, isOnline]);
 
     const deleteReview = useCallback(async (reviewId: string, offerId: string) => {
         if (!isOnline || !db) return;
-        try {
-            // APENAS DELETA A REVIEW. A CLOUD FUNCTION RECALCULA.
-            await deleteDoc(doc(db, 'reviews', reviewId));
-        } catch (error) {
-            console.error("Erro ao deletar review:", error);
-            throw error;
-        }
+        try { await deleteDoc(doc(db, 'reviews', reviewId)); } catch (error) { throw error; }
     }, [isOnline]);
 
     const getProductReviews = useCallback(async (offerId: string): Promise<Review[]> => {
         if (!db) return [];
         try {
-            // REMOVE orderBy to avoid index requirement for now
             const q = query(collection(db, 'reviews'), where('offerId', '==', offerId));
             const snapshot = await getDocs(q);
             const reviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review));
-            
-            // Client-side sort (mais recente primeiro)
             reviews.sort((a, b) => {
                 const getMillis = (d: any) => {
                     if (!d) return 0;
-                    if (d.toDate) return d.toDate().getTime(); // Firestore Timestamp
-                    if (d.seconds) return d.seconds * 1000; // Serialized Timestamp
-                    return new Date(d).getTime(); // Date string/object
+                    if (d.toDate) return d.toDate().getTime();
+                    if (d.seconds) return d.seconds * 1000;
+                    return new Date(d).getTime();
                 };
                 return getMillis(b.createdAt) - getMillis(a.createdAt);
             });
-            
             return reviews;
-        } catch (error) {
-            console.error("Erro ao buscar reviews:", error);
-            return [];
-        }
+        } catch (error) { return []; }
     }, []);
 
-    // --- FUNÇÕES DE ADMIN LOGS ---
     const logAdminAction = useCallback(async (actionType: 'create' | 'update' | 'delete' | 'login', targetName: string, details?: string) => {
         if (!isOnline || !user || !db) return;
-        
-        // Só registra se for admin
         if (user.role !== 'admin_l1' && user.role !== 'admin_l2') return;
-
         try {
-            const logData: Omit<ActivityLog, 'id'> = {
-                userId: user.uid,
-                userName: user.displayName || 'Admin',
-                userPhoto: user.photoURL,
-                actionType,
-                targetName,
-                details: details || '',
-                timestamp: serverTimestamp()
-            };
+            const logData: Omit<ActivityLog, 'id'> = { userId: user.uid, userName: user.displayName || 'Admin', userPhoto: user.photoURL, actionType, targetName, details: details || '', timestamp: serverTimestamp() };
             await addDoc(collection(db, 'admin_logs'), logData);
-        } catch (error) {
-            console.error("Erro ao registrar log:", error);
-        }
+        } catch (error) { console.error("Erro ao registrar log:", error); }
     }, [user, isOnline]);
 
     const getTeamMembers = useCallback(async (): Promise<User[]> => {
         if (!db) return [];
         try {
-            // Busca apenas usuários com role admin_l2 (Editores)
             const q = query(collection(db, 'users'), where('role', '==', 'admin_l2'));
             const snapshot = await getDocs(q);
-            
             const members: User[] = [];
             for (const docSnap of snapshot.docs) {
                 const userData = docSnap.data();
-                // Tenta complementar com dados públicos se faltar info
                 let publicInfo = {};
                 if (userData.email) {
                     try {
@@ -738,21 +669,10 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                         if(publicDoc.exists()) publicInfo = publicDoc.data();
                     } catch(e) {}
                 }
-
-                members.push({
-                    uid: docSnap.id,
-                    role: 'admin_l2',
-                    displayName: userData.displayName || (publicInfo as any).displayName || 'Membro',
-                    photoURL: userData.photoBase64 || (publicInfo as any).photoURL || null,
-                    username: userData.username || (publicInfo as any).username || null,
-                    email: userData.email || null
-                } as User);
+                members.push({ uid: docSnap.id, role: 'admin_l2', displayName: userData.displayName || (publicInfo as any).displayName || 'Membro', photoURL: userData.photoBase64 || (publicInfo as any).photoURL || null, username: userData.username || (publicInfo as any).username || null, email: userData.email || null } as User);
             }
             return members;
-        } catch (error) {
-            console.error("Erro ao buscar equipe:", error);
-            return [];
-        }
+        } catch (error) { return []; }
     }, []);
 
     const getMemberLogs = useCallback(async (userId: string): Promise<ActivityLog[]> => {
@@ -761,50 +681,12 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             const q = query(collection(db, 'admin_logs'), where('userId', '==', userId), orderBy('timestamp', 'desc'), limit(50));
             const snapshot = await getDocs(q);
             return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
-        } catch (error) {
-            console.error("Erro ao buscar logs:", error);
-            return [];
-        }
+        } catch (error) { return []; }
     }, []);
 
     return (
         <ShoppingListContext.Provider value={{
-            items,
-            history,
-            receivedHistory,
-            favorites,
-            offers,
-            savedOffers, // EXPOSTO
-            formatCurrency,
-            addItem,
-            addIngredientsBatch,
-            deleteItem,
-            updateItem,
-            deleteRecipeGroup,
-            toggleItemPurchased,
-            savePurchase,
-            finishWithoutSaving,
-            addHistoricItem,
-            repeatPurchase,
-            findDuplicate,
-            importSharedList,
-            saveReceivedListToHistory,
-            getItemHistory,
-            searchUser,
-            shareListWithEmail,
-            shareListWithPartner,
-            markReceivedListAsRead,
-            unreadReceivedCount,
-            toggleFavorite,
-            isFavorite,
-            toggleOfferSaved, // EXPOSTO
-            isOfferSaved, // EXPOSTO
-            addReview, 
-            deleteReview,
-            getProductReviews,
-            logAdminAction,
-            getTeamMembers,
-            getMemberLogs
+            items, history, receivedHistory, favorites, offers, savedOffers, participants, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, removeParticipant, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs
         }}>
             {children}
         </ShoppingListContext.Provider>
@@ -813,8 +695,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
 export const useShoppingList = (): ShoppingListContextType => {
     const context = useContext(ShoppingListContext);
-    if (context === undefined) {
-        throw new Error('useShoppingList must be used within a ShoppingListProvider');
-    }
+    if (context === undefined) throw new Error('useShoppingList must be used within a ShoppingListProvider');
     return context;
 };
