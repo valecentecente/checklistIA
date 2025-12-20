@@ -1,9 +1,8 @@
 
-// Fix: Added React import to resolve the missing namespace error for React.FC
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, getDoc, writeBatch, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth, db, isFirebaseConfigured } from '../firebase';
 import type { User, ShoppingItem, AdminInvite } from '../types';
 
 interface AuthContextType {
@@ -36,7 +35,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Fix: Use React.FC with children typing correctly after importing React
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -62,6 +60,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("Erro ao verificar username:", error);
             return true; 
         }
+    };
+
+    const generateUniqueUsername = async (baseName: string): Promise<string> => {
+        let username = baseName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (username.length < 3) username = username + Math.floor(Math.random() * 1000);
+        if (username.length > 15) username = username.substring(0, 15);
+
+        let isUnique = await checkUsernameUniqueness(username);
+        let attempts = 0;
+
+        while (!isUnique && attempts < 5) {
+            const suffix = Math.floor(Math.random() * 10000).toString();
+            const availableSpace = 15 - suffix.length;
+            const newBase = username.substring(0, availableSpace);
+            username = newBase + suffix;
+            isUnique = await checkUsernameUniqueness(username);
+            attempts++;
+        }
+        
+        if (!isUnique) {
+            username = 'user' + Date.now().toString().slice(-8);
+        }
+
+        return username;
     };
 
     const syncUserToPublicDirectory = async (currentUser: any, photoURLOverride?: string, usernameOverride?: string) => {
@@ -107,10 +129,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (data.dietaryPreferences) preferencesToUse = data.dietaryPreferences;
                     if (data.birthDate) birthDateToUse = data.birthDate;
                     if (data.role) roleToUse = data.role;
-                    if (data.username) usernameToUse = data.username;
                 }
 
-                if (currentUser.email && !usernameToUse) {
+                if (currentUser.email) {
                     const publicUserRef = doc(db, 'users_public', currentUser.email.toLowerCase());
                     const publicUserSnap = await getDoc(publicUserRef);
                     if (publicUserSnap.exists()) {
@@ -119,6 +140,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             } catch (e) {
                 console.error("Erro ao buscar dados do perfil:", e);
+                const localPhoto = localStorage.getItem(`user_photo_${currentUser.uid}`);
+                if (localPhoto) photoToUse = localPhoto;
             }
         }
 
@@ -168,7 +191,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const q = query(
             collection(db, 'admin_invites'), 
-            where('toUsername', '==', user.username.toLowerCase()), 
+            where('toUsername', '==', user.username), 
             where('status', '==', 'pending')
         );
 
@@ -221,7 +244,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             username: 'convidado',
             activeListId: 'offline-user-' + Date.now(),
             dietaryPreferences: [],
-            role: 'user' 
+            role: 'admin_l1' 
         });
         setIsAuthLoading(false);
     };
@@ -239,7 +262,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.setItem('remembered_email', email);
             await migrateGuestData(result.user.uid);
         } catch (error: any) {
+            console.error("Email Login Error Trace:", error);
             const errorCode = error.code || '';
+            
             if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
                 setAuthErrorCode('INVALID_CREDENTIALS');
                 setAuthError("E-mail ou senha incorretos.");
@@ -269,14 +294,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             const result = await createUserWithEmailAndPassword(auth, email, pass);
-            await updateProfile(result.user, { displayName: name });
+            await updateProfile(result.user, {
+                displayName: name
+            });
             localStorage.setItem('remembered_email', email);
             
             if (db) {
                 const userDocRef = doc(db, 'users', result.user.uid);
                 await setDoc(userDocRef, { 
                     birthDate: birthDate,
-                    username: cleanUsername,
                     role: 'user' 
                 }, { merge: true });
             }
@@ -284,7 +310,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await syncUserToPublicDirectory({ ...result.user, displayName: name }, undefined, cleanUsername);
             await migrateGuestData(result.user.uid);
 
+            const newUser: User = {
+                uid: result.user.uid,
+                displayName: name,
+                email: result.user.email,
+                photoURL: result.user.photoURL,
+                username: cleanUsername,
+                activeListId: result.user.uid,
+                dietaryPreferences: [],
+                birthDate: birthDate,
+                role: 'user'
+            };
+            setUser(newUser);
+
         } catch (error: any) {
+            console.error("Registration Error:", error);
             const errorCode = error.code || '';
             if (errorCode === 'auth/email-already-in-use') {
                 setAuthErrorCode('EMAIL_IN_USE');
@@ -321,10 +361,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const history = user.usernameChangeHistory || [];
             const newHistory = [...history, new Date().toISOString()];
             const userDocRef = doc(db, 'users', auth.currentUser.uid);
-            await setDoc(userDocRef, { 
-                username: cleanUsername,
-                usernameChangeHistory: newHistory 
-            }, { merge: true });
+            await setDoc(userDocRef, { usernameChangeHistory: newHistory }, { merge: true });
 
             setUser(prev => prev ? ({ ...prev, username: cleanUsername, usernameChangeHistory: newHistory }) : null);
 
@@ -409,17 +446,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            await signInWithPopup(auth, provider);
-            // Sync logic in onAuthStateChanged
+            const result = await signInWithPopup(auth, provider);
+            let finalUsername = undefined;
+            if (db && result.user.email) {
+                const publicUserRef = doc(db, 'users_public', result.user.email.toLowerCase());
+                const publicUserSnap = await getDoc(publicUserRef);
+                if (!publicUserSnap.exists()) {
+                    finalUsername = await generateUniqueUsername(result.user.email.split('@')[0]);
+                }
+            }
+            await migrateGuestData(result.user.uid);
+            await syncUserToPublicDirectory(result.user, undefined, finalUsername);
         } catch (error: any) {
             console.error("Google Login Error Trace:", error);
             const errorCode = error.code || '';
-            const errorMsg = error.message || '';
-            
-            // Detecção robusta de domínio não autorizado
-            if (errorCode === 'auth/unauthorized-domain' || errorMsg.includes('auth/unauthorized-domain')) {
+            if (errorCode === 'auth/unauthorized-domain') {
                  setAuthErrorCode('DOMAIN_ERROR');
-                 setAuthError(`Domínio não autorizado.`);
+                 setAuthError(`Domínio não autorizado: ${window.location.hostname}`);
             } else if (errorCode !== 'auth/popup-closed-by-user') {
                 setAuthError(`Erro ao entrar com Google: ${error.message}`);
             }
@@ -436,29 +479,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const sendAdminInvite = async (username: string, level: 'admin_l1' | 'admin_l2') => {
         if (!db || !user) return { success: false, message: 'Erro interno.' };
         try {
-            const cleanUsername = username.toLowerCase().replace('@', '').trim();
-            const q = query(collection(db, 'users_public'), where('username', '==', cleanUsername));
+            const q = query(collection(db, 'users_public'), where('username', '==', username.toLowerCase()));
             const querySnapshot = await getDocs(q);
-            
-            if (querySnapshot.empty) {
-                return { success: false, message: `Usuário @${cleanUsername} não encontrado.` };
-            }
-            
+            if (querySnapshot.empty) return { success: false, message: 'Usuário não encontrado.' };
             const targetUser = querySnapshot.docs[0].data();
             if (targetUser.uid === user.uid) return { success: false, message: 'Você não pode convidar a si mesmo.' };
-            
-            await addDoc(collection(db, 'admin_invites'), { 
-                fromUid: user.uid, 
-                fromName: user.displayName, 
-                toUsername: cleanUsername, 
-                level: level, 
-                status: 'pending', 
-                createdAt: serverTimestamp() 
-            });
-            
-            return { success: true, message: `Convite enviado para @${cleanUsername}` };
+            await addDoc(collection(db, 'admin_invites'), { fromUid: user.uid, fromName: user.displayName, toUsername: username.toLowerCase(), level: level, status: 'pending', createdAt: serverTimestamp() });
+            return { success: true, message: `Convite enviado para @${username}` };
         } catch (error) {
-            console.error("Erro ao enviar convite:", error);
             return { success: false, message: 'Falha ao enviar convite.' };
         }
     };

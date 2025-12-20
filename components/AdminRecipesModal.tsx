@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, limit } from 'firebase/firestore';
 import { GoogleGenAI, Type } from "@google/genai";
 import { db } from '../firebase';
 import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
@@ -21,7 +21,8 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     useEffect(() => {
         if (!isOpen || !db) return;
         setIsLoading(true);
-        const q = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'));
+        // OTIMIZAÇÃO: Adiciona limite para não carregar o BD inteiro
+        const q = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const loadedRecipes: RecipeWithId[] = [];
             snapshot.forEach(doc => {
@@ -121,7 +122,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             <span className="material-symbols-outlined text-orange-400">menu_book</span>
                             Gestão de Acervo
                         </h2>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">IA Granular Tagging Engine</p>
+                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">IA Granular Tagging Engine (Exibindo últimos 100)</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors">
                         <span className="material-symbols-outlined">close</span>
@@ -149,7 +150,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                         )}
                     </div>
                     <div className="flex items-center text-[10px] font-bold text-gray-500 gap-4 px-2 uppercase shrink-0">
-                        <span>Total: {recipes.length}</span>
+                        <span>Carregados: {recipes.length}</span>
                         <span className="text-blue-500 bg-blue-500/10 px-2 py-1 rounded">Média de Tags: {Math.round(recipes.reduce((acc, r) => acc + (r.tags?.length || 0), 0) / (recipes.length || 1))}</span>
                     </div>
                 </div>

@@ -9,6 +9,59 @@ import { useAuth } from './AuthContext';
 
 export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
+const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
+const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 6; 
+
+// --- CATÁLOGO DE SOBREVIVÊNCIA (HARDCODED FALLBACK) ---
+// Estas receitas garantem que o app funcione mesmo se o Firestore estiver com cota estourada.
+const SURVIVAL_RECIPES: FullRecipe[] = [
+    {
+        name: "Omelete de Ervas",
+        ingredients: [{simplifiedName: "Ovos", detailedName: "3 ovos"}, {simplifiedName: "Queijo", detailedName: "50g de queijo muçarela"}, {simplifiedName: "Cebolinha", detailedName: "1 colher de cebolinha picada"}],
+        instructions: ["Bata os ovos", "Aqueça a frigideira", "Doure dos dois lados com o queijo"],
+        imageQuery: "omelete gourmet com ervas",
+        servings: "1 pessoa", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1510627489930-0c1b0ba0fa3e?auto=format&fit=crop&w=800&q=80",
+        tags: ["ovo", "café da manhã", "rápido", "proteína", "fit"]
+    },
+    {
+        name: "Macarrão Alho e Óleo",
+        ingredients: [{simplifiedName: "Macarrão", detailedName: "250g de espaguete"}, {simplifiedName: "Alho", detailedName: "4 dentes de alho fatiados"}, {simplifiedName: "Azeite", detailedName: "3 colheres de azeite"}],
+        instructions: ["Cozinhe a massa", "Frite o alho no azeite", "Misture tudo"],
+        imageQuery: "espaguete alho e óleo",
+        servings: "2 pessoas", prepTimeInMinutes: 15, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80",
+        tags: ["massa", "almoço", "rápido", "barato", "vegano"]
+    },
+    {
+        name: "Salada Tropical",
+        ingredients: [{simplifiedName: "Alface", detailedName: "1 pé de alface"}, {simplifiedName: "Manga", detailedName: "1 manga picada"}, {simplifiedName: "Castanhas", detailedName: "50g de castanhas"}],
+        instructions: ["Lave as folhas", "Pique a manga", "Misture com o molho de sua preferência"],
+        imageQuery: "salada colorida com manga",
+        servings: "2 pessoas", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
+        tags: ["salada", "leve", "saudável", "fit", "fruta"]
+    },
+    {
+        name: "Arroz Soltinho",
+        ingredients: [{simplifiedName: "Arroz", detailedName: "1 xícara de arroz agulhinha"}, {simplifiedName: "Cebola", detailedName: "Meia cebola picada"}],
+        instructions: ["Refogue a cebola", "Frite o arroz", "Adicione 2 xícaras de água e cozinhe"],
+        imageQuery: "arroz branco soltinho",
+        servings: "4 pessoas", prepTimeInMinutes: 20, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1516684732162-798a0062be99?auto=format&fit=crop&w=800&q=80",
+        tags: ["acompanhamento", "base", "arroz", "barato"]
+    },
+    {
+        name: "Smoothie de Morango",
+        ingredients: [{simplifiedName: "Morango", detailedName: "1 xícara de morangos congelados"}, {simplifiedName: "Iogurte", detailedName: "1 pote de iogurte natural"}],
+        instructions: ["Bata tudo no liquidificador", "Sirva gelado"],
+        imageQuery: "smoothie rosa morango",
+        servings: "1 pessoa", prepTimeInMinutes: 5, difficulty: "Fácil", cost: "Médio", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?auto=format&fit=crop&w=800&q=80",
+        tags: ["bebida", "suco", "doce", "fit", "café da manhã"]
+    }
+];
+
 interface AppContextType {
     // Modal States
     isAddItemModalOpen: boolean;
@@ -309,21 +362,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [isFocusMode, setFocusMode] = useState(false);
     const [pendingAction, setPendingAction] = useState<string | null>(null);
     
-    const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>([]);
+    const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>(SURVIVAL_RECIPES); // Inicia com catálogo de sobrevivência
     const [recipeSuggestions, setRecipeSuggestions] = useState<FullRecipe[]>([]);
     const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
     const [currentTheme, setCurrentTheme] = useState<string | null>(null);
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
-    const [totalRecipeCount, setTotalRecipeCount] = useState(0);
+    const [totalRecipeCount, setTotalRecipeCount] = useState(SURVIVAL_RECIPES.length);
     const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
-    const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>([]);
+    const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>(SURVIVAL_RECIPES);
 
     const [recipeSearchResults, setRecipeSearchResults] = useState<FullRecipe[]>([]);
     const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
-    // Guideline check: Obtain API key exclusively from environment variable
     const apiKey = process.env.API_KEY as string;
     
     const isSuperAdmin = user?.role === 'admin_l1';
@@ -441,38 +493,82 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return sorted.map(s => s.recipe);
     }, [scheduleRules, user?.dietaryPreferences]);
 
-    // Carregar dados e ordenar destaque
+    // Carregar dados e ordenar destaque com Cache Local para evitar estouro de cota
     useEffect(() => {
         if (!db) return;
         const loadData = async () => {
+            // Tenta carregar do cache local primeiro
+            const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
+            let fallbackCache = null;
+
+            if (cachedString) {
+                try {
+                    const cache = JSON.parse(cachedString);
+                    fallbackCache = cache; // Guarda para fallback se o fetch falhar
+                    const isExpired = (Date.now() - cache.timestamp) > RECIPE_CACHE_TTL;
+                    if (!isExpired) {
+                        setAllRecipesPool(cache.pool);
+                        setGlobalRecipeCache(cache.cache);
+                        setTotalRecipeCount(cache.count);
+                        return; // Cache válido, interrompe fetch
+                    }
+                } catch (e) {
+                    localStorage.removeItem(RECIPE_CACHE_KEY);
+                }
+            }
+
             try {
-                const qFeatured = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(50));
-                const snapshotFeatured = await getDocs(qFeatured);
-                const recipesPool: FullRecipe[] = [];
-                snapshotFeatured.forEach(doc => {
+                // OTIMIZAÇÃO: Fazemos apenas uma busca maior e dividimos os arrays localmente
+                const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
+                const snapshotFetch = await getDocs(qFetch);
+                
+                const fetchedRecipes: FullRecipe[] = [];
+                snapshotFetch.forEach(doc => {
                     const data = doc.data() as FullRecipe;
                     if (data.name && data.imageUrl && data.ingredients && data.ingredients.length > 0) {
-                        recipesPool.push({ ...data, imageSource: 'cache' });
+                        fetchedRecipes.push({ ...data, imageSource: 'cache' });
                     }
                 });
 
-                setAllRecipesPool(recipesPool);
+                // Se Firestore retornou vazio (improvável mas possível), usa fallback
+                const finalRecipes = fetchedRecipes.length > 0 ? fetchedRecipes : (fallbackCache?.cache || SURVIVAL_RECIPES);
+                const pool = finalRecipes.slice(0, 50);
+                const cache = finalRecipes;
 
-                const qCache = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(300));
-                const snapshotCache = await getDocs(qCache);
-                const cachedRecipes: FullRecipe[] = [];
-                snapshotCache.forEach(doc => {
-                    const data = doc.data() as FullRecipe;
-                    if (data.name && data.imageUrl && data.ingredients && data.ingredients.length > 0) {
-                        cachedRecipes.push({ ...data, imageSource: 'cache' });
-                    }
-                });
-                setGlobalRecipeCache(cachedRecipes);
+                setAllRecipesPool(pool);
+                setGlobalRecipeCache(cache);
 
-                const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
-                setTotalRecipeCount(countSnapshot.data().count);
-            } catch (error) {
-                console.error("Error loading recipes:", error);
+                let totalCount = finalRecipes.length;
+                try {
+                    const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
+                    totalCount = countSnapshot.data().count;
+                } catch (e) { /* ignore count error */ }
+                
+                setTotalRecipeCount(totalCount);
+
+                // Salva no cache local
+                localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({
+                    timestamp: Date.now(),
+                    pool: pool,
+                    cache: cache,
+                    count: totalCount
+                }));
+
+            } catch (error: any) {
+                console.warn("Firestore Quota/Network error. Using survival fallback.", error.message);
+                
+                // FALLBACK DE EMERGÊNCIA
+                if (fallbackCache) {
+                    setAllRecipesPool(fallbackCache.pool);
+                    setGlobalRecipeCache(fallbackCache.cache);
+                    setTotalRecipeCount(fallbackCache.count);
+                    showToast("Limite de cota atingido. Usando catálogo offline.");
+                } else {
+                    // Sem cache nenhum? Usa os fundamentais do código
+                    setAllRecipesPool(SURVIVAL_RECIPES);
+                    setGlobalRecipeCache(SURVIVAL_RECIPES);
+                    setTotalRecipeCount(SURVIVAL_RECIPES.length);
+                }
             }
         };
         loadData();
@@ -578,7 +674,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             favorites,
             featuredRecipes,
             recipeSuggestions,
-            globalRecipeCache
+            globalRecipeCache,
+            SURVIVAL_RECIPES
         ];
 
         for (const cache of allCaches) {
@@ -594,7 +691,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const getRandomCachedRecipe = useCallback((): FullRecipe | null => {
-        if (globalRecipeCache.length === 0) return null;
+        if (globalRecipeCache.length === 0) return SURVIVAL_RECIPES[0];
         const randomIndex = Math.floor(Math.random() * globalRecipeCache.length);
         return globalRecipeCache[randomIndex];
     }, [globalRecipeCache]);
@@ -669,9 +766,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const generateRecipeImageBackground = async (recipe: FullRecipe) => {
-        if (!process.env.API_KEY) return;
+        if (!apiKey) return;
         try {
-             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+             const ai = new GoogleGenAI({ apiKey });
              const response: any = await callGenAIWithRetry(() => ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
                  contents: {
@@ -680,33 +777,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  config: { responseModalities: [Modality.IMAGE] },
              }), 3);
 
-             for (const part of response.candidates?.[0]?.content?.parts || []) {
-                if (part.inlineData) {
-                    const base64ImageBytes = part.inlineData.data;
-                    const mimeType = part.inlineData.mimeType || 'image/jpeg';
-                    const generatedUrl = `data:${mimeType};base64,${base64ImageBytes}`;
-                    
-                    handleRecipeImageGenerated(recipe.name, generatedUrl, 'genai');
+             const part = response.candidates?.[0]?.content?.parts?.[0];
+             if (part?.inlineData) {
+                 const base64ImageBytes = part.inlineData.data;
+                 const mimeType = part.inlineData.mimeType || 'image/jpeg';
+                 const generatedUrl = `data:${mimeType};base64,${base64ImageBytes}`;
+                 
+                 handleRecipeImageGenerated(recipe.name, generatedUrl, 'genai');
 
-                    if (db) {
-                        try {
-                            const compressedUrl = await compressImageForStorage(generatedUrl);
-                            const docId = recipe.name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
-                            
-                            await setDoc(doc(db, 'global_recipes', docId), {
-                                ...recipe,
-                                imageUrl: compressedUrl, 
-                                imageSource: 'genai', 
-                                createdAt: serverTimestamp()
-                            }, { merge: true });
-                        } catch (err: any) {
-                            if (!ignorePermissionError(err)) {
-                                console.error("Erro ao salvar no acervo:", err);
-                            }
-                        }
-                    }
-                    break;
-                }
+                 if (db) {
+                     try {
+                         const compressedUrl = await compressImageForStorage(generatedUrl);
+                         const docId = recipe.name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
+                         
+                         await setDoc(doc(db, 'global_recipes', docId), {
+                             ...recipe,
+                             imageUrl: compressedUrl, 
+                             imageSource: 'genai', 
+                             createdAt: serverTimestamp()
+                         }, { merge: true });
+                     } catch (err: any) {
+                         if (!ignorePermissionError(err)) {
+                             console.error("Erro ao salvar no acervo:", err);
+                         }
+                     }
+                 }
              }
         } catch (error) {
             console.warn("Imagem não gerada:", error);
@@ -742,7 +837,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const snapTag = await getDocs(qTag);
             snapTag.forEach(doc => {
                 const data = doc.data() as FullRecipe;
-                if (data.name) tagResults.push({ ...data, id: doc.id });
+                if (data.name) tagResults.push({ ...data, imageSource: 'cache' });
             });
 
             const mergedMap = new Map<string, FullRecipe>();
@@ -820,7 +915,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             } catch (e) {}
         }
 
-        if (!process.env.API_KEY) {
+        if (!apiKey) {
             setRecipeError("Chave de IA não configurada.");
             return;
         }
@@ -828,7 +923,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsRecipeLoading(true);
         setRecipeError(null);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey });
             let systemPrompt = `Você é um assistente culinário especialista. Gere uma receita completa em JSON.`;
             
             if (recipeName && !imageBase64) {
@@ -925,8 +1020,8 @@ Format:
             if (itemsToCategorize.length === 0) { setGroupingMode('aisle'); closeModal('options'); return; }
             setIsOrganizing(true);
             try {
-                if (!process.env.API_KEY) throw new Error("API Key missing");
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                if (!apiKey) throw new Error("API Key missing");
+                const ai = new GoogleGenAI({ apiKey });
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue e Peixaria", "🧀 Frios e Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene Pessoal", "🐾 Pets", "🏠 Utilidades Domésticas", "❓ Outros" ];
                 
                 const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -966,13 +1061,8 @@ Format:
         showRecipe(recipe);
     };
 
-    const stopSharing = () => {
-        setIsSharedSession(false);
-        showToast("Sessão individual reativada.");
-    };
-
     const getCategoryRecipesSync = useCallback((categoryKey: string): FullRecipe[] => {
-        const pool = globalRecipeCache.length > 0 ? globalRecipeCache : allRecipesPool;
+        const pool = globalRecipeCache.length > 0 ? globalRecipeCache : SURVIVAL_RECIPES;
         
         const matches = (r: FullRecipe, terms: string[]) => {
             const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
@@ -1007,7 +1097,7 @@ Format:
             default:
                 return pool.slice(0, 10);
         }
-    }, [globalRecipeCache, allRecipesPool, isDrinkRecipe]);
+    }, [globalRecipeCache, SURVIVAL_RECIPES, isDrinkRecipe]);
 
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
         return getCategoryRecipesSync(categoryKey);
@@ -1086,7 +1176,7 @@ Format:
         isSuperAdmin,
         smartNudgeItemName,
         currentMarketName, setCurrentMarketName,
-        isSharedSession, setIsSharedSession, stopSharing,
+        isSharedSession, setIsSharedSession,
         historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab),
         isHomeViewActive, setHomeViewActive,
         isFocusMode, setFocusMode,

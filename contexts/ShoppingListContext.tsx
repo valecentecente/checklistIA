@@ -20,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
-import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog, Invitation } from '../types';
+import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog } from '../types';
 
 interface ShoppingListContextType {
     items: ShoppingItem[];
@@ -29,7 +29,6 @@ interface ShoppingListContextType {
     favorites: FullRecipe[];
     offers: Offer[];
     savedOffers: Offer[]; 
-    participants: Invitation[];
     formatCurrency: (value: number) => string;
     addItem: (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => Promise<void>;
     addIngredientsBatch: (items: any[]) => Promise<void>;
@@ -48,7 +47,6 @@ interface ShoppingListContextType {
     searchUser: (identifier: string) => Promise<AuthorMetadata | null>;
     shareListWithEmail: (purchase: PurchaseRecord, identifier: string) => Promise<{ success: boolean; type: 'direct' | 'link'; shareUrl?: string; recipientName?: string }>;
     shareListWithPartner: (identifier: string, listToShareId: string) => Promise<{ success: boolean; message: string; inviteId?: string }>;
-    removeParticipant: (invitationId: string) => Promise<void>;
     markReceivedListAsRead: (id: string) => Promise<void>;
     unreadReceivedCount: number;
     toggleFavorite: (recipe: FullRecipe) => Promise<void>;
@@ -73,7 +71,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [favorites, setFavorites] = useState<FullRecipe[]>([]);
     const [savedOffers, setSavedOffers] = useState<Offer[]>([]); 
     const [offers, setOffers] = useState<Offer[]>([]);
-    const [participants, setParticipants] = useState<Invitation[]>([]);
 
     const STORAGE_KEY = 'guestShoppingList';
     const HISTORY_STORAGE_KEY = 'guestShoppingHistory';
@@ -111,30 +108,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         });
         return () => unsubscribeOffers();
     }, []);
-
-    // LISTENER DE PARTICIPANTES DA SESSÃO
-    useEffect(() => {
-        if (!user || !db || user.uid.startsWith('offline-user-')) {
-            setParticipants([]);
-            return;
-        }
-
-        const q = query(
-            collection(db, 'invitations'), 
-            where('fromUid', '==', user.uid),
-            where('listId', '==', user.uid)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const loadedParticipants = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Invitation));
-            setParticipants(loadedParticipants);
-        });
-
-        return () => unsubscribe();
-    }, [user]);
 
     useEffect(() => {
         if (!user || user.uid.startsWith('offline-user-')) {
@@ -432,16 +405,21 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         await addItem(newItem);
     }, [addItem]);
 
+    // MELHORADO: repeatPurchase agora restaura TUDO exatamente como estava
     const repeatPurchase = useCallback(async (purchase: PurchaseRecord) => {
+        // Mapeia os itens mantendo o preço calculado e o status de comprado
         const itemsToAdd = purchase.items.map(i => ({
             name: i.name,
             calculatedPrice: i.calculatedPrice,
             details: i.details,
             recipeName: purchase.marketName || 'Retomado',
             isNew: true,
-            isPurchased: true 
+            isPurchased: true // Retoma como comprado para continuar a soma
         }));
+
+        // Ativa o nome do mercado no app se ele existir
         window.dispatchEvent(new CustomEvent('restoreMarketName', { detail: purchase.marketName }));
+
         await addIngredientsBatch(itemsToAdd);
         return { message: `${itemsToAdd.length} itens retomados com sucesso!` };
     }, [addIngredientsBatch]);
@@ -549,27 +527,10 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
              return { success: false, message: "Parceiro(a) não encontrado(a) ou é você mesmo." };
         }
         const inviteRef = await addDoc(collection(db, 'invitations'), {
-            fromUid: user.uid, 
-            toUid: partnerData.uid, 
-            toDisplayName: partnerData.displayName,
-            toPhotoURL: partnerData.photoURL || null,
-            listId: listToShareId, 
-            status: 'pending', 
-            marketName: "Lista Compartilhada", 
-            createdAt: serverTimestamp(), 
-            fromName: user.displayName || 'Alguém'
+            fromUid: user.uid, toUid: partnerData.uid, listId: listToShareId, status: 'pending', marketName: "Lista Compartilhada", createdAt: serverTimestamp(), fromName: user.displayName || 'Alguém'
         });
         return { success: true, message: `Convite enviado para ${partnerData.displayName || 'parceiro(a)'}.`, inviteId: inviteRef.id };
     }, [user, searchUser, isOnline]);
-
-    const removeParticipant = useCallback(async (invitationId: string) => {
-        if (!db) return;
-        try {
-            await deleteDoc(doc(db, 'invitations', invitationId));
-        } catch (error) {
-            console.error("Erro ao remover participante:", error);
-        }
-    }, []);
 
     const normalizeRecipeId = (str: string) => {
         return str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_"); 
@@ -686,7 +647,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     return (
         <ShoppingListContext.Provider value={{
-            items, history, receivedHistory, favorites, offers, savedOffers, participants, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, removeParticipant, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs
+            items, history, receivedHistory, favorites, offers, savedOffers, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs
         }}>
             {children}
         </ShoppingListContext.Provider>

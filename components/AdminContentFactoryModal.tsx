@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
-import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -60,19 +60,16 @@ export const AdminContentFactoryModal: React.FC = () => {
         if (!db) return;
         setIsStatsLoading(true);
         try {
-            const querySnapshot = await getDocs(collection(db, 'global_recipes'));
-            const allRecipes: FullRecipe[] = [];
-            querySnapshot.forEach(doc => allRecipes.push(doc.data() as FullRecipe));
-
-            const stats = baseCategories.map(cat => {
+            // OTIMIZAÇÃO CRÍTICA: Usa getCountFromServer por categoria em vez de carregar tudo
+            const stats = await Promise.all(baseCategories.map(async (cat) => {
                 const searchLabel = cat.toLowerCase().replace(' / datas comemorativas', '');
-                const count = allRecipes.filter(r => {
-                    const hasTag = r.tags?.some(t => t.toLowerCase().includes(searchLabel));
-                    const hasName = r.name.toLowerCase().includes(searchLabel);
-                    return hasTag || hasName;
-                }).length;
-                return { name: cat, count };
-            });
+                
+                // Realizamos a contagem diretamente no servidor (contagem = 1 read por categoria aprox)
+                const qTags = query(collection(db, 'global_recipes'), where('tags', 'array-contains', searchLabel));
+                const countSnap = await getCountFromServer(qTags);
+                
+                return { name: cat, count: countSnap.data().count };
+            }));
 
             const sortedStats = stats.sort((a, b) => a.count - b.count);
             setCategoryStats(sortedStats);

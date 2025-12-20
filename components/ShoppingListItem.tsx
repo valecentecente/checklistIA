@@ -46,9 +46,9 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
         <p className={textClasses}>
             {item.name}
         </p>
-         {/* Detalhes ocultos em mobile (hidden) e visíveis em desktop (lg:block) */}
+         {/* Detalhes (Peso/Qtd) agora visíveis sempre, com estilo refinado */}
          {showDetails && (
-             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium hidden lg:block">
+             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
                 {item.details}
              </p>
          )}

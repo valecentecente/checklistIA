@@ -544,7 +544,7 @@ const AppContent: React.FC = () => {
                             {purchasedItemsCount > 0 && <span className="absolute -top-1 -right-1 bg-green-600 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-sm animate-bounce border border-white dark:border-surface-dark">{purchasedItemsCount}</span>}
                           </button>
                           {app.isSharedSession ? (
-                             <button onClick={() => app.openModal('shareList')} className="flex -space-x-3 items-center relative animate-fadeIn hover:scale-105 transition-transform" title="Gerenciar Compartilhamento">
+                             <div className="flex -space-x-3 items-center relative animate-fadeIn" title="Sincronizado">
                                 <div className="relative z-10 rounded-full ring-2 ring-background-light dark:ring-background-dark">
                                     {user?.photoURL ? (<img src={user.photoURL} alt="Você" className="w-9 h-9 rounded-full object-cover" />) : (<div className="w-9 h-9 rounded-full bg-orange-200 flex items-center justify-center text-orange-800"><span className="material-symbols-outlined text-lg">person</span></div>)}
                                 </div>
@@ -552,7 +552,7 @@ const AppContent: React.FC = () => {
                                     <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white"><span className="material-symbols-outlined text-lg">group</span></div>
                                 </div>
                                 <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border border-white dark:border-gray-800 animate-pulse"></div>
-                             </button>
+                             </div>
                           ) : (
                              <button onClick={() => { if (!user) app.openModal('auth'); else app.openModal('shareList'); }} className="h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors" title="Compartilhar Lista">
                                 <span className="material-symbols-outlined">person_add</span>

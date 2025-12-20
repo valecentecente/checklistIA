@@ -39,9 +39,9 @@ const ReceivedListItem: React.FC<{ record: ReceivedListRecord; onProfileClick: (
     const formattedDate = receivedDate.toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
     return (
-        <button onClick={onClick} className={`w-full text-left p-4 rounded-lg bg-surface-light dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border border-border-light dark:border-border-dark flex items-center gap-4 relative ${!record.read ? 'border-l-4 border-l-primary shadow-sm' : ''}`}>
+        <button onClick={onClick} className={`w-full text-left p-4 rounded-lg bg-surface-light dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border border-border-light dark:border-border-dark flex items-center gap-4 relative ${!record.read ? 'border-l-4 border-l-primary' : ''}`}>
             {!record.read && (
-                <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shadow-sm"></span>
+                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
             )}
             
             {record.author && (
@@ -240,7 +240,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                 </button>
                             </header>
                             <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-black/20">
-                                {/* BOTÃO DE RETOMAR */}
+                                {/* BOTÃO DE RETOMAR: Grande e azul para indicar que "não acabou" */}
                                 <button 
                                     onClick={() => handleReactivate(selectedPurchase)} 
                                     className="w-full flex items-center justify-center gap-3 h-14 mb-4 rounded-2xl bg-blue-600 text-white font-black shadow-lg hover:bg-blue-700 transition-all active:scale-95"
@@ -318,7 +318,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                          <>
                             <header className="flex-shrink-0 bg-surface-light dark:bg-surface-dark border-b border-gray-200 dark:border-gray-700">
                                 <div className="flex items-center justify-between p-4 pb-0">
-                                    <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">Centro de Mensagens</h2>
+                                    <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">Histórico</h2>
                                     <button onClick={handleClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-text-secondary-light dark:text-text-secondary-dark"><span className="material-symbols-outlined">close</span></button>
                                 </div>
                                 <div className="flex px-4 mt-4 gap-6">
@@ -341,20 +341,19 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                     )
                                 ) : (
                                     <div className="flex flex-col gap-3">
-                                        {/* UNIFICAÇÃO: Convite de Equipe agora aparece integrado na lista de Recebidos */}
+                                        {/* UNIFICAÇÃO: Se houver convite pendente, ele aparece aqui em destaque */}
                                         {pendingAdminInvite && (
-                                            <div className="bg-gradient-to-r from-indigo-600 to-blue-700 p-4 rounded-xl shadow-xl flex items-center gap-4 animate-bounce-y border border-white/20">
-                                                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white shrink-0 backdrop-blur-md">
-                                                    <span className="material-symbols-outlined text-2xl">admin_panel_settings</span>
+                                            <div className="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/50 flex items-center gap-4 animate-bounce-y">
+                                                <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center text-white shrink-0 shadow-lg">
+                                                    <span className="material-symbols-outlined">admin_panel_settings</span>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-black text-white/70 uppercase tracking-widest mb-0.5">Convite Especial</p>
-                                                    <p className="text-sm font-bold text-white">Equipe ChecklistIA</p>
-                                                    <p className="text-[10px] text-white/80 line-clamp-1">De: {pendingAdminInvite.fromName}</p>
+                                                    <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200">Convite de Equipe</p>
+                                                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 line-clamp-1">De: {pendingAdminInvite.fromName}</p>
                                                 </div>
                                                 <button 
                                                     onClick={() => { onClose(); setTimeout(() => openModal('adminInvite'), 300); }}
-                                                    className="bg-white text-indigo-700 text-[10px] font-black uppercase px-4 py-2.5 rounded-lg shadow-lg active:scale-95 transition-all"
+                                                    className="bg-indigo-600 text-white text-[10px] font-black uppercase px-3 py-2 rounded-lg shadow-sm"
                                                 >
                                                     Ver
                                                 </button>
@@ -369,7 +368,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                         ) : !pendingAdminInvite && (
                                             <div className="flex flex-col items-center justify-center h-64 text-center">
                                                 <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">share</span>
-                                                <p className="text-gray-500 dark:text-gray-400 font-medium">Sua caixa de entrada está vazia.</p>
+                                                <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma lista recebida.</p>
                                             </div>
                                         )}
                                     </div>
