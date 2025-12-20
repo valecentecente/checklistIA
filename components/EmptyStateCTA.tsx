@@ -27,7 +27,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         if (displayRecipes.length <= 1) return;
         const interval = setInterval(() => {
             setCurrentBannerIndex(prev => (prev + 1) % displayRecipes.length);
-        }, 6000); 
+        }, 7000); 
         return () => clearInterval(interval);
     }, [displayRecipes.length]);
 
@@ -51,26 +51,27 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             { id: 'random', label: "Surpresa", key: "random" },
         ];
 
-        const usedImageUrls = new Set<string>(displayRecipes.map(r => r.imageUrl).filter(Boolean) as string[]);
+        // Rastreia URLs já usadas para forçar variedade visual
+        const usedImageUrls = new Set<string>();
+        // Adiciona as imagens dos banners da vitrine para não repetir nelas logo abaixo
+        displayRecipes.forEach(r => { if(r.imageUrl) usedImageUrls.add(r.imageUrl); });
 
         return baseCategories.map(cat => {
             const recipes = getCategoryRecipes(cat.key);
             const count = recipes.length;
             
-            // Lógica de Diversidade Visual: Tenta achar uma receita sólida para a capa primeiro
-            // (a menos que a categoria seja especificamente de bebidas, o que não é o caso das baseCategories aqui)
+            // Tenta achar uma receita com imagem única que não esteja no banner
             let uniqueRecipe = recipes.find(r => 
                 r.imageUrl && 
                 !usedImageUrls.has(r.imageUrl) && 
-                !isLiquid(r) // Prioriza sólidos
+                !isLiquid(r)
             );
 
-            // Se não achar um sólido novo, pega qualquer um novo
             if (!uniqueRecipe) {
                 uniqueRecipe = recipes.find(r => r.imageUrl && !usedImageUrls.has(r.imageUrl));
             }
 
-            const coverRecipe = uniqueRecipe || recipes[0];
+            const coverRecipe = uniqueRecipe || recipes.find(r => r.imageUrl) || recipes[0];
             const coverImage = coverRecipe?.imageUrl;
 
             if (coverImage) {
@@ -123,6 +124,19 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return "Sugestões para Você";
     };
 
+    // Helper para gerar um gradiente de fallback baseado no nome da receita
+    const getFallbackGradient = (name: string) => {
+        const colors = [
+            'from-orange-400 to-red-500',
+            'from-green-400 to-teal-500',
+            'from-blue-400 to-indigo-500',
+            'from-purple-400 to-pink-500',
+            'from-yellow-400 to-orange-500'
+        ];
+        const index = name.length % colors.length;
+        return colors[index];
+    };
+
     return (
         <div className="flex flex-col gap-6 animate-fadeIn pb-6">
             
@@ -132,19 +146,25 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             </div>
 
             {displayRecipes.length > 0 ? (
-                <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group">
+                <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group bg-slate-800">
                     {displayRecipes.map((recipe, index) => (
                         <div 
                             key={index}
                             onClick={() => handleBannerClick(recipe)}
-                            className={`absolute inset-0 transition-opacity duration-700 ease-in-out cursor-pointer ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out cursor-pointer ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                         >
-                            <div 
-                                className="absolute inset-0 bg-cover bg-center transition-transform duration-[10000ms] ease-linear transform group-hover:scale-105"
-                                style={{ backgroundImage: `url(${recipe.imageUrl})` }}
-                            ></div>
+                            {recipe.imageUrl ? (
+                                <div 
+                                    className="absolute inset-0 bg-cover bg-center transition-transform duration-[15000ms] ease-linear transform scale-100 group-hover:scale-110"
+                                    style={{ backgroundImage: `url(${recipe.imageUrl})` }}
+                                ></div>
+                            ) : (
+                                <div className={`absolute inset-0 bg-gradient-to-br ${getFallbackGradient(recipe.name)} flex items-center justify-center`}>
+                                    <span className="material-symbols-outlined text-6xl text-white/20">restaurant</span>
+                                </div>
+                            )}
                             
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent"></div>
 
                             <div className="absolute bottom-0 left-0 p-5 w-full text-white">
                                 <div className="flex gap-2 mb-2">
@@ -186,11 +206,11 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 >
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/food.png')] opacity-10"></div>
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-white">
-                        <div className="bg-white/20 p-3 sm:p-4 rounded-full mb-2 sm:mb-3 backdrop-blur-sm animate-pulse">
-                            <span className="material-symbols-outlined text-3xl sm:text-4xl">menu_book</span>
+                        <div className="bg-white/20 p-4 rounded-full mb-3 backdrop-blur-sm animate-pulse">
+                            <span className="material-symbols-outlined text-4xl">menu_book</span>
                         </div>
-                        <h2 className="text-xl sm:text-2xl font-bold mb-1">Livro de Receitas</h2>
-                        <p className="text-xs sm:text-sm font-medium opacity-90 max-w-[260px] sm:max-w-[300px] leading-relaxed">
+                        <h2 className="text-2xl font-bold mb-1">Livro de Receitas</h2>
+                        <p className="text-sm font-medium opacity-90 max-w-[300px] leading-relaxed">
                             Crie a primeira receita e inspire a comunidade!
                         </p>
                     </div>
@@ -207,22 +227,20 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                             <button
                                 key={idx}
                                 onClick={() => handleCategoryClick(cat.key, cat.coverRecipe?.name)}
-                                className="relative flex-shrink-0 w-28 h-36 sm:w-32 sm:h-40 rounded-xl overflow-hidden shadow-md snap-center group active:scale-95 transition-transform border border-black/5 dark:border-white/5"
+                                className="relative flex-shrink-0 w-28 h-36 sm:w-32 sm:h-40 rounded-xl overflow-hidden shadow-md snap-center group active:scale-95 transition-transform border border-black/5 dark:border-white/5 bg-slate-800"
                             >
-                                <div 
-                                    className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-                                    style={{ 
-                                        backgroundImage: cat.coverImage ? `url(${cat.coverImage})` : 'none',
-                                        backgroundColor: cat.coverImage ? 'transparent' : '#eee'
-                                    }}
-                                >
-                                    {!cat.coverImage && (
-                                        <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
-                                            <span className="material-symbols-outlined text-gray-400 text-3xl">restaurant</span>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                                {cat.coverImage ? (
+                                    <div 
+                                        className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+                                        style={{ backgroundImage: `url(${cat.coverImage})` }}
+                                    ></div>
+                                ) : (
+                                    <div className={`absolute inset-0 bg-gradient-to-br ${getFallbackGradient(cat.label)} flex items-center justify-center`}>
+                                        <span className="material-symbols-outlined text-white/10 text-4xl">restaurant</span>
+                                    </div>
+                                )}
+                                
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                                 <div className="absolute bottom-0 left-0 w-full p-3 text-left">
                                     <span className="block text-sm font-extrabold text-white leading-none tracking-wide drop-shadow-lg font-display">
                                         {cat.label}

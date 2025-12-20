@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot } from 'firebase/firestore';
@@ -12,55 +11,91 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 6; 
 
-// --- CATÁLOGO DE SOBREVIVÊNCIA (HARDCODED FALLBACK) ---
-// Estas receitas garantem que o app funcione mesmo se o Firestore estiver com cota estourada.
+// --- CATÁLOGO DE SOBREVIVÊNCIA ROBUSTO (PARA FALHAS DE COTA OU OFFLINE) ---
 const SURVIVAL_RECIPES: FullRecipe[] = [
     {
         name: "Omelete de Ervas",
-        ingredients: [{simplifiedName: "Ovos", detailedName: "3 ovos"}, {simplifiedName: "Queijo", detailedName: "50g de queijo muçarela"}, {simplifiedName: "Cebolinha", detailedName: "1 colher de cebolinha picada"}],
-        instructions: ["Bata os ovos", "Aqueça a frigideira", "Doure dos dois lados com o queijo"],
-        imageQuery: "omelete gourmet com ervas",
-        servings: "1 pessoa", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        ingredients: [{simplifiedName: "Ovos", detailedName: "3 ovos"}, {simplifiedName: "Queijo", detailedName: "50g de queijo muçarela"}],
+        instructions: ["Bata os ovos", "Frite"],
+        imageQuery: "omelete",
+        servings: "1", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1510627489930-0c1b0ba0fa3e?auto=format&fit=crop&w=800&q=80",
-        tags: ["ovo", "café da manhã", "rápido", "proteína", "fit"]
+        tags: ["ovo", "café da manhã", "rápido"]
     },
     {
         name: "Macarrão Alho e Óleo",
-        ingredients: [{simplifiedName: "Macarrão", detailedName: "250g de espaguete"}, {simplifiedName: "Alho", detailedName: "4 dentes de alho fatiados"}, {simplifiedName: "Azeite", detailedName: "3 colheres de azeite"}],
-        instructions: ["Cozinhe a massa", "Frite o alho no azeite", "Misture tudo"],
-        imageQuery: "espaguete alho e óleo",
-        servings: "2 pessoas", prepTimeInMinutes: 15, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        ingredients: [{simplifiedName: "Macarrão", detailedName: "250g de espaguete"}],
+        instructions: ["Cozinhe a massa"],
+        imageQuery: "espaguete",
+        servings: "2", prepTimeInMinutes: 15, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80",
-        tags: ["massa", "almoço", "rápido", "barato", "vegano"]
+        tags: ["massa", "almoço"]
     },
     {
         name: "Salada Tropical",
-        ingredients: [{simplifiedName: "Alface", detailedName: "1 pé de alface"}, {simplifiedName: "Manga", detailedName: "1 manga picada"}, {simplifiedName: "Castanhas", detailedName: "50g de castanhas"}],
-        instructions: ["Lave as folhas", "Pique a manga", "Misture com o molho de sua preferência"],
-        imageQuery: "salada colorida com manga",
-        servings: "2 pessoas", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        ingredients: [{simplifiedName: "Alface", detailedName: "1 pé"}],
+        instructions: ["Lave"],
+        imageQuery: "salada",
+        servings: "2", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
-        tags: ["salada", "leve", "saudável", "fit", "fruta"]
-    },
-    {
-        name: "Arroz Soltinho",
-        ingredients: [{simplifiedName: "Arroz", detailedName: "1 xícara de arroz agulhinha"}, {simplifiedName: "Cebola", detailedName: "Meia cebola picada"}],
-        instructions: ["Refogue a cebola", "Frite o arroz", "Adicione 2 xícaras de água e cozinhe"],
-        imageQuery: "arroz branco soltinho",
-        servings: "4 pessoas", prepTimeInMinutes: 20, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
-        imageUrl: "https://images.unsplash.com/photo-1516684732162-798a0062be99?auto=format&fit=crop&w=800&q=80",
-        tags: ["acompanhamento", "base", "arroz", "barato"]
+        tags: ["salada", "fit"]
     },
     {
         name: "Smoothie de Morango",
-        ingredients: [{simplifiedName: "Morango", detailedName: "1 xícara de morangos congelados"}, {simplifiedName: "Iogurte", detailedName: "1 pote de iogurte natural"}],
-        instructions: ["Bata tudo no liquidificador", "Sirva gelado"],
-        imageQuery: "smoothie rosa morango",
-        servings: "1 pessoa", prepTimeInMinutes: 5, difficulty: "Fácil", cost: "Médio", imageSource: "cache",
+        ingredients: [{simplifiedName: "Morango", detailedName: "1 xícara"}],
+        instructions: ["Bata"],
+        imageQuery: "smoothie",
+        servings: "1", prepTimeInMinutes: 5, difficulty: "Fácil", cost: "Médio", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?auto=format&fit=crop&w=800&q=80",
-        tags: ["bebida", "suco", "doce", "fit", "café da manhã"]
+        tags: ["bebida", "doce"]
+    },
+    {
+        name: "Bolo de Caneca",
+        ingredients: [{simplifiedName: "Chocolate", detailedName: "2 colheres"}],
+        instructions: ["Microondas"],
+        imageQuery: "bolo",
+        servings: "1", prepTimeInMinutes: 2, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1585238342024-78d387f4a707?auto=format&fit=crop&w=800&q=80",
+        tags: ["doce", "sobremesa"]
+    },
+    {
+        name: "Frango Grelhado",
+        ingredients: [{simplifiedName: "Frango", detailedName: "2 bifes"}],
+        instructions: ["Grelhe"],
+        imageQuery: "frango",
+        servings: "2", prepTimeInMinutes: 15, difficulty: "Médio", cost: "Médio", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&w=800&q=80",
+        tags: ["carne", "almoço"]
+    },
+    {
+        name: "Panqueca Americana",
+        ingredients: [{simplifiedName: "Farinha", detailedName: "1 xícara"}],
+        instructions: ["Misture e frite"],
+        imageQuery: "pancakes",
+        servings: "2", prepTimeInMinutes: 15, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1528207776546-365bb710ee93?auto=format&fit=crop&w=800&q=80",
+        tags: ["café da manhã", "doce"]
+    },
+    {
+        name: "Arroz Carreteiro",
+        ingredients: [{simplifiedName: "Arroz", detailedName: "2 xícaras"}],
+        instructions: ["Refogue tudo"],
+        imageQuery: "arroz",
+        servings: "4", prepTimeInMinutes: 30, difficulty: "Médio", cost: "Médio", imageSource: "cache",
+        imageUrl: "https://images.unsplash.com/photo-1512058560566-427a1bd5a5b7?auto=format&fit=crop&w=800&q=80",
+        tags: ["almoço", "brasileira"]
     }
 ];
+
+// Algoritmo de Embaralhamento Real (Fisher-Yates)
+const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+};
 
 interface AppContextType {
     // Modal States
@@ -362,7 +397,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [isFocusMode, setFocusMode] = useState(false);
     const [pendingAction, setPendingAction] = useState<string | null>(null);
     
-    const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>(SURVIVAL_RECIPES); // Inicia com catálogo de sobrevivência
+    const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>(SURVIVAL_RECIPES); 
     const [recipeSuggestions, setRecipeSuggestions] = useState<FullRecipe[]>([]);
     const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
     const [currentTheme, setCurrentTheme] = useState<string | null>(null);
@@ -434,7 +469,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         showToast("Grade de horários atualizada!");
     };
 
-    // --- ALGORITMO DE AFINIDADE V3 (DATA + HORA + GOSTO DO USUÁRIO) ---
+    // --- ALGORITMO DE AFINIDADE V4 (DIVERSIDADE MÁXIMA) ---
     const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
         if (pool.length === 0) return [];
 
@@ -453,12 +488,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         // 2. Sistema de Pontuação (Peso)
         const scored = pool.map(recipe => {
-            let score = 0;
+            let score = Math.random() * 20; // Ruído aleatório para evitar repetição do topo do BD
             const text = (recipe.name + ' ' + (recipe.tags?.join(' ') || '')).toLowerCase();
             
             // --- PESO 1: Contexto (Sazonalidade e Horário) ---
             activeContextRules.forEach(rule => {
-                const ruleBonus = rule.startDate ? 50 : 20; 
+                const ruleBonus = rule.startDate ? 50 : 25; 
                 if (rule.tags.some(tag => text.includes(tag.toLowerCase()))) {
                     score += ruleBonus;
                 }
@@ -467,29 +502,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // --- PESO 2: Gosto Pessoal (Afinidade e Exclusão) ---
             if (user?.dietaryPreferences && user.dietaryPreferences.length > 0) {
                 user.dietaryPreferences.forEach(pref => {
-                    // Exclusão Radical (Vegano/Vegetariano)
                     const forbidden = FORBIDDEN_WORDS[pref];
                     if (forbidden && forbidden.some(word => text.includes(word))) {
-                        score -= 500; // Penalidade massiva para esconder carnes de veganos
+                        score -= 500; 
                     }
-
-                    // Afinidade Positiva
                     const affinityTags = DIETARY_TAG_MAP[pref];
                     if (affinityTags && affinityTags.some(tag => text.includes(tag))) {
-                        score += 100; // Bônus alto para o que o usuário gosta
+                        score += 30; 
                     }
                 });
             }
 
-            // Bônus para receitas no acervo (Qualidade curada)
-            if (recipe.imageSource === 'cache') score += 10;
+            if (recipe.imageSource === 'cache') score += 15;
 
             return { recipe, score };
         });
 
-        // Ordena por score e retorna (Excluindo as que tiverem score muito baixo se houver opções)
         const sorted = scored.sort((a, b) => b.score - a.score);
-        
         return sorted.map(s => s.recipe);
     }, [scheduleRules, user?.dietaryPreferences]);
 
@@ -497,20 +526,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     useEffect(() => {
         if (!db) return;
         const loadData = async () => {
-            // Tenta carregar do cache local primeiro
             const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
             let fallbackCache = null;
 
             if (cachedString) {
                 try {
                     const cache = JSON.parse(cachedString);
-                    fallbackCache = cache; // Guarda para fallback se o fetch falhar
+                    fallbackCache = cache; 
                     const isExpired = (Date.now() - cache.timestamp) > RECIPE_CACHE_TTL;
                     if (!isExpired) {
                         setAllRecipesPool(cache.pool);
                         setGlobalRecipeCache(cache.cache);
                         setTotalRecipeCount(cache.count);
-                        return; // Cache válido, interrompe fetch
+                        return; 
                     }
                 } catch (e) {
                     localStorage.removeItem(RECIPE_CACHE_KEY);
@@ -518,8 +546,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
 
             try {
-                // OTIMIZAÇÃO: Fazemos apenas uma busca maior e dividimos os arrays localmente
-                const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
+                // AUMENTADO O LIMITE PARA 200 PARA PEGAR "O MEIO" DO ACERVO
+                const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(200));
                 const snapshotFetch = await getDocs(qFetch);
                 
                 const fetchedRecipes: FullRecipe[] = [];
@@ -530,9 +558,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     }
                 });
 
-                // Se Firestore retornou vazio (improvável mas possível), usa fallback
                 const finalRecipes = fetchedRecipes.length > 0 ? fetchedRecipes : (fallbackCache?.cache || SURVIVAL_RECIPES);
-                const pool = finalRecipes.slice(0, 50);
+                
+                // Fisher-Yates Shuffle para diversidade TOTAL
+                const shuffled = shuffleArray(finalRecipes);
+                
+                const pool = shuffled.slice(0, 80); // Pool maior de destaque
                 const cache = finalRecipes;
 
                 setAllRecipesPool(pool);
@@ -542,11 +573,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 try {
                     const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
                     totalCount = countSnapshot.data().count;
-                } catch (e) { /* ignore count error */ }
+                } catch (e) { }
                 
                 setTotalRecipeCount(totalCount);
 
-                // Salva no cache local
                 localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({
                     timestamp: Date.now(),
                     pool: pool,
@@ -557,15 +587,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             } catch (error: any) {
                 console.warn("Firestore Quota/Network error. Using survival fallback.", error.message);
                 
-                // FALLBACK DE EMERGÊNCIA
                 if (fallbackCache) {
-                    setAllRecipesPool(fallbackCache.pool);
+                    const shuffled = shuffleArray(fallbackCache.pool);
+                    setAllRecipesPool(shuffled);
                     setGlobalRecipeCache(fallbackCache.cache);
                     setTotalRecipeCount(fallbackCache.count);
-                    showToast("Limite de cota atingido. Usando catálogo offline.");
                 } else {
-                    // Sem cache nenhum? Usa os fundamentais do código
-                    setAllRecipesPool(SURVIVAL_RECIPES);
+                    const shuffled = shuffleArray(SURVIVAL_RECIPES);
+                    setAllRecipesPool(shuffled);
                     setGlobalRecipeCache(SURVIVAL_RECIPES);
                     setTotalRecipeCount(SURVIVAL_RECIPES.length);
                 }
@@ -575,7 +604,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, []);
 
     const featuredRecipes = useMemo(() => {
-        return getContextualRecipes(allRecipesPool).slice(0, 10);
+        const uniquePool: FullRecipe[] = [];
+        const seenUrls = new Set<string>();
+        
+        const sortedPool = getContextualRecipes(allRecipesPool);
+        
+        for (const r of sortedPool) {
+            // Se a URL for repetida, pula. Se não tiver imagem, ignora na vitrine.
+            if (r.imageUrl && !seenUrls.has(r.imageUrl)) {
+                uniquePool.push(r);
+                seenUrls.add(r.imageUrl);
+            }
+            if (uniquePool.length >= 10) break;
+        }
+        
+        return uniquePool.length > 0 ? uniquePool : SURVIVAL_RECIPES.slice(0, 5);
     }, [allRecipesPool, getContextualRecipes]);
 
     useEffect(() => {
@@ -691,7 +734,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const getRandomCachedRecipe = useCallback((): FullRecipe | null => {
-        if (globalRecipeCache.length === 0) return SURVIVAL_RECIPES[0];
+        if (globalRecipeCache.length === 0) return SURVIVAL_RECIPES[Math.floor(Math.random() * SURVIVAL_RECIPES.length)];
         const randomIndex = Math.floor(Math.random() * globalRecipeCache.length);
         return globalRecipeCache[randomIndex];
     }, [globalRecipeCache]);
@@ -841,8 +884,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
 
             const mergedMap = new Map<string, FullRecipe>();
-            [...keywordResults, ...tagResults].forEach(r => {
-                mergedMap.set(r.name.toLowerCase(), r);
+            [...keywordResults, ...snapTag.docs.map(d => d.data() as FullRecipe)].forEach(r => {
+                if (r.name) mergedMap.set(r.name.toLowerCase(), r);
             });
             
             const results = Array.from(mergedMap.values());
@@ -1061,8 +1104,9 @@ Format:
         showRecipe(recipe);
     };
 
+    // ADD COMMENT: Fix TypeScript errors by explicitly typing pool and its usage.
     const getCategoryRecipesSync = useCallback((categoryKey: string): FullRecipe[] => {
-        const pool = globalRecipeCache.length > 0 ? globalRecipeCache : SURVIVAL_RECIPES;
+        const pool: FullRecipe[] = shuffleArray<FullRecipe>(globalRecipeCache.length > 0 ? globalRecipeCache : allRecipesPool);
         
         const matches = (r: FullRecipe, terms: string[]) => {
             const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
@@ -1075,29 +1119,25 @@ Format:
 
         switch (categoryKey) {
             case 'top10':
-                const solids = pool.filter(r => !isDrinkRecipe(r));
-                const drinks = pool.filter(r => isDrinkRecipe(r));
-                return [...solids.slice(0, 10), ...drinks.slice(0, 5)].sort(() => Math.random() - 0.5);
+                return pool.slice(0, 15);
             case 'fast':
-                const fastPool = pool.filter(r => (r.prepTimeInMinutes && r.prepTimeInMinutes <= 20) || matches(r, ['rápido', 'minutos', 'fácil', 'express']));
+                const fastPool = pool.filter((r: FullRecipe) => (r.prepTimeInMinutes && r.prepTimeInMinutes <= 20) || matches(r, ['rápido', 'minutos', 'fácil', 'express']));
                 return filterDrinks(fastPool).slice(0, 15);
             case 'new':
-                const newSolids = filterDrinks(pool);
-                if (newSolids.length >= 10) return newSolids.slice(0, 15);
-                return pool.slice(0, 15);
+                return pool.filter((r: FullRecipe) => !isDrinkRecipe(r)).slice(0, 15);
             case 'cheap':
-                const cheapPool = pool.filter(r => r.cost === 'Baixo' || matches(r, ['econômico', 'barato', 'simples', 'custo']));
+                const cheapPool = pool.filter((r: FullRecipe) => r.cost === 'Baixo' || matches(r, ['econômico', 'barato', 'simples', 'custo']));
                 return filterDrinks(cheapPool).slice(0, 15);
             case 'healthy':
-                return pool.filter(r => matches(r, ['fit', 'saudável', 'legumes', 'salada', 'integral', 'low carb', 'vegetariano', 'vegano', 'light'])).slice(0, 15);
+                return pool.filter((r: FullRecipe) => matches(r, ['fit', 'saudável', 'legumes', 'salada', 'integral', 'low carb', 'vegetariano', 'vegano', 'light'])).slice(0, 15);
             case 'dessert':
-                return pool.filter(r => matches(r, ['doce', 'sobremesa', 'bolo', 'torta', 'chocolate', 'pudim', 'mousse', 'açúcar'])).slice(0, 15);
+                return pool.filter((r: FullRecipe) => matches(r, ['doce', 'sobremesa', 'bolo', 'torta', 'chocolate', 'pudim', 'mousse', 'açúcar'])).slice(0, 15);
             case 'random':
-                return [...pool].sort(() => 0.5 - Math.random()).slice(0, 10);
+                return pool.slice(0, 10);
             default:
                 return pool.slice(0, 10);
         }
-    }, [globalRecipeCache, SURVIVAL_RECIPES, isDrinkRecipe]);
+    }, [globalRecipeCache, allRecipesPool, isDrinkRecipe]);
 
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
         return getCategoryRecipesSync(categoryKey);
