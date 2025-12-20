@@ -70,9 +70,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   }, [recipe.cost]);
 
   const handleAddRequest = async () => {
-      // Se não houver lista ativa, faz o procedimento direto (procedimento do botão de carrinho da Home)
       if (!hasActiveList) {
-          setHomeViewActive(false); // Fecha a visão da Home/Destaques e mostra a aba da lista
+          setHomeViewActive(false); 
           setIsAdding(true);
           await addRecipeToShoppingList(recipe);
           setIsAdding(false);
@@ -80,7 +79,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
           return;
       }
       
-      // Se já houver lista, apenas adiciona normalmente
       setIsAdding(true);
       await addRecipeToShoppingList(recipe);
       setIsAdding(false);
@@ -90,9 +88,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const handleToggleFavorite = async () => {
       if (!user) {
           onClose();
-          // Aqui poderíamos usar app.openModal('auth'), mas o componente não tem acesso direto via props
-          // No entanto, RecipeModal herda o contexto, então usamos de lá.
-          // Mas como pedido, focamos no botão de adicionar.
           return;
       }
       await toggleFavorite(recipe);
@@ -139,26 +134,26 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                         style={{backgroundImage: imageUrl ? `url(${imageUrl})` : 'none'}}
                     ></div>
 
-                    {!imageUrl && (
+                    {(!imageUrl || isRecipeLoading) && (
                         <div className="absolute inset-0">
                             <div 
-                                className="absolute inset-0 bg-center bg-cover filter blur-[1px] scale-105"
+                                className="absolute inset-0 bg-center bg-cover filter blur-[2px] scale-110 opacity-60"
                                 style={{backgroundImage: `url(${randomChefImage})`}}
                             ></div>
-                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-3 p-6 text-center">
+                            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white gap-3 p-6 text-center">
                                 <div className="bg-white/20 p-4 rounded-full backdrop-blur-md animate-pulse">
-                                    <span className="material-symbols-outlined text-4xl">restaurant_menu</span>
+                                    <span className="material-symbols-outlined text-5xl">restaurant_menu</span>
                                 </div>
-                                <div>
-                                    <p className="font-bold text-lg drop-shadow-md">O Chef IA está trabalhando...</p>
-                                    <p className="text-xs font-medium uppercase tracking-widest opacity-80 mt-1">Preparando a foto do seu prato</p>
+                                <div className="animate-fadeIn">
+                                    <p className="font-bold text-xl drop-shadow-lg">O Chef IA está trabalhando...</p>
+                                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400 mt-2">Preparando a foto do seu prato</p>
                                 </div>
                             </div>
                         </div>
                     )}
                      
                      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 items-start pointer-events-none">
-                         {imageUrl && isFromCache && (
+                         {imageUrl && isFromCache && !isRecipeLoading && (
                              <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10 shadow-sm">
                                  <span className="material-symbols-outlined text-[16px] text-orange-400 leading-none">photo_camera</span>
                                  <span className="text-[10px] font-bold text-white uppercase tracking-wider leading-none pt-[1px]">
@@ -199,15 +194,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                      <h1 className="text-text-main dark:text-gray-50 tracking-tight text-[28px] font-bold leading-none font-display capitalize drop-shadow-sm pr-12">{recipe.name}</h1>
                 </div>
                 
-                {/* LINHA DE METADADOS */}
                 <div className="flex gap-2 p-5 pt-4 flex-wrap items-center">
-                    {/* NOTA 5.0 */}
                     <div className="flex h-8 shrink-0 items-center justify-center gap-x-1.5 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 px-3 shadow-sm">
                          <span className="material-symbols-outlined text-sm text-blue-600 dark:text-blue-400 font-black">check</span>
                          <p className="text-blue-600 dark:text-blue-400 text-xs font-black">5.0</p>
                     </div>
 
-                    {/* INDICADOR DE CUSTO $$$ */}
                     <div className="flex h-8 shrink-0 items-center justify-center gap-x-1 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/30 px-3 shadow-sm" title={`Custo: ${recipe.cost}`}>
                          <p className="text-green-600 dark:text-green-400 text-xs font-black tracking-widest">{costSymbols}</p>
                     </div>
@@ -226,7 +218,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                         </div>
                     )}
 
-                    {/* BOTÃO TRANSLÚCIDO DE VOLTAR (NOVO) */}
                     <button 
                         onClick={onClose}
                         className="ml-auto flex h-8 shrink-0 items-center justify-center gap-x-1.5 rounded-full bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/5 px-4 backdrop-blur-md hover:bg-white/30 dark:hover:bg-white/20 transition-all active:scale-95 group shadow-sm"
@@ -253,14 +244,14 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                                 <button 
                                     onClick={handleRegenerateDetails}
                                     disabled={isRecipeLoading}
-                                    className="mt-2 flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/20 transition-colors disabled:opacity-50"
+                                    className="mt-2 flex items-center gap-2 bg-primary text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-primary-hover shadow-lg transition-all active:scale-95 disabled:opacity-50"
                                 >
                                     {isRecipeLoading ? (
-                                        <span className="material-symbols-outlined animate-spin">sync</span>
+                                        <span className="material-symbols-outlined animate-spin text-lg">sync</span>
                                     ) : (
-                                        <span className="material-symbols-outlined">auto_fix_high</span>
+                                        <span className="material-symbols-outlined text-lg">auto_fix_high</span>
                                     )}
-                                    {isRecipeLoading ? "Gerando..." : "Completar com IA"}
+                                    {isRecipeLoading ? "Refazendo..." : "Completar com IA agora"}
                                 </button>
                             </div>
                         )}
@@ -319,14 +310,19 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                                 <p className="text-text-secondary dark:text-gray-300 text-sm leading-relaxed pt-1">{step}</p>
                             </div>
                         )) : (
-                            <div className="flex flex-col items-center justify-center py-4 gap-2 text-center bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/5">
-                                <p className="text-sm text-gray-500 italic">Modo de preparo indisponível.</p>
+                            <div className="flex flex-col items-center justify-center py-6 gap-3 text-center bg-white dark:bg-white/5 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10">
+                                <p className="text-sm text-gray-500 italic">O modo de preparo não foi gerado corretamente.</p>
                                 <button 
                                     onClick={handleRegenerateDetails}
                                     disabled={isRecipeLoading}
-                                    className="mt-1 flex items-center gap-2 text-primary text-sm font-bold hover:underline disabled:opacity-50"
+                                    className="flex items-center gap-2 text-primary text-sm font-black hover:scale-105 transition-transform disabled:opacity-50"
                                 >
-                                    {isRecipeLoading ? "Aguarde..." : "Tentar corrigir agora"}
+                                    {isRecipeLoading ? (
+                                        <span className="material-symbols-outlined animate-spin">sync</span>
+                                    ) : (
+                                        <span className="material-symbols-outlined">auto_renew</span>
+                                    )}
+                                    {isRecipeLoading ? "Refazendo..." : "Tentar corrigir agora com IA"}
                                 </button>
                             </div>
                         )}
@@ -334,9 +330,15 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 </div>
                 
                 {isRecipeLoading && (
-                    <div className="absolute inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-40 flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="text-primary font-bold animate-pulse">O Chef IA está reescrevendo a receita...</p>
+                    <div className="absolute inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 flex flex-col items-center justify-center animate-fadeIn">
+                        <div className="relative">
+                            <div className="w-20 h-20 border-4 border-primary/20 rounded-full"></div>
+                            <div className="absolute top-0 left-0 w-20 h-20 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                        <p className="mt-6 text-primary text-lg font-black animate-pulse tracking-tight italic">
+                            REESCREVENDO RECEITA...
+                        </p>
+                        <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-2">Aguarde a finalização</p>
                     </div>
                 )}
             </div>
@@ -344,8 +346,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 z-50">
                 <button 
                     onClick={handleAddRequest}
-                    disabled={isAdding || isBroken} 
-                    className="w-full h-14 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isAdding || isBroken || isRecipeLoading} 
+                    className="w-full h-14 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                 >
                     {isAdding ? (
                         <span className="material-symbols-outlined animate-spin">sync</span>

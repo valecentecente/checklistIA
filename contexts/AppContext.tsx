@@ -363,22 +363,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
             let fallbackCache = null;
 
-            // 1. Carregamento imediato do cache do localStorage para evitar UI vazia
             if (cachedString) {
                 try {
                     const cache = JSON.parse(cachedString);
                     fallbackCache = cache; 
-                    // Explicitly cast to FullRecipe[] to avoid 'unknown[]' errors
                     setAllRecipesPool((cache.pool as FullRecipe[]) || SURVIVAL_RECIPES);
                     setGlobalRecipeCache((cache.cache as FullRecipe[]) || SURVIVAL_RECIPES);
                     setTotalRecipeCount(cache.count || 0);
                     
                     const isExpired = (Date.now() - cache.timestamp) > RECIPE_CACHE_TTL;
-                    if (!isExpired) return; // Cache ainda válido, evita hits na rede
+                    if (!isExpired) return; 
                 } catch (e) { localStorage.removeItem(RECIPE_CACHE_KEY); }
             }
 
-            // 2. Tenta atualizar do Firestore com um GUARD de 3 segundos para não travar o app
             try {
                 const networkPromise = (async () => {
                     const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
@@ -386,7 +383,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const fetched: FullRecipe[] = [];
                     snapshotFetch.forEach(doc => {
                         const data = doc.data() as FullRecipe;
-                        // Cast whole object literal as FullRecipe to ensure property compliance
                         if (data.name && data.imageUrl) fetched.push({ ...data, imageSource: 'cache' } as FullRecipe);
                     });
 
@@ -404,7 +400,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     }));
                 })();
 
-                // Se a rede demorar mais que 3s, o app continua com o que tinha no localStorage
                 await Promise.race([
                     networkPromise,
                     new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
@@ -586,7 +581,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let results: FullRecipe[] = [];
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
-            // Construct as FullRecipe explicitly to ensure type compliance
             snap.forEach(doc => results.push({ ...doc.data(), imageSource: 'cache' } as FullRecipe));
             return results;
         } catch (error) { return []; }
@@ -603,13 +597,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } finally { setIsSearchingAcervo(false); }
     };
 
+    // Helper para limpar JSON de blocos de Markdown e garantir validade
+    const sanitizeJsonString = (str: string) => {
+        return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
+    };
+
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
         if (!apiKey) return;
         setIsRecipeLoading(true);
         setRecipeError(null);
         try {
             const ai = new GoogleGenAI({ apiKey });
-            let systemPrompt = `Gere uma receita completa em JSON para: "${recipeName}".`;
+            
+            // PROMPT BLINDADO: Exige conteúdo e proíbe arrays vazios
+            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita completa, deliciosa e detalhada para: "${recipeName}".
+            REGRAS OBRIGATÓRIAS:
+            1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
+            2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
+            3. Identifique se o prato é alcoólico e defina 'isAlcoholic'.
+            4. Retorne APENAS o JSON puro seguindo este formato:
+            {
+                "name": "${recipeName}",
+                "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz agulhinha"}],
+                "instructions": ["Passo 1...", "Passo 2..."],
+                "imageQuery": "Foto close-up apetitosa de ${recipeName}, luz de estúdio",
+                "servings": "2 porções",
+                "prepTimeInMinutes": 30,
+                "difficulty": "Médio",
+                "cost": "Médio",
+                "isAlcoholic": false,
+                "tags": ["tag1", "tag2"]
+            }`;
+
             const parts: any[] = [];
             if (imageBase64) parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64.split(',')[1] } });
             parts.push({ text: systemPrompt });
@@ -620,27 +639,62 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 config: { responseMimeType: "application/json" }
             }));
 
-            // Use 'any' type for raw details to handle spread with defaults safely
-            const details = JSON.parse(response.text || "{}");
-            // Explicitly provide all required FullRecipe properties to satisfy TypeScript
+            const rawText = sanitizeJsonString(response.text || "{}");
+            const details = JSON.parse(rawText);
+            
             const fullData: FullRecipe = { 
                 name: details.name || recipeName,
                 ingredients: details.ingredients || [],
                 instructions: details.instructions || [],
-                imageQuery: details.imageQuery || '',
-                servings: details.servings || '',
-                prepTimeInMinutes: details.prepTimeInMinutes || 0,
+                imageQuery: details.imageQuery || recipeName,
+                servings: details.servings || '2 porções',
+                prepTimeInMinutes: details.prepTimeInMinutes || 30,
                 difficulty: details.difficulty || 'Médio',
                 cost: details.cost || 'Médio',
                 ...details, 
                 keywords: generateKeywords(details.name || recipeName) 
             };
+            
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             closeModal('recipeAssistant');
+
+            // GERAÇÃO AUTOMÁTICA DE IMAGEM IMEDIATA
+            if (fullData.imageQuery) {
+                generateSingleRecipeImage(fullData.name, fullData.imageQuery);
+            }
+
             if (autoAdd) await addRecipeToShoppingList(fullData);
-        } catch (e: any) { setRecipeError("Muitos pedidos. Aguarde."); } finally { setIsRecipeLoading(false); }
-    }, [apiKey]); 
+        } catch (e: any) { 
+            console.error("Erro na geração de receita:", e);
+            setRecipeError("O Chef está ocupado ou a conexão falhou. Tente em instantes."); 
+        } finally { 
+            setIsRecipeLoading(false); 
+        }
+    }, [apiKey, generateKeywords]); 
+
+    // Função interna para gerar foto individual
+    const generateSingleRecipeImage = async (recipeName: string, queryText: string) => {
+        if (!apiKey) return;
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+            const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: { parts: [{ text: "Fotografia profissional de comida, luz natural, alta resolução, apetitoso: " + queryText }] },
+                config: { responseModalities: [Modality.IMAGE] }
+            }));
+
+            if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+                const rawBase64 = imageRes.candidates[0].content.parts[0].inlineData.data;
+                const binaryString = atob(rawBase64);
+                // Compressão leve no cliente se necessário, aqui usamos o base64 direto para rapidez
+                const imageUrl = "data:image/jpeg;base64," + rawBase64;
+                handleRecipeImageGenerated(recipeName, imageUrl, 'genai');
+            }
+        } catch (error) {
+            console.warn("Falha ao gerar imagem para:", recipeName);
+        }
+    };
     
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
@@ -669,7 +723,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Categorias: ${categories.join(', ')}. Return JSON array.`,
                     config: { responseMimeType: "application/json" }
                 }));
-                const categorizedItems = JSON.parse(response.text || "[]");
+                const categorizedItems = JSON.parse(sanitizeJsonString(response.text || "[]"));
                 const newCategoryMap = { ...itemCategories };
                 (categorizedItems as any[]).forEach(ci => {
                     const item = itemsToCategorize.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
@@ -689,7 +743,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
-            const suggestions = getCategoryRecipes(key);
+            // Added explicit type to fix 'unknown[]' assignment error
+            const suggestions: FullRecipe[] = getCategoryRecipes(key);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }
     };

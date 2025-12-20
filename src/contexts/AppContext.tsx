@@ -176,7 +176,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
     const [groupingMode, setGroupingMode] = useState<'recipe' | 'aisle' | 'responsible'>('recipe');
+    // Added missing isOrganizing state
     const [isOrganizing, setIsOrganizing] = useState(false);
+    // Added missing itemCategories state
     const [itemCategories, setItemCategories] = useState<Record<string, string>>({});
     const [showStartHerePrompt, setShowStartHerePrompt] = useState(false);
     const [authTrigger, setAuthTrigger] = useState<string | null>(null);
@@ -188,6 +190,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [isSharedSession, setIsSharedSession] = useState(false);
     const [historyActiveTab, setHistoryActiveTab] = useState<'my' | 'received'>('my');
     const [isHomeViewActive, setHomeViewActive] = useState(true); // Default Home
+    // Added missing isFocusMode state
+    const [isFocusMode, setFocusMode] = useState(false);
     
     // Recipe Discovery
     const [featuredRecipes, setFeaturedRecipes] = useState<FullRecipe[]>([]);
@@ -413,7 +417,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let textResponse = response.text || "";
             textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
 
-            const recipeDetails = JSON.parse(textResponse);
+            // Cast result to any to fix '{}' properties type issue
+            const recipeDetails = JSON.parse(textResponse) as any;
             
             if (!recipeDetails.ingredients || !Array.isArray(recipeDetails.ingredients)) {
                 throw new Error('Receita incompleta ou inválida');
@@ -494,7 +499,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     }
                 });
                 
-                const categorizedItems = JSON.parse(response.text || "[]");
+                // Cast to any to handle flexible JSON parse
+                const categorizedItems = JSON.parse(response.text || "[]") as any;
 
                 if (!Array.isArray(categorizedItems)) {
                     throw new Error("Resposta inválida da IA");
@@ -560,8 +566,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 contents: `Sugira 5 receitas para o tema: "${prompt}". Retorne JSON completo: [{"name": "Nome", "ingredients": [], "instructions": [], "imageQuery": "desc", "servings": "X", "prepTimeInMinutes": 30, "difficulty": "Médio", "cost": "Médio"}]`,
                 config: { responseMimeType: "application/json" }
             });
-            // Construct mapping to ensure all properties are explicitly initialized for TS
-            const suggestionsRaw = JSON.parse(response.text || "[]");
+            // Cast to any to handle unknown structure mapping
+            const suggestionsRaw = JSON.parse(response.text || "[]") as any[];
             const suggestions: FullRecipe[] = (suggestionsRaw as any[]).map(s => ({
                 name: s.name || '',
                 ingredients: s.ingredients || [],
