@@ -162,7 +162,7 @@ interface AppContextType {
     
     // Pending Actions (Login Redirect)
     pendingAction: string | null;
-    setPendingAction: (action: string | null) => void;
+    setPendingAction(action: string | null): void;
 
     addRecipeToShoppingList: (recipe: FullRecipe) => Promise<void>;
     showPWAInstallPromptIfAvailable: () => void;
@@ -323,6 +323,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
+
+    // Helper interno para identificar se é bebida
+    const isDrinkRecipe = (r: FullRecipe) => {
+        const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
+        const drinkTerms = ['suco', 'drink', 'vitamina', 'coquetel', 'bebida', 'smoothie', 'café', 'chá', 'limonada', 'batida', 'caipirinha', 'mojito', 'cerveja', 'vinho'];
+        return drinkTerms.some(t => text.includes(t));
+    };
 
     useEffect(() => {
         const handler = (e: Event) => { e.preventDefault(); setInstallPromptEvent(e); };
@@ -973,19 +980,31 @@ Format:
             return terms.some(t => text.includes(t));
         };
 
+        const filterDrinks = (recipes: FullRecipe[]) => {
+            return recipes.filter(r => !isDrinkRecipe(r));
+        };
+
         switch (categoryKey) {
             case 'top10':
-                return pool.slice(0, 15);
+                // Para o Top 10, tentamos diversificar pegando apenas 30% de bebidas no máximo
+                const solids = pool.filter(r => !isDrinkRecipe(r));
+                const drinks = pool.filter(r => isDrinkRecipe(r));
+                return [...solids.slice(0, 10), ...drinks.slice(0, 5)].sort(() => Math.random() - 0.5);
             case 'fast':
-                return pool.filter(r => (r.prepTimeInMinutes && r.prepTimeInMinutes <= 20) || matches(r, ['rápido', 'minutos', 'fácil', 'express']));
+                const fastPool = pool.filter(r => (r.prepTimeInMinutes && r.prepTimeInMinutes <= 20) || matches(r, ['rápido', 'minutos', 'fácil', 'express']));
+                return filterDrinks(fastPool).slice(0, 15);
             case 'new':
+                // Nas novidades, prioriza pratos sólidos se houver muitos sucos recém-gerados
+                const newSolids = filterDrinks(pool);
+                if (newSolids.length >= 10) return newSolids.slice(0, 15);
                 return pool.slice(0, 15);
             case 'cheap':
-                return pool.filter(r => r.cost === 'Baixo' || matches(r, ['econômico', 'barato', 'simples', 'custo']));
+                const cheapPool = pool.filter(r => r.cost === 'Baixo' || matches(r, ['econômico', 'barato', 'simples', 'custo']));
+                return filterDrinks(cheapPool).slice(0, 15);
             case 'healthy':
-                return pool.filter(r => matches(r, ['fit', 'saudável', 'legumes', 'salada', 'integral', 'low carb', 'vegetariano', 'vegano', 'light']));
+                return pool.filter(r => matches(r, ['fit', 'saudável', 'legumes', 'salada', 'integral', 'low carb', 'vegetariano', 'vegano', 'light'])).slice(0, 15);
             case 'dessert':
-                return pool.filter(r => matches(r, ['doce', 'sobremesa', 'bolo', 'torta', 'chocolate', 'pudim', 'mousse', 'açúcar']));
+                return pool.filter(r => matches(r, ['doce', 'sobremesa', 'bolo', 'torta', 'chocolate', 'pudim', 'mousse', 'açúcar'])).slice(0, 15);
             case 'random':
                 return [...pool].sort(() => 0.5 - Math.random()).slice(0, 10);
             default:

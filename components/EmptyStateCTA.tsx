@@ -16,12 +16,18 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     const displayRecipes = featuredRecipes;
     const showCategories = totalRecipeCount >= 5;
 
+    // Helper interno para identificar se é bebida (diversidade visual)
+    const isLiquid = (r: any) => {
+        const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
+        return ['suco', 'drink', 'vitamina', 'coquetel', 'bebida', 'smoothie', 'café', 'chá', 'limonada', 'batida'].some(t => text.includes(t));
+    };
+
     // Auto-rotate banners
     useEffect(() => {
         if (displayRecipes.length <= 1) return;
         const interval = setInterval(() => {
             setCurrentBannerIndex(prev => (prev + 1) % displayRecipes.length);
-        }, 6000); // Um pouco mais lento para leitura
+        }, 6000); 
         return () => clearInterval(interval);
     }, [displayRecipes.length]);
 
@@ -51,7 +57,19 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             const recipes = getCategoryRecipes(cat.key);
             const count = recipes.length;
             
-            const uniqueRecipe = recipes.find(r => r.imageUrl && !usedImageUrls.has(r.imageUrl));
+            // Lógica de Diversidade Visual: Tenta achar uma receita sólida para a capa primeiro
+            // (a menos que a categoria seja especificamente de bebidas, o que não é o caso das baseCategories aqui)
+            let uniqueRecipe = recipes.find(r => 
+                r.imageUrl && 
+                !usedImageUrls.has(r.imageUrl) && 
+                !isLiquid(r) // Prioriza sólidos
+            );
+
+            // Se não achar um sólido novo, pega qualquer um novo
+            if (!uniqueRecipe) {
+                uniqueRecipe = recipes.find(r => r.imageUrl && !usedImageUrls.has(r.imageUrl));
+            }
+
             const coverRecipe = uniqueRecipe || recipes[0];
             const coverImage = coverRecipe?.imageUrl;
 
@@ -95,7 +113,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         openModal('arcade');
     };
 
-    // Identifica se estamos em período sazonal para mudar o título
     const getHeroTitle = () => {
         const month = new Date().getMonth();
         if (month === 11) return "Especial de Natal";
