@@ -104,6 +104,7 @@ interface AppContextType {
     getCategoryCount: (categoryLabel: string) => number;
     getCategoryCover: (categoryLabel: string) => string | undefined; 
     getCategoryRecipes: (categoryKey: string) => FullRecipe[];
+    getCategoryRecipesSync: (categoryKey: string) => FullRecipe[];
     getCachedRecipe: (name: string) => FullRecipe | undefined;
     getRandomCachedRecipe: () => FullRecipe | null;
     generateKeywords: (text: string) => string[];
@@ -325,11 +326,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
     // Helper interno para identificar se é bebida
-    const isDrinkRecipe = (r: FullRecipe) => {
+    const isDrinkRecipe = useCallback((r: FullRecipe) => {
         const text = (r.name + ' ' + (r.tags?.join(' ') || '')).toLowerCase();
         const drinkTerms = ['suco', 'drink', 'vitamina', 'coquetel', 'bebida', 'smoothie', 'café', 'chá', 'limonada', 'batida', 'caipirinha', 'mojito', 'cerveja', 'vinho'];
         return drinkTerms.some(t => text.includes(t));
-    };
+    }, []);
 
     useEffect(() => {
         const handler = (e: Event) => { e.preventDefault(); setInstallPromptEvent(e); };
@@ -713,20 +714,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const searchKeywords = generateKeywords(queryStr);
             const lowerQuery = queryStr.toLowerCase();
             
+            // Garantir que temos palavras-chave processadas antes de consultar o Firestore
+            if (searchKeywords.length === 0) return [];
+
             // 1. Busca por Palavras-Chave (Keywords de nome)
             let keywordResults: FullRecipe[] = [];
-            if (searchKeywords.length > 0) {
-                const qKey = query(
-                    collection(db, 'global_recipes'),
-                    where('keywords', 'array-contains-any', searchKeywords.slice(0, 10)),
-                    limit(20)
-                );
-                const snapKey = await getDocs(qKey);
-                snapKey.forEach(doc => {
-                    const data = doc.data() as FullRecipe;
-                    if (data.name) keywordResults.push({ ...data, imageSource: 'cache' });
-                });
-            }
+            const qKey = query(
+                collection(db, 'global_recipes'),
+                where('keywords', 'array-contains-any', searchKeywords.slice(0, 10)),
+                limit(20)
+            );
+            const snapKey = await getDocs(qKey);
+            snapKey.forEach(doc => {
+                const data = doc.data() as FullRecipe;
+                if (data.name) keywordResults.push({ ...data, imageSource: 'cache' });
+            });
 
             // 2. Busca por Tags (Categorias)
             let tagResults: FullRecipe[] = [];
@@ -972,7 +974,7 @@ Format:
         showRecipe(recipe);
     };
 
-    const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
+    const getCategoryRecipesSync = useCallback((categoryKey: string): FullRecipe[] => {
         const pool = globalRecipeCache.length > 0 ? globalRecipeCache : allRecipesPool;
         
         const matches = (r: FullRecipe, terms: string[]) => {
@@ -986,7 +988,6 @@ Format:
 
         switch (categoryKey) {
             case 'top10':
-                // Para o Top 10, tentamos diversificar pegando apenas 30% de bebidas no máximo
                 const solids = pool.filter(r => !isDrinkRecipe(r));
                 const drinks = pool.filter(r => isDrinkRecipe(r));
                 return [...solids.slice(0, 10), ...drinks.slice(0, 5)].sort(() => Math.random() - 0.5);
@@ -994,7 +995,6 @@ Format:
                 const fastPool = pool.filter(r => (r.prepTimeInMinutes && r.prepTimeInMinutes <= 20) || matches(r, ['rápido', 'minutos', 'fácil', 'express']));
                 return filterDrinks(fastPool).slice(0, 15);
             case 'new':
-                // Nas novidades, prioriza pratos sólidos se houver muitos sucos recém-gerados
                 const newSolids = filterDrinks(pool);
                 if (newSolids.length >= 10) return newSolids.slice(0, 15);
                 return pool.slice(0, 15);
@@ -1010,7 +1010,11 @@ Format:
             default:
                 return pool.slice(0, 10);
         }
-    }, [globalRecipeCache, allRecipesPool]);
+    }, [globalRecipeCache, allRecipesPool, isDrinkRecipe]);
+
+    const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
+        return getCategoryRecipesSync(categoryKey);
+    }, [getCategoryRecipesSync]);
 
     const getCategoryCount = useCallback((categoryKey: string) => {
         return getCategoryRecipes(categoryKey).length;
@@ -1092,6 +1096,7 @@ Format:
         getCategoryCount,
         getCategoryCover,
         getCategoryRecipes,
+        getCategoryRecipesSync,
         getCachedRecipe, 
         getRandomCachedRecipe,
         generateKeywords, 
