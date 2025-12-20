@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +21,13 @@ export const RecipeSelectionModal: React.FC = () => {
     const { user } = useAuth();
     
     const [customOrder, setCustomOrder] = useState('');
+
+    // Sincroniza o pedido customizado com o que o usuário acabou de buscar
+    useEffect(() => {
+        if (isRecipeSelectionModalOpen) {
+            setCustomOrder(currentSearchTerm);
+        }
+    }, [isRecipeSelectionModalOpen, currentSearchTerm]);
 
     if (!isRecipeSelectionModalOpen) return null;
 
@@ -64,13 +71,17 @@ export const RecipeSelectionModal: React.FC = () => {
         }
     };
 
+    const hasResults = recipeSearchResults.length > 0;
+
     return (
         <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col justify-center items-center animate-fadeIn backdrop-blur-sm">
             
             {/* Header Compacto */}
             <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-50">
                 <div className="flex flex-col bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-                    <span className="text-gray-300 text-[10px] uppercase tracking-widest font-black">Menu Sugerido</span>
+                    <span className="text-gray-300 text-[10px] uppercase tracking-widest font-black">
+                        {hasResults ? 'Acervo Encontrado' : 'Acervo Vazio'}
+                    </span>
                     <h2 className="text-white text-lg font-black capitalize truncate max-w-[200px]">{currentSearchTerm}</h2>
                 </div>
                 <button 
@@ -84,7 +95,7 @@ export const RecipeSelectionModal: React.FC = () => {
             {/* Horizontal Carousel */}
             <div className="w-full flex overflow-x-auto snap-x snap-mandatory gap-6 px-8 pb-8 pt-4 scrollbar-hide items-center h-[75vh]">
                 
-                {/* 1. Results Cards */}
+                {/* 1. Results Cards (if any) */}
                 {recipeSearchResults.map((recipe, idx) => {
                     const isSaved = isFavorite(recipe.name);
                     const fakeRating = "5.0"; 
@@ -103,11 +114,9 @@ export const RecipeSelectionModal: React.FC = () => {
                                 }}
                             ></div>
                             
-                            {/* Overlay de Vinheta Superior e Inferior para legibilidade */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20 opacity-90"></div>
                             
                             <div className="absolute bottom-0 left-0 w-full p-7 flex items-end justify-between text-white gap-4">
-                                {/* Bloco de Texto à Esquerda - VALORIZADO */}
                                 <div className="flex flex-col items-start flex-1 min-w-0 pb-1">
                                     <h3 className="text-2xl sm:text-3xl font-black leading-[0.9] drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-3 uppercase italic tracking-tighter mb-4 transition-transform group-hover:-translate-y-1">
                                         {recipe.name}
@@ -124,9 +133,7 @@ export const RecipeSelectionModal: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Coluna de Ações à Direita */}
                                 <div className="flex flex-col gap-4 shrink-0">
-                                    {/* Botão de Share */}
                                     <button 
                                         onClick={(e) => handleShare(e, recipe)}
                                         className="h-12 w-12 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/20 shadow-2xl"
@@ -134,7 +141,6 @@ export const RecipeSelectionModal: React.FC = () => {
                                         <span className="material-symbols-outlined text-2xl">share</span>
                                     </button>
 
-                                    {/* Botão Favoritos (Lugar do antigo '+') */}
                                     <button 
                                         onClick={(e) => handleToggleFavorite(e, recipe)} 
                                         className={`h-12 w-12 rounded-2xl flex items-center justify-center backdrop-blur-xl border border-white/20 transition-all active:scale-90 shadow-2xl ${isSaved ? 'bg-red-600 border-red-500' : 'bg-white/10 hover:bg-white/20'}`}
@@ -149,9 +155,9 @@ export const RecipeSelectionModal: React.FC = () => {
                     );
                 })}
 
-                {/* 2. THE WAITRESS CARD */}
+                {/* 2. THE WAITRESS CARD (The Fallback) */}
                 <div 
-                    className="snap-center shrink-0 w-[85vw] sm:w-[320px] h-[65vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border-2 border-blue-500/30"
+                    className={`snap-center shrink-0 w-[85vw] sm:w-[320px] h-[65vh] relative rounded-[2.5rem] overflow-hidden shadow-2xl bg-white border-2 ${!hasResults ? 'border-blue-500' : 'border-blue-500/30'}`}
                 >
                     <div 
                         className="absolute inset-0 bg-cover bg-center transition-transform duration-[40s] animate-slowZoom"
@@ -175,6 +181,15 @@ export const RecipeSelectionModal: React.FC = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 
                     <div className="absolute inset-0 p-6 flex flex-col items-center justify-end text-center">
+                        {!hasResults && (
+                            <div className="absolute top-10 left-0 right-0 px-8 animate-fadeIn">
+                                <div className="bg-blue-600 text-white p-4 rounded-2xl shadow-2xl border border-white/20">
+                                    <p className="text-xs font-black uppercase tracking-widest mb-1">Nada encontrado no acervo</p>
+                                    <p className="text-[11px] opacity-90 leading-tight">Mas não se preocupe! A Garçonete pode criar essa receita para você agora mesmo.</p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="w-full bg-black/40 backdrop-blur-xl rounded-3xl p-4 border border-white/20 shadow-2xl mb-2 relative overflow-hidden group">
                              <div className="absolute -top-[100%] left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent skew-y-12"></div>
                              

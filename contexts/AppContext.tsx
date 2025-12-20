@@ -796,16 +796,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const results = await searchGlobalRecipes(term);
             
-            if (results.length > 0) {
-                setRecipeSearchResults(results);
-                setCurrentSearchTerm(term);
-                closeModal('recipeAssistant'); 
-                openModal('recipeSelection'); 
-            } else {
-                fetchRecipeDetails(term);
-            }
+            // CIRURGIA: Sempre abre o modal de seleção. Se results for [], a Garçonete será o único card.
+            setRecipeSearchResults(results);
+            setCurrentSearchTerm(term);
+            closeModal('recipeAssistant'); 
+            openModal('recipeSelection'); 
+            
         } catch (error) {
-            fetchRecipeDetails(term); 
+            setRecipeSearchResults([]);
+            setCurrentSearchTerm(term);
+            closeModal('recipeAssistant');
+            openModal('recipeSelection');
         } finally {
             setIsRecipeLoading(false);
         }
