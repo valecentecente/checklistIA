@@ -21,7 +21,7 @@ export const RecipeSelectionModal: React.FC = () => {
         closeModal, 
         recipeSearchResults, 
         currentSearchTerm,
-        handleExploreRecipeClick,
+        showRecipe,
         fetchRecipeDetails,
         showToast,
         openModal
@@ -46,7 +46,7 @@ export const RecipeSelectionModal: React.FC = () => {
     if (!isRecipeSelectionModalOpen) return null;
 
     const handleSelect = (recipe: FullRecipe) => {
-        handleExploreRecipeClick(recipe);
+        showRecipe(recipe);
         closeModal('recipeSelection');
     };
 
@@ -234,7 +234,6 @@ export const RecipeSelectionModal: React.FC = () => {
                 </button>
             </div>
 
-            {/* Indicador de Swipe */}
             <div className="flex gap-1.5 mb-8">
                 <div className="h-1 w-4 bg-primary rounded-full"></div>
                 <div className="h-1 w-1 bg-white/20 rounded-full"></div>

@@ -10,27 +10,15 @@ export const ThemeRecipesModal: React.FC = () => {
         recipeSuggestions, 
         currentTheme, 
         isSuggestionsLoading,
-        handleExploreRecipeClick
+        showRecipe
     } = useApp();
 
     if (!isThemeRecipesModalOpen) return null;
 
     const handleSelectRecipe = (recipe: FullRecipe) => {
-        handleExploreRecipeClick(recipe);
+        // Abre o modal de detalhes da receita diretamente
+        showRecipe(recipe);
         closeModal('themeRecipes');
-    };
-
-    // Helper para gerar um gradiente de fallback baseado no nome da receita (estética premium)
-    const getFallbackGradient = (name: string) => {
-        const colors = [
-            'from-orange-400 to-red-500',
-            'from-green-400 to-teal-500',
-            'from-blue-400 to-indigo-500',
-            'from-purple-400 to-pink-500',
-            'from-yellow-400 to-orange-500'
-        ];
-        const index = (name?.length || 0) % colors.length;
-        return colors[index];
     };
 
     return (
@@ -58,10 +46,11 @@ export const ThemeRecipesModal: React.FC = () => {
                                 <div className="h-12 w-12 rounded-full border-4 border-gray-200 dark:border-gray-700"></div>
                                 <div className="absolute top-0 left-0 h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
                             </div>
-                            <p className="text-sm font-medium text-gray-500 animate-pulse">Buscando receitas...</p>
+                            <p className="text-sm font-medium text-gray-500 animate-pulse">Buscando receitas salvas...</p>
                         </div>
                     ) : (
                         <div className="flex flex-col gap-4">
+                            {/* Horizontal Snap List Logic */}
                             <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 snap-x scrollbar-hide">
                                 {recipeSuggestions.map((recipe, idx) => (
                                     <button 
@@ -69,6 +58,7 @@ export const ThemeRecipesModal: React.FC = () => {
                                         onClick={() => handleSelectRecipe(recipe)}
                                         className="snap-center shrink-0 w-[260px] flex flex-col bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden group hover:border-primary/50 transition-all text-left"
                                     >
+                                        {/* Image Area */}
                                         <div className="h-32 w-full relative bg-gray-200 dark:bg-gray-800">
                                             {recipe.imageUrl ? (
                                                 <img 
@@ -77,17 +67,22 @@ export const ThemeRecipesModal: React.FC = () => {
                                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
                                                 />
                                             ) : (
-                                                <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${getFallbackGradient(recipe.name)}`}>
-                                                    <span className="material-symbols-outlined text-4xl text-white/20">
+                                                <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${
+                                                    idx % 3 === 0 ? 'from-orange-100 to-red-50 dark:from-orange-900/40 dark:to-red-900/20' :
+                                                    idx % 3 === 1 ? 'from-yellow-100 to-orange-50 dark:from-yellow-900/40 dark:to-orange-900/20' :
+                                                    'from-green-100 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/20'
+                                                }`}>
+                                                    <span className="material-symbols-outlined text-4xl text-black/10 dark:text-white/10">
                                                         restaurant_menu
                                                     </span>
                                                 </div>
                                             )}
+                                            
                                             <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
                                         </div>
                                         
                                         <div className="p-4 flex flex-col flex-1">
-                                            <h3 className="font-bold text-lg text-text-primary-light dark:text-text-primary-dark mb-2 leading-tight line-clamp-2 capitalize">
+                                            <h3 className="font-bold text-lg text-text-primary-light dark:text-text-primary-dark mb-2 leading-tight line-clamp-2">
                                                 {recipe.name}
                                             </h3>
                                             <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
@@ -97,6 +92,10 @@ export const ThemeRecipesModal: React.FC = () => {
                                                         {recipe.prepTimeInMinutes} min
                                                     </span>
                                                 )}
+                                                <span className="flex items-center gap-1 bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
+                                                    <span className="material-symbols-outlined text-[10px]">inventory_2</span> 
+                                                    {recipe.ingredients?.length || 0} ing.
+                                                </span>
                                             </div>
                                             
                                             <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-primary">

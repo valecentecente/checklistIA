@@ -3,7 +3,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { PurchaseRecord, HistoricItem, AuthorMetadata, ReceivedListRecord } from '../types';
 import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useApp } from '../contexts/AppContext';
-import { useAuth } from '../contexts/AuthContext';
 
 interface HistoryModalProps {
     isOpen: boolean;
@@ -112,8 +111,7 @@ const SocialProfileModal: React.FC<{ author: AuthorMetadata; onClose: () => void
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, history, onRepeatPurchase, onAddItem, formatCurrency }) => {
     const { receivedHistory, shareListWithEmail, markReceivedListAsRead, searchUser, items: currentList } = useShoppingList();
-    const { pendingAdminInvite } = useAuth();
-    const { showToast, historyActiveTab, setHistoryActiveTab, setHomeViewActive, openModal } = useApp();
+    const { showToast, historyActiveTab, setHistoryActiveTab, setHomeViewActive } = useApp();
     const [activeTab, setActiveTab] = useState<'my' | 'received'>(historyActiveTab);
     const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRecord | null>(null);
     const [selectedProfile, setSelectedProfile] = useState<AuthorMetadata | null>(null);
@@ -340,38 +338,18 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                         </div>
                                     )
                                 ) : (
-                                    <div className="flex flex-col gap-3">
-                                        {/* UNIFICAÇÃO: Se houver convite pendente, ele aparece aqui em destaque */}
-                                        {pendingAdminInvite && (
-                                            <div className="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/50 flex items-center gap-4 animate-bounce-y">
-                                                <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center text-white shrink-0 shadow-lg">
-                                                    <span className="material-symbols-outlined">admin_panel_settings</span>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200">Convite de Equipe</p>
-                                                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 line-clamp-1">De: {pendingAdminInvite.fromName}</p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => { onClose(); setTimeout(() => openModal('adminInvite'), 300); }}
-                                                    className="bg-indigo-600 text-white text-[10px] font-black uppercase px-3 py-2 rounded-lg shadow-sm"
-                                                >
-                                                    Ver
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* Listas Recebidas Normais */}
-                                        {receivedHistory.length > 0 ? (
-                                            receivedHistory.map(r => (
+                                    receivedHistory.length > 0 ? (
+                                        <div className="flex flex-col gap-3">
+                                            {receivedHistory.map(r => (
                                                 <ReceivedListItem key={r.id} record={r} onProfileClick={(e, author) => { e.stopPropagation(); setSelectedProfile(author); }} onClick={() => handleViewReceived(r)} />
-                                            ))
-                                        ) : !pendingAdminInvite && (
-                                            <div className="flex flex-col items-center justify-center h-64 text-center">
-                                                <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">share</span>
-                                                <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma lista recebida.</p>
-                                            </div>
-                                        )}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-64 text-center">
+                                            <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">share</span>
+                                            <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma lista recebida.</p>
+                                        </div>
+                                    )
                                 )}
                             </main>
                          </>

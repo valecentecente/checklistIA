@@ -117,7 +117,6 @@ const AppContent: React.FC = () => {
     const [tempMarketName, setTempMarketName] = useState('');
     const marketInputRef = useRef<HTMLInputElement>(null);
 
-    // LÓGICA DE BADGE: O contador 'lastSeen' sincroniza com o total do app ao clicar, escondendo o badge
     const [lastSeenNotificationCount, setLastSeenNotificationCount] = useState(0);
     const showProfileBadge = app.unreadNotificationCount > 0 && app.unreadNotificationCount > lastSeenNotificationCount;
 
@@ -149,7 +148,6 @@ const AppContent: React.FC = () => {
     }, [app]);
 
     const handleProfileClick = () => {
-        // Marca todas como vistas globalmente nesta sessão ao clicar na foto
         setLastSeenNotificationCount(app.unreadNotificationCount);
         app.toggleAppOptionsMenu();
     };
@@ -465,7 +463,7 @@ const AppContent: React.FC = () => {
     return (
         <div className="w-full h-[100dvh] bg-background-light dark:bg-background-dark lg:bg-[#121212] lg:dark:bg-[#121212] lg:flex overflow-hidden">
             <WebSidebarLeft />
-            <div className="relative w-full lg:flex-1 lg:min-w-0 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden" style={{contain: 'strict'}}>
+            <div className="relative w-full lg:flex-1 lg:min-w-0 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu" style={{contain: 'strict'}}>
                 {app.theme === 'christmas' && (
                     <div aria-hidden="true" className="pointer-events-none">
                         {[...Array(10)].map((_, i) => <div key={i} className="snowflake">❅</div>)}
@@ -478,8 +476,7 @@ const AppContent: React.FC = () => {
                         <p className="text-sm font-medium leading-snug">{app.toastMessage}</p>
                     </div>
                 )}
-                
-                <header className={`fixed md:fixed top-0 left-0 right-0 z-[115] flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'hidden' : 'block'} bg-white/70 dark:bg-black/60 backdrop-blur-xl border-b border-white/20 dark:border-white/10 shadow-sm`}>
+                <header className={`absolute top-0 left-0 right-0 z-[115] flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'hidden' : 'block'} bg-white/70 dark:bg-black/60 backdrop-blur-xl border-b border-white/20 dark:border-white/10 shadow-sm`}>
                     <div className="relative z-10 flex h-24 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
                             <div onClick={() => app.setHomeViewActive(true)} className="h-12 w-12 shrink-0 rounded-full shadow-md overflow-hidden bg-white flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
@@ -516,7 +513,7 @@ const AppContent: React.FC = () => {
                 </header>
 
                 {showSessionBar && (
-                    <div className={`fixed left-0 right-0 z-[112] w-full bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm animate-slideUp overflow-visible transition-all duration-300 ${app.isFocusMode ? 'top-0' : 'top-24 lg:top-0'}`}>
+                    <div className={`absolute left-0 right-0 z-[112] w-full bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm animate-slideUp overflow-visible transition-all duration-300 ${app.isFocusMode ? 'top-0' : 'top-24 lg:top-0'}`}>
                        <div className="flex flex-col flex-1 min-w-0">
                           <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-0.5">Local de Compra</span>
                           <div className="flex items-center gap-2 group">
@@ -566,7 +563,7 @@ const AppContent: React.FC = () => {
                 )}
 
                 {app.isCartTooltipVisible && showSessionBar && (
-                    <div className={`fixed right-4 z-[130] w-auto max-w-[200px] bg-zinc-800/95 backdrop-blur-md border border-white/10 text-white rounded-xl shadow-2xl animate-fadeIn p-3 pointer-events-none transition-all duration-300 ${app.isFocusMode ? 'top-16' : 'top-40 lg:top-16'}`}>
+                    <div className={`absolute right-4 z-[130] w-auto max-w-[200px] bg-zinc-800/95 backdrop-blur-md border border-white/10 text-white rounded-xl shadow-2xl animate-fadeIn p-3 pointer-events-none transition-all duration-300 ${app.isFocusMode ? 'top-16' : 'top-40 lg:top-16'}`}>
                         <div className="flex items-center gap-2 mb-1">
                             <span className="material-symbols-outlined text-green-400 text-lg">check_circle</span>
                             <span className="font-bold text-sm">{purchasedItemsCount} Comprados</span>
@@ -601,7 +598,7 @@ const AppContent: React.FC = () => {
 
                 {(!showHomeView) && <SlideToFinish total={formattedTotal} onFinish={() => app.openModal('savePurchase')} />}
 
-                <footer className="fixed lg:hidden bottom-0 left-0 right-0 w-full z-[100] bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-t border-white/20 dark:border-white/10 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] pb-safe-area transition-all duration-300">
+                <footer className="fixed lg:hidden bottom-0 w-full z-[100] bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-t border-white/20 dark:border-white/10 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] pb-safe-area transition-all duration-300">
                     <div className="flex items-end justify-between px-2 h-16 w-full max-w-full">
                         <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="favorite" label="Favoritos" onClick={() => { if (!user) app.openModal('auth'); else app.openModal('favorites'); }} active={app.isFavoritesModalOpen} /></div>
