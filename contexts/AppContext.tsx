@@ -413,41 +413,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const networkPromise = (async () => {
                     const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
                     const snapshotFetch = await getDocs(qFetch);
-                    const fetched: FullRecipe[] = [];
+                    const fetchedRaw: any[] = [];
                     snapshotFetch.forEach(docSnap => {
-                        const data = docSnap.data() as any; 
+                        const data = docSnap.data();
                         if (data && data.name && data.imageUrl) {
-                            fetched.push({ 
-                                name: String(data.name || ''),
-                                ingredients: Array.isArray(data.ingredients) ? data.ingredients.map((i: any) => ({
-                                    simplifiedName: String(i.simplifiedName || ''),
-                                    detailedName: String(i.detailedName || '')
-                                })) : [],
-                                instructions: Array.isArray(data.instructions) ? data.instructions.map(String) : [],
-                                imageQuery: String(data.imageQuery || data.name || ''),
-                                servings: String(data.servings || '2 porções'),
-                                prepTimeInMinutes: Number(data.prepTimeInMinutes || 30),
-                                difficulty: (data.difficulty === 'Fácil' || data.difficulty === 'Médio' || data.difficulty === 'Difícil' ? data.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-                                cost: (data.cost === 'Baixo' || data.cost === 'Médio' || data.cost === 'Alto' ? data.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
-                                imageUrl: data.imageUrl,
-                                imageSource: 'cache',
-                                description: data.description,
-                                keywords: Array.isArray(data.keywords) ? data.keywords.map(String) : [],
-                                tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
-                                isAlcoholic: !!data.isAlcoholic,
-                                suggestedLeads: Array.isArray(data.suggestedLeads) ? data.suggestedLeads.map(String) : []
-                            });
+                            fetchedRaw.push(data);
                         }
                     });
 
-                    const pool: FullRecipe[] = (fetched.length > 0 
+                    // Fixed: Explicitly mapping to avoid 'unknown[]' or missing property errors
+                    const fetched: FullRecipe[] = mapToFullRecipeArray(fetchedRaw);
+
+                    const pool: FullRecipe[] = fetched.length > 0 
                         ? shuffleArray<FullRecipe>(fetched) 
-                        : (fallbackCache && fallbackCache.pool ? mapToFullRecipeArray(fallbackCache.pool) : SURVIVAL_RECIPES)) as FullRecipe[];
+                        : (fallbackCache && fallbackCache.pool ? mapToFullRecipeArray(fallbackCache.pool) : SURVIVAL_RECIPES);
                     setAllRecipesPool(pool);
                     
-                    const cacheToSet: FullRecipe[] = (fetched.length > 0 
-                        ? (fetched as FullRecipe[]) 
-                        : (fallbackCache && fallbackCache.cache ? mapToFullRecipeArray(fallbackCache.cache) : SURVIVAL_RECIPES)) as FullRecipe[];
+                    const cacheToSet: FullRecipe[] = fetched.length > 0 
+                        ? fetched 
+                        : (fallbackCache && fallbackCache.cache ? mapToFullRecipeArray(fallbackCache.cache) : SURVIVAL_RECIPES);
                     setGlobalRecipeCache(cacheToSet);
                     
                     const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
@@ -467,7 +451,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             } catch (error: any) {
                 if (fallbackCache) {
-                    // Added explicit typing and ensured the variables are correctly mapped for assignment
                     const poolData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.pool);
                     const cacheData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.cache);
                     setAllRecipesPool(poolData.length > 0 ? poolData : SURVIVAL_RECIPES);
@@ -652,32 +635,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let results: FullRecipe[] = [];
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
+            const rawResults: any[] = [];
             snap.forEach(docSnap => {
-                const data = docSnap.data() as any;
+                const data = docSnap.data();
                 if (data && data.name) {
-                    results.push({ 
-                        name: String(data.name || ''),
-                        ingredients: Array.isArray(data.ingredients) ? data.ingredients.map((i: any) => ({
-                            simplifiedName: String(i.simplifiedName || ''),
-                            detailedName: String(i.detailedName || '')
-                        })) : [],
-                        instructions: Array.isArray(data.instructions) ? data.instructions.map(String) : [],
-                        imageQuery: String(data.imageQuery || data.name || ''),
-                        servings: String(data.servings || '2 porções'),
-                        prepTimeInMinutes: Number(data.prepTimeInMinutes || 30),
-                        difficulty: (data.difficulty === 'Fácil' || data.difficulty === 'Médio' || data.difficulty === 'Difícil' ? data.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-                        cost: (data.cost === 'Baixo' || data.cost === 'Médio' || data.cost === 'Alto' ? data.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
-                        imageUrl: data.imageUrl,
-                        imageSource: 'cache',
-                        description: data.description,
-                        keywords: Array.isArray(data.keywords) ? data.keywords.map(String) : [],
-                        tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
-                        isAlcoholic: !!data.isAlcoholic,
-                        suggestedLeads: Array.isArray(data.suggestedLeads) ? data.suggestedLeads.map(String) : []
-                    } as FullRecipe);
+                    rawResults.push(data);
                 }
             });
-            return results;
+            return mapToFullRecipeArray(rawResults);
         } catch (error) { 
             return []; 
         }
@@ -740,7 +705,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             
             const finalName = details.name || recipeName;
 
-            // Fixed property mapping for safe TypeScript assignment
             const fullData: FullRecipe = { 
                 name: finalName,
                 ingredients: Array.isArray(details.ingredients) ? details.ingredients.map((i: any) => ({
@@ -824,13 +788,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         closeModal('options');
     }, [groupingMode, items, itemCategories, apiKey]);
 
+    // Fix: Explicitly construction using mapToFullRecipeArray and ensure state is properly typed to avoid 'unknown[]' errors.
     const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
         setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
         setRecipeSuggestions([] as FullRecipe[]);
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
-            const suggestions: FullRecipe[] = getCategoryRecipes(key);
+            // Use explicit helper to map results and guarantee FullRecipe type adherence
+            const rawSuggestions = getCategoryRecipes(key);
+            const suggestions = mapToFullRecipeArray(rawSuggestions);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }
     };

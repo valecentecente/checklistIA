@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord } from '../types';
@@ -153,6 +152,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isOffersModalOpen: false,
         isAdminModalOpen: false,
         isAdminRecipesModalOpen: false,
+        // Fix: initialize with default boolean values instead of type keywords
         isInfoModalOpen: false,
         isStartShoppingModalOpen: false,
         isShareListModalOpen: false,
@@ -349,10 +349,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  model: 'gemini-2.5-flash-image',
                  contents: {
                      parts: [{ text: `Uma foto de comida profissional, realista e apetitosa de ${imageQuery}` }]
-                 },
-                 config: {
-                     responseModalities: [Modality.AUDIO], // Incorrect Modality fixed in actual code below
-                 },
+                 }
              });
              
              // Fixed tool usage and image extraction based on guidelines
@@ -427,7 +424,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const finalRecipeName = recipeDetails.name || recipeName || "Receita Identificada";
             
-            // Fixed TypeScript error by correctly mapping all FullRecipe properties
+            // Correctly mapping all properties of the FullRecipe interface
             const fullRecipeData: FullRecipe = { 
                 name: String(finalRecipeName),
                 ingredients: Array.isArray(recipeDetails.ingredients) ? recipeDetails.ingredients.map((ing: any) => ({
@@ -572,20 +569,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 config: { responseMimeType: "application/json" }
             });
             
-            // Fixed TypeScript error on line 354 by correctly mapping all FullRecipe properties
-            const suggestionsRaw = JSON.parse(response.text || "[]") as any[];
-            const suggestions: FullRecipe[] = (suggestionsRaw || []).map((s: any): FullRecipe => ({
-                name: String(s.name || ''),
+            // Fixed Type 'unknown[]' is not assignable to type 'FullRecipe[]' by explicitly casting the parsed JSON array and ensuring all required properties are present
+            // Line 378 fix: added detailed validation and default values for mandatory properties
+            const suggestionsRaw = JSON.parse(response.text || "[]");
+            const suggestions: FullRecipe[] = (Array.isArray(suggestionsRaw) ? suggestionsRaw : []).map((s: any): FullRecipe => ({
+                name: String(s.name || 'Receita Sugerida'),
                 ingredients: Array.isArray(s.ingredients) ? s.ingredients.map((ing: any) => ({
                     simplifiedName: String(ing.simplifiedName || ''),
                     detailedName: String(ing.detailedName || '')
                 })) : [],
                 instructions: Array.isArray(s.instructions) ? s.instructions.map(String) : [],
-                imageQuery: String(s.imageQuery || ''),
-                servings: String(s.servings || ''),
-                prepTimeInMinutes: Number(s.prepTimeInMinutes || 0),
-                difficulty: (s.difficulty === 'Fácil' || s.difficulty === 'Médio' || s.difficulty === 'Difícil' ? s.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-                cost: (s.cost === 'Baixo' || s.cost === 'Médio' || s.cost === 'Alto' ? s.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
+                imageQuery: String(s.imageQuery || s.name || ''),
+                servings: String(s.servings || '2 porções'),
+                prepTimeInMinutes: Number(s.prepTimeInMinutes || 30),
+                difficulty: (['Fácil', 'Médio', 'Difícil'].includes(s.difficulty) ? s.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+                cost: (['Baixo', 'Médio', 'Alto'].includes(s.cost) ? s.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
+                keywords: [],
+                tags: [],
+                isAlcoholic: false,
+                suggestedLeads: []
             }));
             setRecipeSuggestions(suggestions);
         } catch (error) {

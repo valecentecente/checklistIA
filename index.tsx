@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -83,7 +82,6 @@ const AppContent: React.FC = () => {
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
     const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
     
-    // ESTADOS PARA EDIÇÃO INLINE DO NOME DO MERCADO
     const [isEditingMarketName, setIsEditingMarketName] = useState(false);
     const [tempMarketName, setTempMarketName] = useState('');
     const marketInputRef = useRef<HTMLInputElement>(null);
@@ -105,8 +103,6 @@ const AppContent: React.FC = () => {
         window.addEventListener('orientationchange', checkOrientation);
         return () => {
             window.removeEventListener('resize', checkOrientation);
-            window.removeEventListener('mouseup', checkOrientation);
-            window.removeEventListener('touchmove', checkOrientation);
             window.removeEventListener('orientationchange', checkOrientation);
         };
     }, []);
@@ -372,7 +368,6 @@ const AppContent: React.FC = () => {
         }
     };
 
-    // FUNÇÕES PARA EDIÇÃO INLINE DO NOME DO MERCADO
     const startEditingMarketName = () => {
         setTempMarketName(app.currentMarketName || "Minha Lista");
         setIsEditingMarketName(true);
@@ -434,8 +429,7 @@ const AppContent: React.FC = () => {
             <WebSidebarLeft />
             <div className="relative w-full lg:flex-1 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu">
                 
-                {/* --- HEADER PRINCIPAL --- */}
-                <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/40 dark:bg-black/30 backdrop-blur-2xl border-b border-white/10 dark:border-white/5 shadow-lg`}>
+                <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden opacity-0 invisible' : 'h-auto opacity-100 visible'} bg-white/40 dark:bg-black/30 backdrop-blur-2xl border-b border-white/10 dark:border-white/5 shadow-lg`}>
                     <header className="flex h-20 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
                             <div onClick={() => app.setHomeViewActive(true)} className="h-10 w-10 shrink-0 rounded-full shadow-md overflow-hidden bg-white/90 flex items-center justify-center cursor-pointer">
@@ -460,11 +454,10 @@ const AppContent: React.FC = () => {
                     </header>
                 </div>
 
-                {/* --- SESSION BAR (VISÍVEL NO MOBILE E DESKTOP QUANDO LISTA ATIVA) --- */}
                 {showSessionBar && (
-                    <div className={`sticky top-0 z-[112] w-full flex-shrink-0 bg-white/80 dark:bg-black/80 backdrop-blur-2xl border-b border-white/10 px-4 py-3 flex items-center justify-between shadow-sm transition-all duration-300 ${app.isFocusMode && 'hidden'}`}>
+                    <div className={`sticky top-0 z-[112] w-full flex-shrink-0 bg-white/80 dark:bg-black/80 backdrop-blur-2xl border-b border-white/10 px-4 flex items-center justify-between shadow-sm transition-all duration-300 ${app.isFocusMode ? 'py-2 h-12' : 'py-3 h-auto'}`}>
                         <div className="flex flex-col flex-1 min-w-0">
-                            <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>
+                            {!app.isFocusMode && <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>}
                             
                             {isEditingMarketName ? (
                                 <input
@@ -478,19 +471,21 @@ const AppContent: React.FC = () => {
                                 />
                             ) : (
                                 <div className="flex items-center gap-1.5 cursor-pointer group" onClick={startEditingMarketName}>
-                                    <span className="font-black text-primary dark:text-orange-400 text-sm leading-none truncate max-w-[220px]">
+                                    <span className={`font-black text-primary dark:text-orange-400 leading-none truncate max-w-[220px] ${app.isFocusMode ? 'text-xs' : 'text-sm'}`}>
                                         {app.currentMarketName || "Minha Lista"}
                                     </span>
-                                    <span className="material-symbols-outlined text-[12px] text-gray-400 group-hover:text-primary transition-colors">edit</span>
+                                    {!app.isFocusMode && <span className="material-symbols-outlined text-[12px] text-gray-400 group-hover:text-primary transition-colors">edit</span>}
                                 </div>
                             )}
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
-                            <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors hover:bg-black/10">
-                                <span className="material-symbols-outlined text-xl">shopping_cart</span>
-                                {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
-                            </button>
-                            <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
+                            {!app.isFocusMode && (
+                                <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors hover:bg-black/10">
+                                    <span className="material-symbols-outlined text-xl">shopping_cart</span>
+                                    {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
+                                </button>
+                            )}
+                            <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-all active:scale-95">
                                 <span className="material-symbols-outlined text-xl">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
                             </button>
                         </div>
@@ -509,11 +504,10 @@ const AppContent: React.FC = () => {
                     </div>
                 </main>
 
-                {/* BOTÃO "+" FLUTUANTE (VISÍVEL NO MOBILE E DESKTOP QUANDO LISTA ATIVA) */}
                 {!showHomeView && (
                     <button 
                         onClick={() => app.openModal('addItem')} 
-                        className="fixed bottom-24 right-6 lg:bottom-12 lg:right-12 z-40 h-16 w-16 flex items-center justify-center rounded-full bg-primary text-white shadow-2xl shadow-primary/40 ring-4 ring-white/10 transition-all hover:scale-110 active:scale-95 animate-fadeIn"
+                        className="hidden lg:flex lg:absolute lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2 z-40 h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-2xl shadow-primary/40 ring-4 ring-white/10 transition-all hover:scale-110 active:scale-95 animate-fadeIn"
                         title="Adicionar Item"
                     >
                         <span className="material-symbols-outlined !text-4xl">add</span>
@@ -527,7 +521,7 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 h-full"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full"><NavButton icon="favorite" label="Favoritos" onClick={() => app.openModal('favorites')} /></div>
                         <div className="flex-1 h-full flex items-center justify-center relative">
-                            <button onClick={() => app.isHomeViewActive ? (items.length > 0 || app.currentMarketName ? app.setHomeViewActive(false) : app.openModal('startShopping')) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
+                            <button onClick={() => app.isHomeViewActive ? app.setHomeViewActive(false) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
                                 <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>{app.isHomeViewActive ? 'shopping_cart' : 'add'}</span>
                             </button>
                         </div>
