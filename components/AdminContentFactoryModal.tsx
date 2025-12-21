@@ -161,8 +161,8 @@ export const AdminContentFactoryModal: React.FC = () => {
         setLogs([]);
         setProgress(0);
 
-        addLog("--- MODO SEGURO: ABASTECIMENTO COM TAGS GRANULARES ---", 'separator');
-        addLog("Objetivo: Gerar inventário rico com ~20 tags por item.", 'info');
+        addLog("--- MODO SEGURO: PRODUÇÃO DE CONTEÚDO VISUAL REALISTA ---", 'separator');
+        addLog("Iniciando geração de lotes com foco em fidelidade visual.", 'info');
 
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -177,7 +177,7 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                 addLog("CATEGORIA ATUAL: " + currentCat, 'separator');
                 
-                const listPrompt = "Gere uma lista JSON com " + (quantity * 2) + " nomes das receitas mais populares da categoria '" + currentCat + "' no Brasil. " + (holidayTheme ? "Foco total no tema: " + holidayTheme : "") + ". Retorne apenas o JSON array de strings.";
+                const listPrompt = `Gere uma lista JSON com ${quantity * 2} nomes das receitas mais populares da categoria '${currentCat}' no Brasil. ${holidayTheme ? "Foco total no tema: " + holidayTheme : ""}. Retorne apenas o JSON array de strings.`;
 
                 try {
                     const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -209,13 +209,14 @@ export const AdminContentFactoryModal: React.FC = () => {
                         addLog("> Produzindo [" + (successCount + 1) + "/" + quantity + "]: " + name, 'info');
                         
                         try {
+                            // Delay para evitar limite de requisições por minuto
                             await new Promise(r => setTimeout(r, 5000));
 
                             const detailPrompt = `Gere a receita completa para '${name}' em JSON. 
-                            IMPORTANTE: Gere aproximadamente 20 etiquetas (tags) estratégicas divididas em: 
-                            1. Ingredientes principais, 2. Métodos de preparo (assado, frito, etc), 
-                            3. Ocasião (domingo, festa, etc), 4. Perfil de sabor/textura (cremoso, picante, etc).
-                            Formato: { 'name': '${name}', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'v', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': ['tag1', 'tag2', ...] }`;
+                            O campo 'imageQuery' DEVE ser uma descrição visual extremamente detalhada do prato PRONTO para um gerador de imagens. 
+                            Exemplo se for pizza: 'Close-up de uma pizza redonda com queijo derretido borbulhando, manjericão fresco, bordas de massa douradas e crocantes, estilo fotografia comercial'.
+                            IMPORTANTE: Gere aproximadamente 20 tags divididas em ingredientes, métodos, ocasião e perfil.
+                            Formato: { 'name': '${name}', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'descrição visual literal do prato pronto', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': [...] }`;
 
                             const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-3-flash-preview',
@@ -223,13 +224,17 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 config: { responseMimeType: "application/json" }
                             }));
 
-                            addLog("  ~ IA tagueando e preparando foto (Aguardando 12s)...", 'info');
-                            await new Promise(r => setTimeout(r, 12000));
+                            addLog("  ~ IA preparando descrição visual e tags (Aguardando)...", 'info');
+                            await new Promise(r => setTimeout(r, 10000));
 
                             const recipeData = JSON.parse(detailRes.text || "{}");
+                            
+                            // PROMPT DE IMAGEM BLINDADO (REFORÇADO PARA PIZZAS E PRATOS REAIS)
+                            const finalImagePrompt = `Fotografia culinária ultra-realista e apetitosa de um prato de ${name}. Descrição visual: ${recipeData.imageQuery || "o prato pronto servido em uma mesa"}. Estilo editorial gourmet, iluminação natural suave vinda da lateral, profundidade de campo rasa focando na textura central do alimento, 4k, cores vibrantes, zero abstração.`;
+
                             const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-2.5-flash-image',
-                                contents: { parts: [{ text: "Foto profissional de alta gastronomia, close-up, luz natural: " + (recipeData.imageQuery || name) }] },
+                                contents: { parts: [{ text: finalImagePrompt }] },
                                 config: { responseModalities: [Modality.IMAGE] }
                             }));
 
@@ -243,7 +248,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 ...(recipeData.tags || []), 
                                 currentCat.toLowerCase().replace(' / datas comemorativas', ''),
                                 ...(holidayTheme ? [holidayTheme.toLowerCase()] : []),
-                                'factory_v4_granular'
+                                'factory_v4_refined_visual'
                             ]));
 
                             if (db) {
@@ -257,41 +262,37 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 }, { merge: true });
                                 
                                 successCount++;
-                                addLog("> PRATO FINALIZADO (" + finalTags.length + " tags): " + name, 'success');
+                                addLog("> PRATO FINALIZADO COM SUCESSO: " + name, 'success');
                                 const totalToProcess = selectedCategories.length * quantity;
                                 const currentOverallIndex = selectedCategories.indexOf(currentCat);
                                 setProgress(((currentOverallIndex * quantity + successCount) / totalToProcess) * 100);
                             }
                             
-                            addLog("  ~ Recarregando créditos da API (Aguardando 20s)...", 'quota');
+                            addLog("  ~ Respiro da API (20s)...", 'quota');
                             await new Promise(r => setTimeout(r, 20000));
 
                         } catch (err: any) {
                             const errStr = (JSON.stringify(err) || err?.toString() || '').toLowerCase();
                             
                             if (errStr.includes('429') || errStr.includes('quota')) {
-                                addLog("⚠️ LIMITE ATINGIDO MESMO COM RESPIRO. Pausa de 60 segundos...", 'quota');
+                                addLog("⚠️ LIMITE ATINGIDO. Pausa longa de 60 segundos...", 'quota');
                                 await new Promise(r => setTimeout(r, 60000));
                                 attemptCount--; 
-                            } else if (errStr.includes('403')) { 
-                                addLog("Acesso negado. Verifique o console do Google Cloud.", 'error');
-                                setShouldStop(true); 
-                                break; 
                             } else {
-                                addLog("> Erro no item " + name + ". Pulando...", 'error');
+                                addLog("> Falha no item: " + name + ". Tentando próximo...", 'error');
                                 await new Promise(r => setTimeout(r, 10000));
                             }
                         }
                     }
                 } catch (catErr: any) {
-                    addLog("Erro crítico na categoria. Pulando...", 'error');
+                    addLog("Erro na categoria. Pulando...", 'error');
                     await new Promise(r => setTimeout(r, 15000));
                 }
             }
-            addLog("--- OPERAÇÃO CONCLUÍDA ---", 'separator');
+            addLog("--- OPERAÇÃO FINALIZADA ---", 'separator');
             fetchCategoryStats(); 
         } catch (error: any) {
-            addLog("ERRO FATAL NA PRODUÇÃO", 'error');
+            addLog("ERRO CRÍTICO NA FÁBRICA", 'error');
         } finally {
             setIsGenerating(false);
         }

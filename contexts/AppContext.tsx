@@ -53,6 +53,31 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
+// Moved helper outside AppProvider to ensure robust typing and scope
+const mapToFullRecipeArray = (data: any): FullRecipe[] => {
+    if (!Array.isArray(data)) return [];
+    return data.map((r: any): FullRecipe => ({
+        name: String(r.name || 'Receita'),
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
+            simplifiedName: String(i.simplifiedName || ''),
+            detailedName: String(i.detailedName || '')
+        })) : [],
+        instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [],
+        imageQuery: String(r.imageQuery || r.name || ''),
+        servings: String(r.servings || '2 porções'),
+        prepTimeInMinutes: Number(r.prepTimeInMinutes || 30),
+        difficulty: (r.difficulty === 'Fácil' || r.difficulty === 'Médio' || r.difficulty === 'Difícil' ? r.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+        cost: (r.cost === 'Baixo' || r.cost === 'Médio' || r.cost === 'Alto' ? r.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
+        imageUrl: r.imageUrl,
+        imageSource: r.imageSource || 'cache',
+        description: r.description,
+        keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [],
+        tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+        isAlcoholic: !!r.isAlcoholic,
+        suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : []
+    }));
+};
+
 interface AppContextType {
     isAddItemModalOpen: boolean;
     isBudgetModalOpen: boolean;
@@ -358,31 +383,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [globalRecipeCache]);
 
-    // Fixed mapping function to be typed safely
-    const mapToFullRecipeArray = (data: any): FullRecipe[] => {
-        if (!Array.isArray(data)) return [];
-        return data.map((r: any): FullRecipe => ({
-            name: String(r.name || 'Receita'),
-            ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
-                simplifiedName: String(i.simplifiedName || ''),
-                detailedName: String(i.detailedName || '')
-            })) : [],
-            instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [],
-            imageQuery: String(r.imageQuery || r.name || ''),
-            servings: String(r.servings || '2 porções'),
-            prepTimeInMinutes: Number(r.prepTimeInMinutes || 30),
-            difficulty: (r.difficulty === 'Fácil' || r.difficulty === 'Médio' || r.difficulty === 'Difícil' ? r.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-            cost: (r.cost === 'Baixo' || r.cost === 'Médio' || r.cost === 'Alto' ? r.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
-            imageUrl: r.imageUrl,
-            imageSource: r.imageSource || 'cache',
-            description: r.description,
-            keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [],
-            tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
-            isAlcoholic: !!r.isAlcoholic,
-            suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : []
-        }));
-    };
-
     useEffect(() => {
         if (!db) return;
         const loadData = async () => {
@@ -467,11 +467,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             } catch (error: any) {
                 if (fallbackCache) {
-                    const poolData = mapToFullRecipeArray(fallbackCache.pool);
-                    const cacheData = mapToFullRecipeArray(fallbackCache.cache);
-                    // Add explicit casts to avoid unknown[] error on line 354
-                    setAllRecipesPool((poolData.length > 0 ? poolData : SURVIVAL_RECIPES) as FullRecipe[]);
-                    setGlobalRecipeCache((cacheData.length > 0 ? cacheData : SURVIVAL_RECIPES) as FullRecipe[]);
+                    // Added explicit typing and ensured the variables are correctly mapped for assignment
+                    const poolData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.pool);
+                    const cacheData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.cache);
+                    setAllRecipesPool(poolData.length > 0 ? poolData : SURVIVAL_RECIPES);
+                    setGlobalRecipeCache(cacheData.length > 0 ? cacheData : SURVIVAL_RECIPES);
                     setTotalRecipeCount(fallbackCache.count || 0);
                 }
             }
