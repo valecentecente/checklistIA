@@ -134,6 +134,8 @@ const AppContent: React.FC = () => {
         window.addEventListener('orientationchange', checkOrientation);
         return () => {
             window.removeEventListener('resize', checkOrientation);
+            window.removeEventListener('mouseup', checkOrientation);
+            window.removeEventListener('touchmove', checkOrientation);
             window.removeEventListener('orientationchange', checkOrientation);
         };
     }, []);
@@ -445,173 +447,93 @@ const AppContent: React.FC = () => {
     );
 
     const globalPatternStyle = {
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='150' height='150' viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23F97316' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M20 30c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm80 40c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm-70-10c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm110 50c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM60 140c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm100-120c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM25 140c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50-100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm40-20c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zm-10 100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50 40c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zM60 60c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm-12-20c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60-30c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60 60c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zM20 70c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4z'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='150' height='150' viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23F97316' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M20 30c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm80 40c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm-70-10c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm110 50c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM60 140c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 2 5 5 5zm100-120c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM25 140c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50-100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm40-20c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zm-10 100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50 40c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zM60 60c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm-12-20c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60-30c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60 60c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zM20 70c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4z'/%3E%3C/g%3E%3C/svg%3E")`,
         backgroundSize: '150px 150px'
     };
 
-    if (isMobileLandscape) {
-        return (
-            <div className="fixed inset-0 z-[9999] bg-[#121212] flex flex-col items-center justify-center p-8 text-center animate-fadeIn">
-                <span className="material-symbols-outlined text-6xl text-primary mb-4 animate-pulse">screen_rotation</span>
-                <h1 className="text-2xl font-bold text-white mb-2">Gire o dispositivo</h1>
-                <p className="text-gray-400">O ChecklistIA foi otimizado para o modo retrato (vertical).</p>
-            </div>
-        );
-    }
+    if (isMobileLandscape) return <div className="fixed inset-0 z-[9999] bg-[#121212] flex items-center justify-center text-white">Gire o dispositivo</div>;
 
     return (
-        <div className="w-full h-[100dvh] bg-background-light dark:bg-background-dark lg:bg-[#121212] lg:dark:bg-[#121212] lg:flex overflow-hidden">
+        <div className="w-full h-[100dvh] bg-background-light dark:bg-background-dark lg:flex overflow-hidden">
             <WebSidebarLeft />
-            <div className="relative w-full lg:flex-1 lg:min-w-0 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu" style={{contain: 'strict'}}>
-                {app.theme === 'christmas' && (
-                    <div aria-hidden="true" className="pointer-events-none">
-                        {[...Array(10)].map((_, i) => <div key={i} className="snowflake">❅</div>)}
-                    </div>
-                )}
-                {app.theme === 'newyear' && <NewYearFireworks />}
-                {app.toastMessage && (
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[140] flex items-center gap-3 bg-zinc-900/95 text-white px-6 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md border border-white/10 animate-fadeIn max-w-[90%] w-auto">
-                        <span className="material-symbols-outlined text-green-400 !text-2xl shrink-0">check_circle</span>
-                        <p className="text-sm font-medium leading-snug">{app.toastMessage}</p>
-                    </div>
-                )}
+            <div className="relative w-full lg:flex-1 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu">
                 
-                {/* GRUPO DE CABEÇALHO FIXO PARA TABLET/MOBILE */}
-                <div className={`flex-shrink-0 z-[115] transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/70 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-150 border-b border-white/20 dark:border-white/10 shadow-sm`}>
-                    <header className="flex h-24 items-center justify-between gap-4 p-4">
+                {/* --- CONTAINER FIXO DO TOPO (HEADER + SESSION BAR) --- */}
+                {/* CONFIGURAÇÃO GLASSMORPHISM IGUAL AO RODAPÉ */}
+                <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-b border-white/20 dark:border-white/10 shadow-lg`}>
+                    <header className="flex h-20 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
-                            <div onClick={() => app.setHomeViewActive(true)} className="h-12 w-12 shrink-0 rounded-full shadow-md overflow-hidden bg-white flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
-                                <Logo className="w-8 h-8 text-blue-600" />
+                            <div onClick={() => app.setHomeViewActive(true)} className="h-10 w-10 shrink-0 rounded-full shadow-md overflow-hidden bg-white flex items-center justify-center cursor-pointer">
+                                <Logo className="w-6 h-6 text-blue-600" />
                             </div>
                             <div className="flex flex-col justify-center items-start">
-                                <h1 translate="no" className={`text-xl font-bold tracking-tight leading-none drop-shadow-md flex items-baseline ${app.theme === 'christmas' || app.theme === 'newyear' ? 'text-white' : 'text-slate-800 dark:text-white'}`}>
-                                    {app.theme === 'newyear' ? 'Feliz 2026!' : (
-                                        <><span>Checklist</span><span className="text-blue-600 dark:text-blue-400 ml-0.5">IA</span></>
-                                    )}
+                                <h1 translate="no" className="text-lg font-bold tracking-tight leading-none text-slate-800 dark:text-white">
+                                    <span>Checklist</span><span className="text-blue-600 dark:text-blue-400 ml-0.5">IA</span>
                                 </h1>
-                                <span translate="no" className="mt-1 w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-700 dark:bg-orange-900/60 dark:text-orange-200 leading-none shadow-sm">Beta</span>
+                                <span translate="no" className="mt-0.5 w-fit rounded-full bg-orange-100 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-orange-700 leading-none shadow-sm">Beta</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            {app.isAdmin && (
-                                <button onClick={() => app.openModal('recipeAssistant')} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-gray-700">
-                                    <span className="material-symbols-outlined !text-2xl text-primary dark:text-orange-400">restaurant</span>
-                                </button>
-                            )}
                             <div className="relative">
-                                <button onClick={handleProfileClick} className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-gray-700 overflow-hidden border-2 border-white shadow-sm">
-                                    {user?.photoURL ? (<img src={user.photoURL} alt="Foto" className="h-full w-full object-cover" />) : (<span className="material-symbols-outlined !text-3xl">account_circle</span>)}
+                                <button onClick={handleProfileClick} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-white/20 dark:text-slate-300 overflow-hidden border border-white/30 shadow-sm">
+                                    {user?.photoURL ? <img src={user.photoURL} alt="Foto" className="h-full w-full object-cover" /> : <span className="material-symbols-outlined !text-2xl">account_circle</span>}
                                 </button>
-                                {showProfileBadge && (
-                                    <button onClick={handleProfileClick} className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-sm border border-white z-20 animate-bounce">
-                                        {app.unreadNotificationCount > 9 ? '9+' : app.unreadNotificationCount}
-                                    </button>
-                                )}
+                                {showProfileBadge && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-bold rounded-full h-4 w-4 flex items-center justify-center border border-white">!</span>}
                                 <AppOptionsMenu />
                             </div>
                         </div>
                     </header>
+
+                    {showSessionBar && (
+                        <div className="w-full px-4 py-2 flex items-center justify-between transition-all duration-300 border-t border-white/10">
+                           <div className="flex flex-col flex-1 min-w-0" onClick={startEditingMarketName}>
+                              <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>
+                              <div className="flex items-center gap-1.5 group cursor-pointer">
+                                 <span className="font-black text-primary dark:text-orange-400 text-sm leading-none truncate max-w-[180px]">{app.currentMarketName || "Minha Lista"}</span>
+                                 <span className="material-symbols-outlined text-[12px] text-gray-400">edit</span>
+                              </div>
+                           </div>
+                           <div className="flex items-center justify-end pl-2 gap-2">
+                              <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-300 transition-colors">
+                                <span className="material-symbols-outlined text-xl">shopping_cart</span>
+                                {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
+                              </button>
+                              <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-300">
+                                 <span className="material-symbols-outlined text-xl">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
+                              </button>
+                           </div>
+                        </div>
+                    )}
                 </div>
 
-                {showSessionBar && (
-                    <div className={`z-[112] w-full bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm transition-all duration-300 ${app.isFocusMode ? 'fixed top-0' : 'relative lg:absolute lg:top-0'}`}>
-                       <div className="flex flex-col flex-1 min-w-0">
-                          <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-0.5">Local de Compra</span>
-                          <div className="flex items-center gap-2 group">
-                             {isEditingMarketName ? (
-                                <input 
-                                    ref={marketInputRef}
-                                    type="text"
-                                    value={tempMarketName}
-                                    onChange={(e) => setTempMarketName(e.target.value)}
-                                    onBlur={saveMarketNameInline}
-                                    onKeyDown={(e) => e.key === 'Enter' && saveMarketNameInline()}
-                                    className="bg-white dark:bg-zinc-800 border-none rounded px-2 py-0.5 font-bold text-primary dark:text-orange-400 text-lg w-full focus:ring-1 focus:ring-primary h-7"
-                                />
-                             ) : (
-                                <div className="flex items-center gap-2 cursor-pointer" onClick={startEditingMarketName}>
-                                    <span className="font-bold text-primary dark:text-orange-400 text-lg leading-none truncate max-w-[200px]">{app.currentMarketName || "Minha Lista"}</span>
-                                    <span className="material-symbols-outlined text-sm text-gray-400 group-hover:text-primary transition-colors">edit</span>
-                                </div>
-                             )}
-                          </div>
-                       </div>
-                       <div className="flex items-center justify-end pl-2 gap-2">
-                          <button onClick={() => app.showCartTooltip()} className="relative h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-400 transition-colors" title="Itens Comprados">
-                            <span className="material-symbols-outlined">shopping_cart</span>
-                            {purchasedItemsCount > 0 && <span className="absolute -top-1 -right-1 bg-green-600 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-sm animate-bounce border border-white dark:border-surface-dark">{purchasedItemsCount}</span>}
-                          </button>
-                          {app.isSharedSession ? (
-                             <div className="flex -space-x-3 items-center relative animate-fadeIn" title="Sincronizado">
-                                <div className="relative z-10 rounded-full ring-2 ring-background-light dark:ring-background-dark">
-                                    {user?.photoURL ? (<img src={user.photoURL} alt="Você" className="w-9 h-9 rounded-full object-cover" />) : (<div className="w-9 h-9 rounded-full bg-orange-200 flex items-center justify-center text-orange-800"><span className="material-symbols-outlined text-lg">person</span></div>)}
-                                </div>
-                                <div className="relative z-0 rounded-full ring-2 ring-background-light dark:ring-background-dark opacity-90">
-                                    <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white"><span className="material-symbols-outlined text-lg">group</span></div>
-                                </div>
-                                <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border border-white dark:border-gray-800 animate-pulse"></div>
-                             </div>
-                          ) : (
-                             <button onClick={() => { if (!user) app.openModal('auth'); else app.openModal('shareList'); }} className="h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors" title="Compartilhar Lista">
-                                <span className="material-symbols-outlined">person_add</span>
-                             </button>
-                          )}
-                            <button onClick={(e) => { e.stopPropagation(); app.setFocusMode(!app.isFocusMode); }} className="h-10 w-10 flex lg:hidden items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 transition-colors">
-                                <span className="material-symbols-outlined">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
-                            </button>
-                       </div>
-                    </div>
-                )}
-
-                {app.isCartTooltipVisible && showSessionBar && (
-                    <div className={`absolute right-4 z-[130] w-auto max-w-[200px] bg-zinc-800/95 backdrop-blur-md border border-white/10 text-white rounded-xl shadow-2xl animate-fadeIn p-3 pointer-events-none transition-all duration-300 ${app.isFocusMode ? 'top-16' : 'top-40 lg:top-16'}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="material-symbols-outlined text-green-400 text-lg">check_circle</span>
-                            <span className="font-bold text-sm">{purchasedItemsCount} Comprados</span>
-                        </div>
-                        <p className="text-[10px] text-gray-300 leading-tight">Itens salvos. Finalize para limpar.</p>
-                    </div>
-                )}
-
-                <main 
-                    className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`}
-                    style={globalPatternStyle}
-                >
+                <main className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`} style={globalPatternStyle}>
                     <div className="flex flex-col gap-4 relative z-10">
                         {app.budget !== null && !showHomeView && (
-                            <div className="flex flex-col gap-4 rounded-xl bg-surface-light p-5 shadow-sm dark:bg-surface-dark">
-                                <div className="flex items-center justify-between"><p className="text-base font-semibold">Resumo do Orçamento</p><span>{formattedTotal} de {formatCurrency(app.budget)}</span></div>
-                                <div className="flex items-center gap-4">
-                                    <div className="relative h-16 w-16"><svg viewBox="0 0 36 36"><circle className="stroke-gray-200 dark:stroke-gray-700" cx="18" cy="18" fill="none" r="16" strokeWidth="3"></circle><circle className="stroke-primary" cx="18" cy="18" fill="none" r="16" strokeDasharray="100" strokeDashoffset={100 - budgetProgress} strokeLinecap="round" strokeWidth="3" transform="rotate(-90 18 18)"></circle></svg><div className="absolute inset-0 flex items-center justify-center"><span className="text-sm font-bold text-primary">{Math.round(budgetProgress)}%</span></div></div>
-                                    <div className="flex-1"><div className="h-2.5 rounded-full bg-gray-200 dark:bg-gray-700"><div className="h-2.5 rounded-full bg-primary" style={{ width: `${budgetProgress}%` }}></div></div></div>
-                                </div>
+                            <div className="flex flex-col gap-4 rounded-xl bg-white/5 p-5 border border-white/10">
+                                <div className="flex items-center justify-between text-white"><p className="text-base font-semibold">Gasto Previsto</p><span>{formattedTotal} / {formatCurrency(app.budget)}</span></div>
+                                <div className="h-2.5 rounded-full bg-white/10"><div className="h-2.5 rounded-full bg-blue-500" style={{ width: `${budgetProgress}%` }}></div></div>
                             </div>
                         )}
-                        {showHomeView ? (<EmptyStateCTA onShowRecipeAssistant={() => app.openModal('recipeAssistant')} onShowBudget={() => app.openModal('budget')} />) : (<ShoppingList groupedItems={groupedItems} onDeleteItem={deleteItem} onDeleteGroup={deleteRecipeGroup} onStartEdit={app.startEdit} onShowRecipe={app.showRecipe} onTogglePurchased={toggleItemPurchased} />)}
+                        {showHomeView ? <EmptyStateCTA onShowRecipeAssistant={() => app.openModal('recipeAssistant')} onShowBudget={() => app.openModal('budget')} /> : <ShoppingList groupedItems={groupedItems} onDeleteItem={deleteItem} onDeleteGroup={deleteRecipeGroup} onStartEdit={app.startEdit} onShowRecipe={app.showRecipe} onTogglePurchased={toggleItemPurchased} />}
                     </div>
                 </main>
 
-                {!showHomeView && (
-                    <button onClick={() => app.openModal('addItem')} className="hidden lg:flex absolute bottom-8 left-1/2 -translate-x-1/2 z-40 h-16 w-16 bg-primary hover:bg-primary-hover text-white rounded-full items-center justify-center shadow-xl transition-transform hover:scale-105 active:scale-95" title="Adicionar Item">
-                        <span className="material-symbols-outlined text-3xl">add</span>
-                    </button>
-                )}
+                {!showHomeView && <SlideToFinish total={formattedTotal} onFinish={() => app.openModal('savePurchase')} />}
 
-                {(!showHomeView) && <SlideToFinish total={formattedTotal} onFinish={() => app.openModal('savePurchase')} />}
-
-                <footer className="fixed lg:hidden bottom-0 w-full z-[100] bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-t border-white/20 dark:border-white/10 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] pb-safe-area transition-all duration-300">
+                <footer className="fixed lg:hidden bottom-0 w-full z-[100] bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-t border-white/20 dark:border-white/10 shadow-lg transition-all duration-300">
                     <div className="flex items-end justify-between px-2 h-16 w-full max-w-full">
-                        <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
-                        <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="favorite" label="Favoritos" onClick={() => { if (!user) app.openModal('auth'); else app.openModal('favorites'); }} active={app.isFavoritesModalOpen} /></div>
+                        <div className="flex-1 h-full"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
+                        <div className="flex-1 h-full"><NavButton icon="favorite" label="Favoritos" onClick={() => app.openModal('favorites')} /></div>
                         <div className="flex-1 h-full flex items-center justify-center relative">
-                            <button onClick={() => { if (app.isHomeViewActive) { app.setHomeViewActive(false); } else { app.openModal('addItem'); } }} className={`absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl ring-4 ring-white/50 dark:ring-black/20 backdrop-blur-sm transition-all active:scale-95 ${app.theme === 'christmas' ? 'bg-[#165B33]' : (app.theme === 'newyear' ? 'bg-amber-500' : 'bg-gradient-to-br from-primary to-orange-600')}`}>
-                                {app.isHomeViewActive ? (<span className="material-symbols-outlined" style={{ fontSize: '32px' }}>shopping_cart</span>) : (<span className="material-symbols-outlined" style={{ fontSize: '32px' }}>add</span>)}
+                            <button onClick={() => app.isHomeViewActive ? app.setHomeViewActive(false) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
+                                <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>{app.isHomeViewActive ? 'shopping_cart' : 'add'}</span>
                             </button>
                         </div>
-                        <div className="flex-1 h-full flex items-center justify-center"><NavButton icon="local_offer" label="Ofertas" onClick={() => app.openModal('offers')} active={app.isOffersModalOpen} /></div>
-                        <div className="flex-1 h-full flex items-center justify-center relative"><NavButton icon={<span className="material-symbols-outlined text-[28px] animate-color-pulse">auto_awesome</span>} label="Menu" onClick={handleBottomMenuClick} active={app.isToolsModalOpen} /></div>
+                        <div className="flex-1 h-full"><NavButton icon="local_offer" label="Ofertas" onClick={() => app.openModal('offers')} /></div>
+                        <div className="flex-1 h-full"><NavButton icon={<span className="material-symbols-outlined text-[28px] animate-color-pulse">auto_awesome</span>} label="Menu" onClick={handleBottomMenuClick} /></div>
                     </div>
                 </footer>
+
                 <AppModals sharedListData={sharedListData} isImportingShare={isImportingShare} isDistributionModalOpen={isDistributionModalOpen} closeDistributionModal={closeDistributionModal} handleShare={handleShare} handleAddItem={handleAddItem} editingItem={editingItem} handleSavePurchase={handleSavePurchase} handleFinishWithoutSaving={handleFinishWithoutSaving} handleRepeatPurchase={handleRepeatPurchase} handleAddHistoricItem={handleAddHistoricItem} handleImportSharedList={handleImportSharedList} handleStartShopping={handleStartShopping} handleShareAndStart={handleShareAndStart} handleAddToCurrentList={handleAddToCurrentList} handleStartNewListForRecipe={handleStartNewListForRecipe} />
             </div>
             <WebSidebarRight />
@@ -621,9 +543,5 @@ const AppContent: React.FC = () => {
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
-    ReactDOM.createRoot(rootElement).render(
-        <React.StrictMode>
-            <AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>
-        </React.StrictMode>
-    );
+    ReactDOM.createRoot(rootElement).render(<React.StrictMode><AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider></React.StrictMode>);
 }

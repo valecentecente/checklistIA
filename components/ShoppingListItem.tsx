@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { ShoppingItem } from '../types';
 
@@ -46,9 +45,9 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
         <p className={textClasses}>
             {item.name}
         </p>
-         {/* Detalhes (Peso/Qtd) agora visíveis sempre, com estilo refinado */}
+         {/* Detalhes (Peso/Qtd) ocultos no MOBILE (hidden) e visíveis no DESKTOP (lg:block) */}
          {showDetails && (
-             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium hidden lg:block">
                 {item.details}
              </p>
          )}

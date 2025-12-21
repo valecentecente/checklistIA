@@ -178,12 +178,3 @@ export interface ActivityLog {
     details?: string;
     timestamp: any;
 }
-
-// Added to resolve import errors in AppContext.tsx
-export interface PlannedEvent {
-  id: string;
-  name: string;
-  date: string;
-  recipeNames: string[];
-  notes?: string;
-}
