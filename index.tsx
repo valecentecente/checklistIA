@@ -83,6 +83,11 @@ const AppContent: React.FC = () => {
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
     const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
     
+    // ESTADOS PARA EDIÇÃO INLINE DO NOME DO MERCADO
+    const [isEditingMarketName, setIsEditingMarketName] = useState(false);
+    const [tempMarketName, setTempMarketName] = useState('');
+    const marketInputRef = useRef<HTMLInputElement>(null);
+
     const [lastSeenNotificationCount, setLastSeenNotificationCount] = useState(0);
     const showProfileBadge = app.unreadNotificationCount > 0 && app.unreadNotificationCount > lastSeenNotificationCount;
 
@@ -366,6 +371,24 @@ const AppContent: React.FC = () => {
             }
         }
     };
+
+    // FUNÇÕES PARA EDIÇÃO INLINE DO NOME DO MERCADO
+    const startEditingMarketName = () => {
+        setTempMarketName(app.currentMarketName || "Minha Lista");
+        setIsEditingMarketName(true);
+    };
+
+    const saveMarketNameChange = () => {
+        if (tempMarketName.trim()) {
+            app.setCurrentMarketName(tempMarketName.trim());
+        }
+        setIsEditingMarketName(false);
+    };
+
+    const handleMarketNameKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') saveMarketNameChange();
+        if (e.key === 'Escape') setIsEditingMarketName(false);
+    };
     
     const showHomeView = app.isHomeViewActive;
     const showSessionBar = !app.isHomeViewActive;
@@ -400,7 +423,7 @@ const AppContent: React.FC = () => {
     );
 
     const globalPatternStyle = {
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='150' height='150' viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23F97316' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M20 30c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm80 40c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm-70-10c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm110 50c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM60 140c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 2 5 5 5zm100-120c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM25 140c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50-100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm40-20c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zm-10 100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50 40c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zM60 60c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm-12-20c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60-30c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60 60c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zM20 70c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4z'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='150' height='150' viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23F97316' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M20 30c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm80 40c6 0 11-5 11-11s-5-11-11-11-11 5-11 11 5 11 11 11zm-70-10c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zm110 50c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM60 140c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 2 5 5 5zm100-120c3 0 5-2 5-5s-2-5-5-5-5 2-5 5 2 5 5 5zM25 140c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50-100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm40-20c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zm-10 100c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm50 40c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9zM60 60c4 0 7-3 7-7s-3-7-7-7-7 3-7 7 3 7 7 7zm-12-20c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60-30c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zm60 60c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4zM20 70c2 0 4-2 4-4s-2-4-4-4-4 2-4 4 2 4 4 4'/%3E%3C/g%3E%3C/svg%3E")`,
         backgroundSize: '150px 150px'
     };
 
@@ -412,7 +435,6 @@ const AppContent: React.FC = () => {
             <div className="relative w-full lg:flex-1 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu">
                 
                 {/* --- HEADER PRINCIPAL --- */}
-                {/* Oculto em modo focus no mobile, visível apenas mobile se for a Home. Se for lista ativa, mostra o session bar abaixo. */}
                 <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/40 dark:bg-black/30 backdrop-blur-2xl border-b border-white/10 dark:border-white/5 shadow-lg`}>
                     <header className="flex h-20 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
@@ -441,12 +463,27 @@ const AppContent: React.FC = () => {
                 {/* --- SESSION BAR (VISÍVEL NO MOBILE E DESKTOP QUANDO LISTA ATIVA) --- */}
                 {showSessionBar && (
                     <div className={`sticky top-0 z-[112] w-full flex-shrink-0 bg-white/80 dark:bg-black/80 backdrop-blur-2xl border-b border-white/10 px-4 py-3 flex items-center justify-between shadow-sm transition-all duration-300 ${app.isFocusMode && 'hidden'}`}>
-                        <div className="flex flex-col flex-1 min-w-0 cursor-pointer group" onClick={() => app.openModal('startShopping')}>
+                        <div className="flex flex-col flex-1 min-w-0">
                             <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>
-                            <div className="flex items-center gap-1.5">
-                                <span className="font-black text-primary dark:text-orange-400 text-sm leading-none truncate max-w-[220px]">{app.currentMarketName || "Minha Lista"}</span>
-                                <span className="material-symbols-outlined text-[12px] text-gray-400 group-hover:text-primary transition-colors">edit</span>
-                            </div>
+                            
+                            {isEditingMarketName ? (
+                                <input
+                                    ref={marketInputRef}
+                                    autoFocus
+                                    className="bg-transparent border-b border-primary/40 focus:border-primary outline-none font-black text-primary dark:text-orange-400 text-sm leading-none w-full max-w-[220px]"
+                                    value={tempMarketName}
+                                    onChange={(e) => setTempMarketName(e.target.value)}
+                                    onBlur={saveMarketNameChange}
+                                    onKeyDown={handleMarketNameKeyDown}
+                                />
+                            ) : (
+                                <div className="flex items-center gap-1.5 cursor-pointer group" onClick={startEditingMarketName}>
+                                    <span className="font-black text-primary dark:text-orange-400 text-sm leading-none truncate max-w-[220px]">
+                                        {app.currentMarketName || "Minha Lista"}
+                                    </span>
+                                    <span className="material-symbols-outlined text-[12px] text-gray-400 group-hover:text-primary transition-colors">edit</span>
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
                             <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors hover:bg-black/10">
@@ -490,7 +527,7 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 h-full"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full"><NavButton icon="favorite" label="Favoritos" onClick={() => app.openModal('favorites')} /></div>
                         <div className="flex-1 h-full flex items-center justify-center relative">
-                            <button onClick={() => app.isHomeViewActive ? app.setHomeViewActive(false) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
+                            <button onClick={() => app.isHomeViewActive ? (items.length > 0 || app.currentMarketName ? app.setHomeViewActive(false) : app.openModal('startShopping')) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
                                 <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>{app.isHomeViewActive ? 'shopping_cart' : 'add'}</span>
                             </button>
                         </div>

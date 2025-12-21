@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -470,8 +469,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (fallbackCache) {
                     const poolData = mapToFullRecipeArray(fallbackCache.pool);
                     const cacheData = mapToFullRecipeArray(fallbackCache.cache);
-                    setAllRecipesPool(poolData.length > 0 ? poolData : SURVIVAL_RECIPES);
-                    setGlobalRecipeCache(cacheData.length > 0 ? cacheData : SURVIVAL_RECIPES);
+                    // Add explicit casts to avoid unknown[] error on line 354
+                    setAllRecipesPool((poolData.length > 0 ? poolData : SURVIVAL_RECIPES) as FullRecipe[]);
+                    setGlobalRecipeCache((cacheData.length > 0 ? cacheData : SURVIVAL_RECIPES) as FullRecipe[]);
                     setTotalRecipeCount(fallbackCache.count || 0);
                 }
             }
@@ -513,7 +513,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return scored.sort((a, b) => b.score - a.score).map(s => s.recipe);
     }, [scheduleRules]);
 
-    // Fixed TypeScript error on line 354 by adding explicit cast or return type
     const featuredRecipes = useMemo((): FullRecipe[] => {
         return getContextualRecipes(allRecipesPool).slice(0, 10);
     }, [allRecipesPool, getContextualRecipes]);
