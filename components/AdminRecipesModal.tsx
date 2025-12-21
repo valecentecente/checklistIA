@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, limit, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import type { FullRecipe } from '../types';
 
@@ -25,21 +25,28 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
 
     useEffect(() => {
-        if (!isOpen || !db) return;
+        if (!isOpen || !db || !auth?.currentUser) {
+            if (isOpen && !auth?.currentUser) setIsLoading(false);
+            return;
+        }
+        
         setIsLoading(true);
         const q = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(500));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const loadedRecipes: RecipeWithId[] = [];
-            snapshot.forEach(doc => {
-                const data = doc.data() as FullRecipe;
-                if (data.name) loadedRecipes.push({ ...data, id: doc.id });
-            });
-            setRecipes(loadedRecipes);
-            setIsLoading(false);
-        }, (error) => {
-            console.error("Firestore error:", error);
-            setIsLoading(false);
-        });
+        const unsubscribe = onSnapshot(q, 
+            (snapshot) => {
+                const loadedRecipes: RecipeWithId[] = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data() as FullRecipe;
+                    if (data.name) loadedRecipes.push({ ...data, id: doc.id });
+                });
+                setRecipes(loadedRecipes);
+                setIsLoading(false);
+            }, 
+            (error) => {
+                console.warn("[Admin] Erro de permissão em 'recipes':", error.message);
+                setIsLoading(false);
+            }
+        );
         return () => unsubscribe();
     }, [isOpen]);
 
@@ -211,6 +218,12 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
 
                 {/* Grid de Receitas */}
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-100 dark:bg-black/20">
+                    {!auth?.currentUser && (
+                        <div className="p-4 bg-orange-100 text-orange-800 rounded-lg text-sm font-bold text-center mb-4">
+                            Você está em modo de demonstração. <br/>Acesse sua conta para ver o acervo real.
+                        </div>
+                    )}
+
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center py-20 gap-3">
                             <span className="material-symbols-outlined animate-spin text-4xl text-primary">sync</span>

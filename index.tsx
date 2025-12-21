@@ -459,23 +459,23 @@ const AppContent: React.FC = () => {
             <div className="relative w-full lg:flex-1 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu">
                 
                 {/* --- CONTAINER FIXO DO TOPO (HEADER + SESSION BAR) --- */}
-                {/* CONFIGURAÇÃO GLASSMORPHISM IGUAL AO RODAPÉ */}
-                <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-b border-white/20 dark:border-white/10 shadow-lg`}>
+                {/* CONFIGURAÇÃO GLASSMORPHISM ATUALIZADA - MAIS TRANSLÚCIDO E BLUR POTENTE */}
+                <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/40 dark:bg-black/30 backdrop-blur-2xl border-b border-white/10 dark:border-white/5 shadow-lg`}>
                     <header className="flex h-20 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
-                            <div onClick={() => app.setHomeViewActive(true)} className="h-10 w-10 shrink-0 rounded-full shadow-md overflow-hidden bg-white flex items-center justify-center cursor-pointer">
+                            <div onClick={() => app.setHomeViewActive(true)} className="h-10 w-10 shrink-0 rounded-full shadow-md overflow-hidden bg-white/90 flex items-center justify-center cursor-pointer">
                                 <Logo className="w-6 h-6 text-blue-600" />
                             </div>
                             <div className="flex flex-col justify-center items-start">
                                 <h1 translate="no" className="text-lg font-bold tracking-tight leading-none text-slate-800 dark:text-white">
                                     <span>Checklist</span><span className="text-blue-600 dark:text-blue-400 ml-0.5">IA</span>
                                 </h1>
-                                <span translate="no" className="mt-0.5 w-fit rounded-full bg-orange-100 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-orange-700 leading-none shadow-sm">Beta</span>
+                                <span translate="no" className="mt-0.5 w-fit rounded-full bg-orange-100/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-orange-700 leading-none shadow-sm backdrop-blur-sm">Beta</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <div className="relative">
-                                <button onClick={handleProfileClick} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-white/20 dark:text-slate-300 overflow-hidden border border-white/30 shadow-sm">
+                                <button onClick={handleProfileClick} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-white/20 dark:text-slate-300 overflow-hidden border border-white/40 shadow-sm backdrop-blur-md">
                                     {user?.photoURL ? <img src={user.photoURL} alt="Foto" className="h-full w-full object-cover" /> : <span className="material-symbols-outlined !text-2xl">account_circle</span>}
                                 </button>
                                 {showProfileBadge && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-bold rounded-full h-4 w-4 flex items-center justify-center border border-white">!</span>}
@@ -485,7 +485,7 @@ const AppContent: React.FC = () => {
                     </header>
 
                     {showSessionBar && (
-                        <div className="w-full px-4 py-2 flex items-center justify-between transition-all duration-300 border-t border-white/10">
+                        <div className="w-full px-4 py-2 flex items-center justify-between transition-all duration-300 border-t border-white/5">
                            <div className="flex flex-col flex-1 min-w-0" onClick={startEditingMarketName}>
                               <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>
                               <div className="flex items-center gap-1.5 group cursor-pointer">
@@ -494,11 +494,11 @@ const AppContent: React.FC = () => {
                               </div>
                            </div>
                            <div className="flex items-center justify-end pl-2 gap-2">
-                              <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-300 transition-colors">
+                              <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors">
                                 <span className="material-symbols-outlined text-xl">shopping_cart</span>
                                 {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
                               </button>
-                              <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-300">
+                              <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
                                  <span className="material-symbols-outlined text-xl">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
                               </button>
                            </div>

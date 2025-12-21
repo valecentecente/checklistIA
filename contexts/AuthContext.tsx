@@ -187,7 +187,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
-        if (!user || !user.username || !db) return;
+        // Ignora listeners de Firebase se for usuário Guest ou offline
+        if (!user || !user.username || !db || !auth?.currentUser) return;
 
         const q = query(
             collection(db, 'admin_invites'), 
@@ -203,11 +204,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setPendingAdminInvite(null);
             }
         }, (error) => {
-            console.warn("Erro ao buscar convites de admin:", error);
+            console.warn("[Auth] Erro ao buscar convites de admin:", error.message);
         });
 
         return () => unsubscribe();
-    }, [user?.username]);
+    }, [user?.username, user?.uid]);
 
     const migrateGuestData = async (userId: string) => {
         try {

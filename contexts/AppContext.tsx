@@ -1,8 +1,9 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule } from '../types';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
 
@@ -251,7 +252,7 @@ export const generateKeywords = (text: string): string[] => {
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
+    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, offers } = useShoppingList();
     const { user } = useAuth();
 
     const [modalStates, setModalStates] = useState({
@@ -288,7 +289,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const [theme, setThemeState] = useState<Theme>(() => {
         const stored = localStorage.getItem('theme');
-        if (stored === 'light' || stored === 'dark' || stored === 'christmas' || stored === 'newyear') return stored;
+        if (stored === 'light' || stored === 'dark' || stored === 'christmas' || stored === 'newyear') return stored as Theme;
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
 
@@ -308,7 +309,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [isOrganizing, setIsOrganizing] = useState(false);
     const [itemCategories, setItemCategories] = useState<Record<string, string>>({});
     const [showStartHerePrompt, setShowStartHerePrompt] = useState(false);
-    const [authTrigger, setAuthTrigger] = useState<string | null>(null);
     const [incomingList, setIncomingList] = useState<ReceivedListRecord | null>(null);
     
     const [smartNudgeItemName, setSmartNudgeItemName] = useState<string | null>(null);
@@ -357,6 +357,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 return pool.slice(0, 10);
             case 'random':
                 return shuffleArray(pool).slice(0, 5);
+            case 'sorvetes':
+                return pool.filter(r => r.tags?.some(t => t.toLowerCase().includes('sorvete') || t.toLowerCase().includes('gelato')));
             default:
                 return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
         }
@@ -391,7 +393,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             if (cachedString) {
                 try {
-                    // Proper validation and mapping of cached data to satisfy TypeScript required properties
                     const cache = JSON.parse(cachedString);
                     fallbackCache = cache; 
                     
@@ -418,7 +419,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     snapshotFetch.forEach(docSnap => {
                         const data = docSnap.data();
                         if (data && data.name && data.imageUrl) {
-                            fetched.push({ 
+                            // Explicitly mapping each property to ensure compliance with FullRecipe interface
+                            const recipe: FullRecipe = { 
                                 name: String(data.name || ''),
                                 ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
                                 instructions: Array.isArray(data.instructions) ? data.instructions : [],
@@ -433,11 +435,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                                 keywords: data.keywords,
                                 tags: data.tags,
                                 isAlcoholic: !!data.isAlcoholic
-                            } as FullRecipe);
+                            };
+                            fetched.push(recipe);
                         }
                     });
 
-                    // Explicitly type pool and mapped fallbacks to avoid 'unknown[]' errors
+                    // Explicitly cast ternary branches to ensure pool is inferred as FullRecipe[]
                     const pool: FullRecipe[] = fetched.length > 0 
                         ? shuffleArray<FullRecipe>(fetched) 
                         : (fallbackCache && fallbackCache.pool ? mapToFullRecipeArray(fallbackCache.pool) : SURVIVAL_RECIPES);
@@ -464,7 +467,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 ]);
 
             } catch (error: any) {
-                console.warn("Firestore sluggish/offline. Using local data.", error.message);
                 if (fallbackCache) {
                     const poolData = mapToFullRecipeArray(fallbackCache.pool);
                     const cacheData = mapToFullRecipeArray(fallbackCache.cache);
@@ -673,7 +675,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
             return results;
         } catch (error) { 
-            console.error("Search error:", error);
             return []; 
         }
     }, []);
@@ -704,7 +705,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             REGRAS OBRIGATÓRIAS:
             1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
             2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
-            3. Identifique se o prato é alcoólico e defina 'isAlcoholic'.
+            3. Identifique se o preparo exige equipamentos específicos (ex: batedeira, airfryer, forma, liquidificador, colher de pau, etc) para venda direcionada.
             4. Retorne APENAS o JSON puro seguindo este formato:
             {
                 "name": "${recipeName}",
@@ -716,7 +717,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 "difficulty": "Médio",
                 "cost": "Médio",
                 "isAlcoholic": false,
-                "tags": ["tag1", "tag2"]
+                "tags": ["tag1", "tag2"],
+                "suggestedLeads": ["batedeira", "forma de bolo"]
             }`;
 
             const parts: any[] = [];
@@ -748,12 +750,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 description: details.description,
                 keywords: generateKeywords(finalName),
                 tags: details.tags || [],
-                isAlcoholic: !!details.isAlcoholic
+                isAlcoholic: !!details.isAlcoholic,
+                suggestedLeads: details.suggestedLeads || []
             };
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             closeModal('recipeAssistant');
+
+            // PROCESSO DE LEADS PARA ADMIN (ACHADINHOS)
+            if (db && details.suggestedLeads && details.suggestedLeads.length > 0) {
+                details.suggestedLeads.forEach(async (term: string) => {
+                    const hasOffer = offers.some(o => o.tags?.some(t => t.toLowerCase().includes(term.toLowerCase())));
+                    if (!hasOffer) {
+                        await addDoc(collection(db!, 'sales_opportunities'), {
+                            term, recipeName: finalName, status: 'pending', createdAt: serverTimestamp()
+                        }).catch(() => {});
+                    }
+                });
+            }
 
             if (db) {
                 const docId = getRecipeDocId(fullData.name);
@@ -770,12 +785,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             if (autoAdd) await addRecipeToShoppingList(fullData);
         } catch (e: any) { 
-            console.error("Erro na generation de receita:", e);
             setRecipeError("O Chef está ocupado ou a conexão falhou. Tente em instantes."); 
         } finally { 
             setIsRecipeLoading(false); 
         }
-    }, [apiKey]); 
+    }, [apiKey, offers]); 
 
     const compressImage = (base64Str: string): Promise<string> => {
         return new Promise((resolve) => {
@@ -900,7 +914,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [user, items.length, currentMarketName, showToast, openModal]);
 
     const value = {
-        ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme,
+        ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme: setThemeState,
         installPromptEvent, handleInstall, handleDismissInstall, isPWAInstallVisible,
         budget, setBudget, clearBudget, toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
         fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,

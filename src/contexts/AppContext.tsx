@@ -31,6 +31,7 @@ interface AppContextType {
     isOffersModalOpen: boolean;
     isAdminModalOpen: boolean;
     isAdminRecipesModalOpen: boolean;
+    // Removed duplicate identifiers isInfoModalOpen and isStartShoppingModalOpen
     isInfoModalOpen: boolean;
     isStartShoppingModalOpen: boolean;
     isShareListModalOpen: boolean;
@@ -560,14 +561,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         try {
             const ai = new GoogleGenAI({ apiKey });
-            // Added retry logic to improve reliability on free tier
+            // Added explicit cast to handle unknown response from parser as FullRecipe[]
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: `Sugira 5 receitas para o tema: "${prompt}". Retorne JSON completo: [{"name": "Nome", "ingredients": [], "instructions": [], "imageQuery": "desc", "servings": "X", "prepTimeInMinutes": 30, "difficulty": "Médio", "cost": "Médio"}]`,
                 config: { responseMimeType: "application/json" }
             });
-            // Fixed potentially unknown return from JSON.parse and mapped it to FullRecipe array correctly
-            // Added explicit cast to handle unknown response from parser as FullRecipe[]
+            
+            // Properly map unknown parser result to FullRecipe[]
             const suggestionsRaw = JSON.parse(response.text || "[]") as any[];
             const suggestions: FullRecipe[] = (suggestionsRaw || []).map((s: any): FullRecipe => ({
                 name: String(s.name || ''),
@@ -576,8 +577,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 imageQuery: String(s.imageQuery || ''),
                 servings: String(s.servings || ''),
                 prepTimeInMinutes: Number(s.prepTimeInMinutes || 0),
-                difficulty: (s.difficulty === 'Fácil' || s.difficulty === 'Médio' || s.difficulty === 'Difícil') ? s.difficulty : 'Médio',
-                cost: (s.cost === 'Baixo' || s.cost === 'Médio' || s.cost === 'Alto') ? s.cost : 'Médio',
+                // Cast to specific literal types to satisfy FullRecipe contract
+                difficulty: (s.difficulty === 'Fácil' || s.difficulty === 'Médio' || s.difficulty === 'Difícil' ? s.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+                cost: (s.cost === 'Baixo' || s.cost === 'Médio' || s.cost === 'Alto' ? s.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
             }));
             setRecipeSuggestions(suggestions);
         } catch (error) {

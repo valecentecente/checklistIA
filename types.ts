@@ -50,6 +50,14 @@ export interface RecipeDetails {
   cost: 'Baixo' | 'Médio' | 'Alto';
 }
 
+export interface SalesOpportunity {
+    id: string;
+    term: string;
+    recipeName: string;
+    status: 'pending' | 'converted' | 'dismissed';
+    createdAt: any;
+}
+
 export interface FullRecipe {
   name: string;
   ingredients: {
@@ -68,6 +76,7 @@ export interface FullRecipe {
   keywords?: string[]; 
   tags?: string[]; 
   isAlcoholic?: boolean; 
+  suggestedLeads?: string[]; // Novos produtos sugeridos pela IA
 }
 
 export interface RecipeSuggestion {
