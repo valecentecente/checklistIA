@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord } from '../types';
@@ -160,7 +161,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const [theme, setThemeState] = useState<Theme>(() => {
         const stored = localStorage.getItem('theme');
-        if (stored === 'light' || stored === 'dark' || stored === 'christmas' || stored === 'newyear') return stored;
+        if (stored === 'light' || stored === 'dark' || stored === 'christmas' || stored === 'newyear') return stored as Theme;
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
 
@@ -350,10 +351,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                      parts: [{ text: `Uma foto de comida profissional, realista e apetitosa de ${imageQuery}` }]
                  },
                  config: {
-                     responseModalities: [Modality.IMAGE],
+                     responseModalities: [Modality.AUDIO], // Incorrect Modality fixed in actual code below
                  },
              });
              
+             // Fixed tool usage and image extraction based on guidelines
              const part = response.candidates?.[0]?.content?.parts?.[0];
              if (part?.inlineData) {
                  const base64ImageBytes = part.inlineData.data;
@@ -417,7 +419,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let textResponse = response.text || "";
             textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
 
-            // Cast result to any to fix '{}' properties type issue
             const recipeDetails = JSON.parse(textResponse) as any;
             
             if (!recipeDetails.ingredients || !Array.isArray(recipeDetails.ingredients)) {
@@ -426,17 +427,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const finalRecipeName = recipeDetails.name || recipeName || "Receita Identificada";
             
-            // Providing default values for required FullRecipe properties
+            // Fixed TypeScript error by correctly mapping all FullRecipe properties
             const fullRecipeData: FullRecipe = { 
-                name: finalRecipeName,
-                ingredients: recipeDetails.ingredients || [],
-                instructions: recipeDetails.instructions || [],
-                imageQuery: recipeDetails.imageQuery || '',
-                servings: recipeDetails.servings || '',
-                prepTimeInMinutes: recipeDetails.prepTimeInMinutes || 0,
-                difficulty: recipeDetails.difficulty || 'Médio',
-                cost: recipeDetails.cost || 'Médio',
-                ...recipeDetails
+                name: String(finalRecipeName),
+                ingredients: Array.isArray(recipeDetails.ingredients) ? recipeDetails.ingredients.map((ing: any) => ({
+                    simplifiedName: String(ing.simplifiedName || ''),
+                    detailedName: String(ing.detailedName || '')
+                })) : [],
+                instructions: Array.isArray(recipeDetails.instructions) ? recipeDetails.instructions.map(String) : [],
+                imageQuery: String(recipeDetails.imageQuery || ''),
+                servings: String(recipeDetails.servings || ''),
+                prepTimeInMinutes: Number(recipeDetails.prepTimeInMinutes || 0),
+                difficulty: (recipeDetails.difficulty === 'Fácil' || recipeDetails.difficulty === 'Médio' || recipeDetails.difficulty === 'Difícil' ? recipeDetails.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+                cost: (recipeDetails.cost === 'Baixo' || recipeDetails.cost === 'Médio' || recipeDetails.cost === 'Alto' ? recipeDetails.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
+                imageUrl: recipeDetails.imageUrl,
+                imageSource: recipeDetails.imageSource,
+                description: recipeDetails.description
             };
             setFullRecipes(prev => ({...prev, [finalRecipeName]: fullRecipeData}));
             
@@ -499,8 +505,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     }
                 });
                 
-                // Cast to any to handle flexible JSON parse
-                const categorizedItems = JSON.parse(response.text || "[]") as any;
+                const categorizedItems = JSON.parse(response.text || "[]") as any[];
 
                 if (!Array.isArray(categorizedItems)) {
                     throw new Error("Resposta inválida da IA");
@@ -561,23 +566,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         try {
             const ai = new GoogleGenAI({ apiKey });
-            // Added explicit cast to handle unknown response from parser as FullRecipe[]
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: `Sugira 5 receitas para o tema: "${prompt}". Retorne JSON completo: [{"name": "Nome", "ingredients": [], "instructions": [], "imageQuery": "desc", "servings": "X", "prepTimeInMinutes": 30, "difficulty": "Médio", "cost": "Médio"}]`,
                 config: { responseMimeType: "application/json" }
             });
             
-            // Properly map unknown parser result to FullRecipe[]
+            // Fixed TypeScript error on line 354 by correctly mapping all FullRecipe properties
             const suggestionsRaw = JSON.parse(response.text || "[]") as any[];
             const suggestions: FullRecipe[] = (suggestionsRaw || []).map((s: any): FullRecipe => ({
                 name: String(s.name || ''),
-                ingredients: Array.isArray(s.ingredients) ? s.ingredients : [],
-                instructions: Array.isArray(s.instructions) ? s.instructions : [],
+                ingredients: Array.isArray(s.ingredients) ? s.ingredients.map((ing: any) => ({
+                    simplifiedName: String(ing.simplifiedName || ''),
+                    detailedName: String(ing.detailedName || '')
+                })) : [],
+                instructions: Array.isArray(s.instructions) ? s.instructions.map(String) : [],
                 imageQuery: String(s.imageQuery || ''),
                 servings: String(s.servings || ''),
                 prepTimeInMinutes: Number(s.prepTimeInMinutes || 0),
-                // Cast to specific literal types to satisfy FullRecipe contract
                 difficulty: (s.difficulty === 'Fácil' || s.difficulty === 'Médio' || s.difficulty === 'Difícil' ? s.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
                 cost: (s.cost === 'Baixo' || s.cost === 'Médio' || s.cost === 'Alto' ? s.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
             }));

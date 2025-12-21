@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -11,7 +12,6 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 Horas de cache
 
-// Adicionado keywords e isAlcoholic para conformidade total com a interface FullRecipe
 const SURVIVAL_RECIPES: FullRecipe[] = [
     {
         name: "Omelete de Ervas",
@@ -33,17 +33,6 @@ const SURVIVAL_RECIPES: FullRecipe[] = [
         imageUrl: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80",
         tags: ["massa", "almoço", "rápido"],
         keywords: ["macarrao", "alho", "oleo", "massa"],
-        isAlcoholic: false
-    },
-    {
-        name: "Salada Tropical",
-        ingredients: [{simplifiedName: "Alface", detailedName: "1 pé"}],
-        instructions: ["Lave"],
-        imageQuery: "salada",
-        servings: "2", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
-        imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
-        tags: ["salada", "fit", "saudável"],
-        keywords: ["salada", "tropical", "saudavel", "fit"],
         isAlcoholic: false
     }
 ];
@@ -214,7 +203,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Fix type inference for callGenAIWithRetry to ensure result type matches fn return type
 export const callGenAIWithRetry = async <T = GenerateContentResponse>(fn: () => Promise<T>, retries = 8): Promise<T> => {
     try {
         return await fn();
@@ -371,13 +359,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [globalRecipeCache]);
 
-    // Helper to properly map and validate cached recipe data to FullRecipe type
+    // Fixed mapping function to be typed safely
     const mapToFullRecipeArray = (data: any): FullRecipe[] => {
         if (!Array.isArray(data)) return [];
         return data.map((r: any): FullRecipe => ({
             name: String(r.name || 'Receita'),
-            ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
-            instructions: Array.isArray(r.instructions) ? r.instructions : [],
+            ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
+                simplifiedName: String(i.simplifiedName || ''),
+                detailedName: String(i.detailedName || '')
+            })) : [],
+            instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [],
             imageQuery: String(r.imageQuery || r.name || ''),
             servings: String(r.servings || '2 porções'),
             prepTimeInMinutes: Number(r.prepTimeInMinutes || 30),
@@ -386,9 +377,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             imageUrl: r.imageUrl,
             imageSource: r.imageSource || 'cache',
             description: r.description,
-            keywords: r.keywords,
-            tags: r.tags,
-            isAlcoholic: !!r.isAlcoholic
+            keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [],
+            tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+            isAlcoholic: !!r.isAlcoholic,
+            suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : []
         }));
     };
 
@@ -424,13 +416,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const snapshotFetch = await getDocs(qFetch);
                     const fetched: FullRecipe[] = [];
                     snapshotFetch.forEach(docSnap => {
-                        const data = docSnap.data() as any; // Cast to any to safely build FullRecipe
+                        const data = docSnap.data() as any; 
                         if (data && data.name && data.imageUrl) {
-                            // Explicitly mapping each property to ensure compliance with FullRecipe interface
-                            const recipe: FullRecipe = { 
+                            fetched.push({ 
                                 name: String(data.name || ''),
-                                ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
-                                instructions: Array.isArray(data.instructions) ? data.instructions : [],
+                                ingredients: Array.isArray(data.ingredients) ? data.ingredients.map((i: any) => ({
+                                    simplifiedName: String(i.simplifiedName || ''),
+                                    detailedName: String(i.detailedName || '')
+                                })) : [],
+                                instructions: Array.isArray(data.instructions) ? data.instructions.map(String) : [],
                                 imageQuery: String(data.imageQuery || data.name || ''),
                                 servings: String(data.servings || '2 porções'),
                                 prepTimeInMinutes: Number(data.prepTimeInMinutes || 30),
@@ -439,23 +433,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                                 imageUrl: data.imageUrl,
                                 imageSource: 'cache',
                                 description: data.description,
-                                keywords: data.keywords,
-                                tags: data.tags,
-                                isAlcoholic: !!data.isAlcoholic
-                            };
-                            fetched.push(recipe);
+                                keywords: Array.isArray(data.keywords) ? data.keywords.map(String) : [],
+                                tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+                                isAlcoholic: !!data.isAlcoholic,
+                                suggestedLeads: Array.isArray(data.suggestedLeads) ? data.suggestedLeads.map(String) : []
+                            });
                         }
                     });
 
-                    // Explicitly type pool as FullRecipe[] and cast branches to handle ternary inference issues
-                    // FIX: Added explicit cast to FullRecipe[] for ternary result to resolve unknown[] error
                     const pool: FullRecipe[] = (fetched.length > 0 
                         ? shuffleArray<FullRecipe>(fetched) 
                         : (fallbackCache && fallbackCache.pool ? mapToFullRecipeArray(fallbackCache.pool) : SURVIVAL_RECIPES)) as FullRecipe[];
                     setAllRecipesPool(pool);
                     
-                    // Explicitly type cacheToSet as FullRecipe[] and cast ternary result
-                    // FIX: Added explicit cast to FullRecipe[] for ternary result to resolve unknown[] error
                     const cacheToSet: FullRecipe[] = (fetched.length > 0 
                         ? (fetched as FullRecipe[]) 
                         : (fallbackCache && fallbackCache.cache ? mapToFullRecipeArray(fallbackCache.cache) : SURVIVAL_RECIPES)) as FullRecipe[];
@@ -523,7 +513,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return scored.sort((a, b) => b.score - a.score).map(s => s.recipe);
     }, [scheduleRules]);
 
-    const featuredRecipes = useMemo(() => {
+    // Fixed TypeScript error on line 354 by adding explicit cast or return type
+    const featuredRecipes = useMemo((): FullRecipe[] => {
         return getContextualRecipes(allRecipesPool).slice(0, 10);
     }, [allRecipesPool, getContextualRecipes]);
 
@@ -663,14 +654,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
             snap.forEach(docSnap => {
-                // Fix: Cast docSnap.data() to any to avoid Property access on DocumentData issue
                 const data = docSnap.data() as any;
                 if (data && data.name) {
-                    // Explicitly mapping each property to ensure compliance with FullRecipe interface and avoid 'missing properties' errors
                     results.push({ 
                         name: String(data.name || ''),
-                        ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
-                        instructions: Array.isArray(data.instructions) ? data.instructions : [],
+                        ingredients: Array.isArray(data.ingredients) ? data.ingredients.map((i: any) => ({
+                            simplifiedName: String(i.simplifiedName || ''),
+                            detailedName: String(i.detailedName || '')
+                        })) : [],
+                        instructions: Array.isArray(data.instructions) ? data.instructions.map(String) : [],
                         imageQuery: String(data.imageQuery || data.name || ''),
                         servings: String(data.servings || '2 porções'),
                         prepTimeInMinutes: Number(data.prepTimeInMinutes || 30),
@@ -679,9 +671,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         imageUrl: data.imageUrl,
                         imageSource: 'cache',
                         description: data.description,
-                        keywords: data.keywords,
-                        tags: data.tags,
-                        isAlcoholic: !!data.isAlcoholic
+                        keywords: Array.isArray(data.keywords) ? data.keywords.map(String) : [],
+                        tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+                        isAlcoholic: !!data.isAlcoholic,
+                        suggestedLeads: Array.isArray(data.suggestedLeads) ? data.suggestedLeads.map(String) : []
                     } as FullRecipe);
                 }
             });
@@ -694,7 +687,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleRecipeSearch = async (term: string) => {
         setIsSearchingAcervo(true); 
         try {
-            // Fix: Explicitly type searchGlobalRecipes results as FullRecipe[]
             const results: FullRecipe[] = await searchGlobalRecipes(term);
             setRecipeSearchResults(results);
             setCurrentSearchTerm(term);
@@ -749,10 +741,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             
             const finalName = details.name || recipeName;
 
+            // Fixed property mapping for safe TypeScript assignment
             const fullData: FullRecipe = { 
                 name: finalName,
-                ingredients: details.ingredients || [],
-                instructions: details.instructions || [],
+                ingredients: Array.isArray(details.ingredients) ? details.ingredients.map((i: any) => ({
+                    simplifiedName: String(i.simplifiedName || ''),
+                    detailedName: String(i.detailedName || '')
+                })) : [],
+                instructions: Array.isArray(details.instructions) ? details.instructions.map(String) : [],
                 imageQuery: details.imageQuery || finalName,
                 servings: details.servings || '2 porções',
                 prepTimeInMinutes: details.prepTimeInMinutes || 30,
@@ -762,26 +758,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 imageSource: details.imageSource || 'cache',
                 description: details.description,
                 keywords: generateKeywords(finalName),
-                tags: details.tags || [],
+                tags: Array.isArray(details.tags) ? details.tags.map(String) : [],
                 isAlcoholic: !!details.isAlcoholic,
-                suggestedLeads: details.suggestedLeads || []
+                suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : []
             };
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             closeModal('recipeAssistant');
-
-            // PROCESSO DE LEADS PARA ADMIN (ACHADINHOS)
-            if (db && details.suggestedLeads && details.suggestedLeads.length > 0) {
-                details.suggestedLeads.forEach(async (term: string) => {
-                    const hasOffer = offers.some(o => o.tags?.some(t => t.toLowerCase().includes(term.toLowerCase())));
-                    if (!hasOffer) {
-                        await addDoc(collection(db!, 'sales_opportunities'), {
-                            term, recipeName: finalName, status: 'pending', createdAt: serverTimestamp()
-                        }).catch(() => {});
-                    }
-                });
-            }
 
             if (db) {
                 const docId = getRecipeDocId(fullData.name);
@@ -792,65 +776,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }, { merge: true }).catch(() => console.warn("Acervo offline ao salvar texto."));
             }
 
-            if (fullData.imageQuery) {
-                generateSingleRecipeImage(fullData.name, fullData.imageQuery);
-            }
-
             if (autoAdd) await addRecipeToShoppingList(fullData);
         } catch (e: any) { 
             setRecipeError("O Chef está ocupado ou a conexão falhou. Tente em instantes."); 
         } finally { 
             setIsRecipeLoading(false); 
         }
-    }, [apiKey, offers]); 
+    }, [apiKey]); 
 
-    const compressImage = (base64Str: string): Promise<string> => {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.src = base64Str;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 600; 
-                let width = img.width;
-                let height = img.height;
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6));
-                } else {
-                    resolve(base64Str);
-                }
-            };
-            img.onerror = () => resolve(base64Str);
-        });
-    };
-
-    const generateSingleRecipeImage = async (recipeName: string, queryText: string) => {
-        if (!apiKey) return;
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts: [{ text: "Fotografia profissional de comida, luz natural, alta resolution, apetitoso: " + queryText }] },
-                config: { responseModalities: [Modality.IMAGE] }
-            }));
-
-            if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-                const rawBase64 = imageRes.candidates[0].content.parts[0].inlineData.data;
-                const compressedUrl = await compressImage("data:image/jpeg;base64," + rawBase64);
-                handleRecipeImageGenerated(recipeName, compressedUrl, 'genai');
-            }
-        } catch (error) {
-            console.warn("Falha ao gerar imagem para:", recipeName);
-        }
-    };
-    
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
         recipe.ingredients.forEach((ing) => {
@@ -939,7 +872,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails: (p: Offer) => {}, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
+        pendingAction: null, setPendingAction: () => {}, selectedProduct: null, openProductDetails: (p: Offer) => {}, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

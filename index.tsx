@@ -73,36 +73,6 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
     );
 };
 
-const Firework: React.FC<{ delay: number; top: string; left: string; color: string }> = ({ delay, top, left, color }) => {
-    return (
-        <div 
-            className="firework-particle" 
-            style={{ 
-                top, 
-                left, 
-                backgroundColor: color,
-                boxShadow: `0 0 6px ${color}, 0 0 10px ${color}`,
-                animationDelay: `${delay}s`
-            }}
-        ></div>
-    );
-};
-
-const NewYearFireworks: React.FC = () => {
-    return (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-[0]">
-            <Firework delay={0} top="20%" left="15%" color="#FFD700" />
-            <Firework delay={1.5} top="15%" left="75%" color="#FF4500" />
-            <Firework delay={0.8} top="40%" left="50%" color="#00BFFF" />
-            <Firework delay={2.2} top="10%" left="40%" color="#FF69B4" />
-            <Firework delay={1.2} top="30%" left="85%" color="#32CD32" />
-            <Firework delay={2.8} top="25%" left="5%" color="#FFD700" />
-            <Firework delay={0.5} top="50%" left="20%" color="#FFFFFF" />
-            <Firework delay={1.9} top="35%" left="70%" color="#FFD700" />
-        </div>
-    );
-};
-
 const AppContent: React.FC = () => {
     const { user } = useAuth();
     const { items, formatCurrency, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, addItem, findDuplicate, importSharedList, addIngredientsBatch, saveReceivedListToHistory } = useShoppingList();
@@ -113,10 +83,6 @@ const AppContent: React.FC = () => {
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
     const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
     
-    const [isEditingMarketName, setIsEditingMarketName] = useState(false);
-    const [tempMarketName, setTempMarketName] = useState('');
-    const marketInputRef = useRef<HTMLInputElement>(null);
-
     const [lastSeenNotificationCount, setLastSeenNotificationCount] = useState(0);
     const showProfileBadge = app.unreadNotificationCount > 0 && app.unreadNotificationCount > lastSeenNotificationCount;
 
@@ -401,19 +367,6 @@ const AppContent: React.FC = () => {
         }
     };
     
-    const startEditingMarketName = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setTempMarketName(app.currentMarketName || "Minha Lista");
-        setIsEditingMarketName(true);
-        setTimeout(() => marketInputRef.current?.focus(), 50);
-    };
-
-    const saveMarketNameInline = () => {
-        const finalName = tempMarketName.trim() || "Minha Lista";
-        app.setCurrentMarketName(finalName);
-        setIsEditingMarketName(false);
-    };
-
     const showHomeView = app.isHomeViewActive;
     const showSessionBar = !app.isHomeViewActive;
 
@@ -458,8 +411,8 @@ const AppContent: React.FC = () => {
             <WebSidebarLeft />
             <div className="relative w-full lg:flex-1 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu">
                 
-                {/* --- CONTAINER FIXO DO TOPO (HEADER + SESSION BAR) --- */}
-                {/* CONFIGURAÇÃO GLASSMORPHISM ATUALIZADA - MAIS TRANSLÚCIDO E BLUR POTENTE */}
+                {/* --- HEADER PRINCIPAL --- */}
+                {/* Oculto em modo focus no mobile, visível apenas mobile se for a Home. Se for lista ativa, mostra o session bar abaixo. */}
                 <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/40 dark:bg-black/30 backdrop-blur-2xl border-b border-white/10 dark:border-white/5 shadow-lg`}>
                     <header className="flex h-20 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
@@ -483,28 +436,29 @@ const AppContent: React.FC = () => {
                             </div>
                         </div>
                     </header>
+                </div>
 
-                    {showSessionBar && (
-                        <div className="w-full px-4 py-2 flex items-center justify-between transition-all duration-300 border-t border-white/5">
-                           <div className="flex flex-col flex-1 min-w-0" onClick={startEditingMarketName}>
-                              <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>
-                              <div className="flex items-center gap-1.5 group cursor-pointer">
-                                 <span className="font-black text-primary dark:text-orange-400 text-sm leading-none truncate max-w-[180px]">{app.currentMarketName || "Minha Lista"}</span>
-                                 <span className="material-symbols-outlined text-[12px] text-gray-400">edit</span>
-                              </div>
-                           </div>
-                           <div className="flex items-center justify-end pl-2 gap-2">
-                              <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors">
+                {/* --- SESSION BAR (VISÍVEL NO MOBILE E DESKTOP QUANDO LISTA ATIVA) --- */}
+                {showSessionBar && (
+                    <div className={`sticky top-0 z-[112] w-full flex-shrink-0 bg-white/80 dark:bg-black/80 backdrop-blur-2xl border-b border-white/10 px-4 py-3 flex items-center justify-between shadow-sm transition-all duration-300 ${app.isFocusMode && 'hidden'}`}>
+                        <div className="flex flex-col flex-1 min-w-0 cursor-pointer group" onClick={() => app.openModal('startShopping')}>
+                            <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="font-black text-primary dark:text-orange-400 text-sm leading-none truncate max-w-[220px]">{app.currentMarketName || "Minha Lista"}</span>
+                                <span className="material-symbols-outlined text-[12px] text-gray-400 group-hover:text-primary transition-colors">edit</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-end pl-2 gap-2">
+                            <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors hover:bg-black/10">
                                 <span className="material-symbols-outlined text-xl">shopping_cart</span>
                                 {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
-                              </button>
-                              <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
-                                 <span className="material-symbols-outlined text-xl">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
-                              </button>
-                           </div>
+                            </button>
+                            <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
+                                <span className="material-symbols-outlined text-xl">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
+                            </button>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 <main className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`} style={globalPatternStyle}>
                     <div className="flex flex-col gap-4 relative z-10">
@@ -517,6 +471,17 @@ const AppContent: React.FC = () => {
                         {showHomeView ? <EmptyStateCTA onShowRecipeAssistant={() => app.openModal('recipeAssistant')} onShowBudget={() => app.openModal('budget')} /> : <ShoppingList groupedItems={groupedItems} onDeleteItem={deleteItem} onDeleteGroup={deleteRecipeGroup} onStartEdit={app.startEdit} onShowRecipe={app.showRecipe} onTogglePurchased={toggleItemPurchased} />}
                     </div>
                 </main>
+
+                {/* BOTÃO "+" FLUTUANTE (VISÍVEL NO MOBILE E DESKTOP QUANDO LISTA ATIVA) */}
+                {!showHomeView && (
+                    <button 
+                        onClick={() => app.openModal('addItem')} 
+                        className="fixed bottom-24 right-6 lg:bottom-12 lg:right-12 z-40 h-16 w-16 flex items-center justify-center rounded-full bg-primary text-white shadow-2xl shadow-primary/40 ring-4 ring-white/10 transition-all hover:scale-110 active:scale-95 animate-fadeIn"
+                        title="Adicionar Item"
+                    >
+                        <span className="material-symbols-outlined !text-4xl">add</span>
+                    </button>
+                )}
 
                 {!showHomeView && <SlideToFinish total={formattedTotal} onFinish={() => app.openModal('savePurchase')} />}
 
