@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -12,6 +11,7 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 Horas de cache
 
+// Adicionado keywords e isAlcoholic para conformidade total com a interface FullRecipe
 const SURVIVAL_RECIPES: FullRecipe[] = [
     {
         name: "Omelete de Ervas",
@@ -20,7 +20,9 @@ const SURVIVAL_RECIPES: FullRecipe[] = [
         imageQuery: "omelete",
         servings: "1", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1510627489930-0.1b0ba0fa3e?auto=format&fit=crop&w=800&q=80",
-        tags: ["ovo", "café da manhã", "rápido"]
+        tags: ["ovo", "café da manhã", "rápido"],
+        keywords: ["omelete", "ovo", "cafe"],
+        isAlcoholic: false
     },
     {
         name: "Macarrão Alho e Óleo",
@@ -29,7 +31,9 @@ const SURVIVAL_RECIPES: FullRecipe[] = [
         imageQuery: "espaguete",
         servings: "2", prepTimeInMinutes: 15, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80",
-        tags: ["massa", "almoço", "rápido"]
+        tags: ["massa", "almoço", "rápido"],
+        keywords: ["macarrao", "alho", "oleo", "massa"],
+        isAlcoholic: false
     },
     {
         name: "Salada Tropical",
@@ -38,7 +42,9 @@ const SURVIVAL_RECIPES: FullRecipe[] = [
         imageQuery: "salada",
         servings: "2", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
         imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
-        tags: ["salada", "fit", "saudável"]
+        tags: ["salada", "fit", "saudável"],
+        keywords: ["salada", "tropical", "saudavel", "fit"],
+        isAlcoholic: false
     }
 ];
 
@@ -208,7 +214,8 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const callGenAIWithRetry = async (fn: () => Promise<any>, retries = 8): Promise<any> => {
+// Fix type inference for callGenAIWithRetry to ensure result type matches fn return type
+export const callGenAIWithRetry = async <T = GenerateContentResponse>(fn: () => Promise<T>, retries = 8): Promise<T> => {
     try {
         return await fn();
     } catch (error: any) {
@@ -417,7 +424,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const snapshotFetch = await getDocs(qFetch);
                     const fetched: FullRecipe[] = [];
                     snapshotFetch.forEach(docSnap => {
-                        const data = docSnap.data();
+                        const data = docSnap.data() as any; // Cast to any to safely build FullRecipe
                         if (data && data.name && data.imageUrl) {
                             // Explicitly mapping each property to ensure compliance with FullRecipe interface
                             const recipe: FullRecipe = { 
@@ -440,15 +447,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         }
                     });
 
-                    // Explicitly cast ternary branches to ensure pool is inferred as FullRecipe[]
-                    const pool: FullRecipe[] = fetched.length > 0 
+                    // Explicitly type pool as FullRecipe[] and cast branches to handle ternary inference issues
+                    // FIX: Added explicit cast to FullRecipe[] for ternary result to resolve unknown[] error
+                    const pool: FullRecipe[] = (fetched.length > 0 
                         ? shuffleArray<FullRecipe>(fetched) 
-                        : (fallbackCache && fallbackCache.pool ? mapToFullRecipeArray(fallbackCache.pool) : SURVIVAL_RECIPES);
+                        : (fallbackCache && fallbackCache.pool ? mapToFullRecipeArray(fallbackCache.pool) : SURVIVAL_RECIPES)) as FullRecipe[];
                     setAllRecipesPool(pool);
                     
-                    const cacheToSet: FullRecipe[] = fetched.length > 0 
-                        ? fetched 
-                        : (fallbackCache && fallbackCache.cache ? mapToFullRecipeArray(fallbackCache.cache) : SURVIVAL_RECIPES);
+                    // Explicitly type cacheToSet as FullRecipe[] and cast ternary result
+                    // FIX: Added explicit cast to FullRecipe[] for ternary result to resolve unknown[] error
+                    const cacheToSet: FullRecipe[] = (fetched.length > 0 
+                        ? (fetched as FullRecipe[]) 
+                        : (fallbackCache && fallbackCache.cache ? mapToFullRecipeArray(fallbackCache.cache) : SURVIVAL_RECIPES)) as FullRecipe[];
                     setGlobalRecipeCache(cacheToSet);
                     
                     const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
@@ -653,14 +663,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
             snap.forEach(docSnap => {
-                const data = docSnap.data();
+                // Fix: Cast docSnap.data() to any to avoid Property access on DocumentData issue
+                const data = docSnap.data() as any;
                 if (data && data.name) {
+                    // Explicitly mapping each property to ensure compliance with FullRecipe interface and avoid 'missing properties' errors
                     results.push({ 
                         name: String(data.name || ''),
                         ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
                         instructions: Array.isArray(data.instructions) ? data.instructions : [],
                         imageQuery: String(data.imageQuery || data.name || ''),
-                        servings: String(data.servings || '2'),
+                        servings: String(data.servings || '2 porções'),
                         prepTimeInMinutes: Number(data.prepTimeInMinutes || 30),
                         difficulty: (data.difficulty === 'Fácil' || data.difficulty === 'Médio' || data.difficulty === 'Difícil' ? data.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
                         cost: (data.cost === 'Baixo' || data.cost === 'Médio' || data.cost === 'Alto' ? data.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
@@ -682,7 +694,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleRecipeSearch = async (term: string) => {
         setIsSearchingAcervo(true); 
         try {
-            const results = await searchGlobalRecipes(term);
+            // Fix: Explicitly type searchGlobalRecipes results as FullRecipe[]
+            const results: FullRecipe[] = await searchGlobalRecipes(term);
             setRecipeSearchResults(results);
             setCurrentSearchTerm(term);
             closeModal('recipeAssistant'); 

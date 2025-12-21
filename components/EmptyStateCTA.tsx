@@ -24,7 +24,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         if (displayRecipes.length <= 1) return;
         const interval = setInterval(() => {
             setCurrentBannerIndex(prev => (prev + 1) % displayRecipes.length);
-        }, 6000); 
+        }, 8000); 
         return () => clearInterval(interval);
     }, [displayRecipes.length]);
 
@@ -120,53 +120,76 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         <div className="flex flex-col gap-6 animate-fadeIn pb-6">
             
             <div className="px-1 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">{getHeroTitle()}</h3>
-                <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">{getHeroTitle()}</h3>
+                <span className="flex h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
             </div>
 
+            {/* HERO BANNER - MAGAZINE STYLE REFINED */}
             {displayRecipes.length > 0 ? (
-                <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-2xl overflow-hidden shadow-lg group">
+                <div className="relative w-full aspect-[1/1] sm:aspect-[16/9] rounded-[2.5rem] overflow-hidden shadow-2xl group border border-white/5 bg-[#111]">
                     {displayRecipes.map((recipe, index) => (
                         <div 
                             key={index}
                             onClick={() => handleBannerClick(recipe)}
-                            className={`absolute inset-0 transition-opacity duration-700 ease-in-out cursor-pointer ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                            className={`absolute inset-0 transition-all duration-1000 ease-in-out cursor-pointer ${index === currentBannerIndex ? 'opacity-100 z-10 scale-100' : 'opacity-0 z-0 scale-105 blur-sm'}`}
                         >
+                            {/* Background Image com Zoom Lento */}
                             <div 
-                                className="absolute inset-0 bg-cover bg-center transition-transform duration-[10000ms] ease-linear transform group-hover:scale-105"
+                                className="absolute inset-0 bg-cover bg-center transition-transform duration-[12000ms] linear transform scale-100 group-hover:scale-110"
                                 style={{ backgroundImage: `url(${recipe.imageUrl})` }}
                             ></div>
                             
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                            {/* Overlays de Contraste Profissional - Suavizados */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+                            <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-black/40 to-transparent"></div>
 
-                            <div className="absolute bottom-0 left-0 p-5 w-full text-white">
-                                <div className="flex gap-2 mb-2">
-                                    <span className="bg-primary/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md uppercase tracking-wide">
-                                        Recomendado
-                                    </span>
-                                    {recipe.prepTimeInMinutes && (
-                                        <span className="bg-black/40 text-white text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-md flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[12px]">schedule</span> {recipe.prepTimeInMinutes} min
+                            {/* Conteúdo "Billboard" */}
+                            <div className="absolute inset-0 p-8 pb-10 flex flex-col justify-end">
+                                <div className="flex flex-col items-start max-w-[90%]">
+                                    
+                                    {/* Badge Superior */}
+                                    <div className="mb-4 flex items-center gap-2 bg-primary px-3 py-1 rounded-full shadow-lg border border-white/10 animate-slideUp">
+                                        <span className="text-[9px] font-black text-white uppercase tracking-[0.15em]">
+                                            Destaque IA
                                         </span>
-                                    )}
+                                    </div>
+                                    
+                                    {/* TÍTULO REFINED - Tamanho reduzido conforme solicitado */}
+                                    <div className="relative pl-5 border-l-[4px] border-primary animate-slideUp" style={{ animationDelay: '0.2s' }}>
+                                        <h2 className="font-display text-[32px] sm:text-[46px] font-black text-white leading-[0.95] uppercase italic tracking-[-0.03em] drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)]">
+                                            {recipe.name}
+                                        </h2>
+                                    </div>
+
+                                    {/* Footer do Banner */}
+                                    <div className="mt-6 flex items-center gap-6 animate-slideUp" style={{ animationDelay: '0.4s' }}>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] text-white/40 font-black uppercase tracking-widest">Tempo</span>
+                                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                                <span className="material-symbols-outlined text-[14px] text-primary">schedule</span>
+                                                {recipe.prepTimeInMinutes || 30} MIN
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] text-white/40 font-black uppercase tracking-widest">Ver Mais</span>
+                                            <span className="text-xs font-bold text-white/90 flex items-center gap-1 group/btn">
+                                                Receita Completa
+                                                <span className="material-symbols-outlined text-sm text-primary transition-transform group-hover/btn:translate-x-1">arrow_forward</span>
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                <h2 className="text-xl sm:text-2xl font-bold leading-tight drop-shadow-md mb-1 capitalize">
-                                    {recipe.name}
-                                </h2>
-                                <p className="text-xs text-gray-300 font-medium flex items-center gap-1">
-                                    Toque para ver a receita <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                </p>
                             </div>
                         </div>
                     ))}
 
+                    {/* Indicadores de Progresso (Linha Estilizada na Base) */}
                     {displayRecipes.length > 1 && (
-                        <div className="absolute bottom-2 right-4 z-20 flex gap-1.5">
+                        <div className="absolute bottom-6 right-8 z-20 flex gap-1.5">
                             {displayRecipes.map((_, idx) => (
                                 <div 
                                     key={idx} 
-                                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentBannerIndex ? 'w-6 bg-primary' : 'w-1.5 bg-white/50'}`}
+                                    className={`h-[2px] rounded-full transition-all duration-500 ${idx === currentBannerIndex ? 'w-8 bg-primary' : 'w-2 bg-white/20'}`}
                                 />
                             ))}
                         </div>
@@ -174,10 +197,11 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             ) : null}
 
+            {/* CATEGORIES SECTION */}
             {categories.length > 0 && (
-                <div className="animate-fadeIn">
+                <div className="animate-fadeIn mt-2">
                     <div className="flex items-center justify-between px-1 mb-3">
-                        <h3 className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">Explorar Coleções</h3>
+                        <h3 className="text-[12px] font-black text-gray-800 dark:text-white uppercase tracking-widest">Coleções Sugeridas</h3>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-4 px-1 -mx-4 scrollbar-hide snap-x">
                         <div className="w-1 px-1 snap-start shrink-0"></div>
@@ -185,7 +209,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                             <button
                                 key={idx}
                                 onClick={() => handleCategoryClick(cat.key, cat.coverRecipe?.name)}
-                                className="relative flex-shrink-0 w-28 h-36 sm:w-32 sm:h-40 rounded-xl overflow-hidden shadow-md snap-center group active:scale-95 transition-transform border border-black/5 dark:border-white/5"
+                                className="relative flex-shrink-0 w-28 h-36 sm:w-32 sm:h-40 rounded-3xl overflow-hidden shadow-md snap-center group active:scale-95 transition-transform border border-black/5 dark:border-white/5"
                             >
                                 <div 
                                     className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
@@ -202,10 +226,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                 </div>
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
                                 <div className="absolute bottom-0 left-0 w-full p-3 text-left">
-                                    <span className="block text-sm font-extrabold text-white leading-none tracking-wide drop-shadow-lg font-display">
+                                    <span className="block text-[11px] font-black text-white leading-none tracking-tight uppercase italic font-display">
                                         {cat.label}
                                     </span>
-                                    <span className="block text-[10px] text-gray-300 font-medium mt-1 opacity-80">Ver tudo</span>
+                                    <span className="block text-[8px] text-gray-400 font-bold mt-1 uppercase tracking-widest opacity-80">Ver Tudo</span>
                                 </div>
                             </button>
                         ))}
@@ -213,58 +237,56 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             )}
 
+            {/* ACTION GRID */}
             <div className="grid grid-cols-2 gap-3">
                 <button 
                     onClick={handleAiClick}
-                    className="flex flex-col p-4 rounded-xl bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 text-left relative overflow-hidden group active:scale-95 transition-transform"
+                    className="flex flex-col p-5 rounded-3xl bg-white dark:bg-orange-900/10 border border-gray-100 dark:border-orange-900/30 text-left relative overflow-hidden group active:scale-95 transition-transform shadow-sm"
                 >
                     {!user && (
-                        <div className="absolute top-2 right-2 text-gray-400/80 bg-white/50 dark:bg-black/20 rounded-full p-1 z-10 backdrop-blur-sm">
-                            <span className="material-symbols-outlined text-[16px]">lock</span>
+                        <div className="absolute top-3 right-3 text-gray-400/80 bg-gray-50 dark:bg-black/20 rounded-full p-1 z-10 backdrop-blur-sm">
+                            <span className="material-symbols-outlined text-[14px]">lock</span>
                         </div>
                     )}
-                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <span className="material-symbols-outlined text-6xl text-primary">restaurant_menu</span>
+                    <div className="absolute -top-2 -right-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <span className="material-symbols-outlined text-7xl text-primary transform rotate-12">restaurant_menu</span>
                     </div>
                     <span className="material-symbols-outlined text-2xl text-primary mb-2">auto_awesome</span>
-                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Criar com IA</span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight mt-1">Sua receita em segundos.</span>
+                    <span className="text-sm font-black text-gray-800 dark:text-gray-100 uppercase tracking-tight">Criar com IA</span>
+                    <span className="text-[9px] text-gray-500 dark:text-gray-400 leading-tight mt-1 font-bold uppercase tracking-widest">Receitas em segundos</span>
                 </button>
 
                 <button 
                     onClick={handleBudgetClick}
-                    className="flex flex-col p-4 rounded-xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 text-left relative overflow-hidden group active:scale-95 transition-transform"
+                    className="flex flex-col p-5 rounded-3xl bg-white dark:bg-blue-900/10 border border-gray-100 dark:border-blue-900/30 text-left relative overflow-hidden group active:scale-95 transition-transform shadow-sm"
                 >
                     {!user && (
-                        <div className="absolute top-2 right-2 text-gray-400/80 bg-white/50 dark:bg-black/20 rounded-full p-1 z-10 backdrop-blur-sm">
-                            <span className="material-symbols-outlined text-[16px]">lock</span>
+                        <div className="absolute top-3 right-3 text-gray-400/80 bg-gray-50 dark:bg-black/20 rounded-full p-1 z-10 backdrop-blur-sm">
+                            <span className="material-symbols-outlined text-[14px]">lock</span>
                         </div>
                     )}
-                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <span className="material-symbols-outlined text-6xl text-blue-500">account_balance_wallet</span>
+                    <div className="absolute -top-2 -right-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <span className="material-symbols-outlined text-7xl text-blue-500 transform -rotate-12">account_balance_wallet</span>
                     </div>
                     <span className="material-symbols-outlined text-2xl text-blue-500 mb-2">savings</span>
-                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Meu Orçamento</span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight mt-1">Controle seus gastos.</span>
+                    <span className="text-sm font-black text-gray-800 dark:text-gray-100 uppercase tracking-tight">Meu Orçamento</span>
+                    <span className="text-[9px] text-gray-500 dark:text-gray-400 leading-tight mt-1 font-bold uppercase tracking-widest">Controle seus gastos</span>
                 </button>
 
                 <button 
                     onClick={handleArcadeClick}
-                    className="col-span-2 relative flex items-center justify-center gap-4 p-4 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-md text-white hover:from-indigo-600 hover:to-purple-700 transition-all active:scale-95 group overflow-hidden"
+                    className="col-span-2 relative flex items-center justify-center gap-6 p-5 bg-gradient-to-r from-indigo-600 to-purple-700 rounded-3xl shadow-xl text-white hover:brightness-110 transition-all active:scale-95 group overflow-hidden border border-white/10"
                 >
-                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
                     <div className="flex flex-col items-start z-10">
-                        <span className="font-black text-lg uppercase tracking-wide flex items-center gap-2">
-                            <span className="material-symbols-outlined">sports_esports</span>
+                        <span className="font-black text-lg uppercase tracking-widest flex items-center gap-2 italic">
+                            <span className="material-symbols-outlined text-yellow-400">sports_esports</span>
                             Passatempo
                         </span>
-                        <span className="text-xs opacity-90 font-medium">Tédio na fila? Jogue agora!</span>
+                        <span className="text-[10px] opacity-80 font-black uppercase tracking-[0.2em] mt-1">Tédio na fila? Jogue Agora!</span>
                     </div>
-                    <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm group-hover:rotate-12 transition-transform z-10">
+                    <div className="h-12 w-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md group-hover:rotate-12 transition-transform z-10 border border-white/20">
                         <span className="material-symbols-outlined text-2xl">stadia_controller</span>
-                    </div>
-                    <div className="absolute -right-4 -bottom-6 opacity-20 rotate-12">
-                        <span className="material-symbols-outlined text-8xl">videogame_asset</span>
                     </div>
                 </button>
             </div>
