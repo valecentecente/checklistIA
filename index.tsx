@@ -138,7 +138,6 @@ const AppContent: React.FC = () => {
         };
     }, []);
 
-    // Listener para restauração do nome do mercado (Vindo do ShoppingListContext)
     useEffect(() => {
         const handleRestoreMarket = (e: any) => {
             if (e.detail) app.setCurrentMarketName(e.detail);
@@ -476,19 +475,21 @@ const AppContent: React.FC = () => {
                         <p className="text-sm font-medium leading-snug">{app.toastMessage}</p>
                     </div>
                 )}
-                <header className={`absolute top-0 left-0 right-0 z-[115] flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'hidden' : 'block'} bg-white/70 dark:bg-black/60 backdrop-blur-xl border-b border-white/20 dark:border-white/10 shadow-sm`}>
-                    <div className="relative z-10 flex h-24 items-center justify-between gap-4 p-4">
+                
+                {/* GRUPO DE CABEÇALHO FIXO PARA TABLET/MOBILE */}
+                <div className={`flex-shrink-0 z-[115] transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/70 dark:bg-black/60 backdrop-blur-xl backdrop-saturate-150 border-b border-white/20 dark:border-white/10 shadow-sm`}>
+                    <header className="flex h-24 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
                             <div onClick={() => app.setHomeViewActive(true)} className="h-12 w-12 shrink-0 rounded-full shadow-md overflow-hidden bg-white flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
                                 <Logo className="w-8 h-8 text-blue-600" />
                             </div>
                             <div className="flex flex-col justify-center items-start">
-                            <h1 translate="no" className={`text-xl font-bold tracking-tight leading-none drop-shadow-md flex items-baseline ${app.theme === 'christmas' || app.theme === 'newyear' ? 'text-white' : 'text-slate-800 dark:text-white'}`}>
-                                {app.theme === 'newyear' ? 'Feliz 2026!' : (
-                                    <><span>Checklist</span><span className="text-blue-600 dark:text-blue-400 ml-0.5">IA</span></>
-                                )}
-                            </h1>
-                            <span translate="no" className="mt-1 w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-700 dark:bg-orange-900/60 dark:text-orange-200 leading-none shadow-sm">Beta</span>
+                                <h1 translate="no" className={`text-xl font-bold tracking-tight leading-none drop-shadow-md flex items-baseline ${app.theme === 'christmas' || app.theme === 'newyear' ? 'text-white' : 'text-slate-800 dark:text-white'}`}>
+                                    {app.theme === 'newyear' ? 'Feliz 2026!' : (
+                                        <><span>Checklist</span><span className="text-blue-600 dark:text-blue-400 ml-0.5">IA</span></>
+                                    )}
+                                </h1>
+                                <span translate="no" className="mt-1 w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-700 dark:bg-orange-900/60 dark:text-orange-200 leading-none shadow-sm">Beta</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -509,11 +510,11 @@ const AppContent: React.FC = () => {
                                 <AppOptionsMenu />
                             </div>
                         </div>
-                    </div>
-                </header>
+                    </header>
+                </div>
 
                 {showSessionBar && (
-                    <div className={`absolute left-0 right-0 z-[112] w-full bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm animate-slideUp overflow-visible transition-all duration-300 ${app.isFocusMode ? 'top-0' : 'top-24 lg:top-0'}`}>
+                    <div className={`z-[112] w-full bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm transition-all duration-300 ${app.isFocusMode ? 'fixed top-0' : 'relative lg:absolute lg:top-0'}`}>
                        <div className="flex flex-col flex-1 min-w-0">
                           <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-0.5">Local de Compra</span>
                           <div className="flex items-center gap-2 group">
@@ -573,7 +574,7 @@ const AppContent: React.FC = () => {
                 )}
 
                 <main 
-                    className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300 ${showSessionBar ? (app.isFocusMode ? 'pt-20' : 'pt-40 lg:pt-20') : (app.isFocusMode ? 'pt-4' : 'pt-28 lg:pt-4')}`}
+                    className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`}
                     style={globalPatternStyle}
                 >
                     <div className="flex flex-col gap-4 relative z-10">
