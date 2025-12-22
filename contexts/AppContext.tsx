@@ -79,7 +79,7 @@ const INITIAL_MODAL_STATES = {
     isThemeRecipesModalOpen: false,
     isToolsModalOpen: false,
     isProductDetailsModalOpen: false,
-    isUnitConverterModalOpen: false,
+    isUnitConverterModalOpen: false, 
     isContentFactoryModalOpen: false,
     isRecipeSelectionModalOpen: false,
     isDistributionModalOpen: false
@@ -839,6 +839,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [user, items.length, currentMarketName, showToast, openModal]);
 
+    const openProductDetails = (product: Offer) => {
+        setSelectedProduct(product);
+        openModal('productDetails');
+    };
+
     const value = {
         ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme: setThemeState,
         installPromptEvent, handleInstall, handleDismissInstall, isPWAInstallVisible,
@@ -852,7 +857,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails: setSelectedProduct, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
+        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

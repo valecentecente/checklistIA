@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { Offer } from '../types';
 import { useShoppingList } from '../contexts/ShoppingListContext';
@@ -12,7 +11,7 @@ interface OffersModalProps {
 
 // Sub-componente para lidar com o carrossel individual de cada produto
 const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
-    const { openProductDetails, openModal, showToast } = useApp();
+    const { openModal, showToast } = useApp();
     const { toggleOfferSaved, isOfferSaved } = useShoppingList();
     const { user } = useAuth();
     
@@ -32,14 +31,15 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
     }, [images.length]);
 
     const handleCardClick = (e: React.MouseEvent) => {
-        // Se clicar nos botões de ação, não abre detalhes
-        if ((e.target as HTMLElement).closest('.action-btn')) return;
-        openProductDetails(product);
+        // Se clicar nos botões de ação, não abre o link
+        if ((e.target as HTMLElement).closest('.stop-propagation')) return;
+        
+        // Redirecionamento Direto para a Loja
+        window.open(product.link, '_blank', 'noopener,noreferrer');
     };
 
     const handleToggleCheck = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        e.preventDefault();
         if (!user) {
             showToast("Faça login para salvar seus Achadinhos!");
             openModal('auth');
@@ -50,20 +50,17 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
 
     const handleShare = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        e.preventDefault();
         
         const shareData = {
             title: `ChecklistIA: ${product.name}`,
             text: `Olha esse achadinho que vi no ChecklistIA! ${product.price}`,
-            url: product.link // Idealmente seria um deep link para o app, mas usamos o link da loja por enquanto
+            url: product.link
         };
 
         if (navigator.share) {
             try {
                 await navigator.share(shareData);
-            } catch (err) {
-                // User cancelled or error
-            }
+            } catch (err) {}
         } else {
             await navigator.clipboard.writeText(product.link);
             showToast("Link copiado!");
@@ -84,7 +81,7 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
     return (
         <div 
             onClick={handleCardClick}
-            className="flex flex-col bg-white dark:bg-surface-dark rounded-xl shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 group hover:shadow-md transition-all active:scale-95 cursor-pointer relative"
+            className="flex flex-col bg-white dark:bg-surface-dark rounded-xl shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 group hover:shadow-md transition-all active:scale-[0.98] cursor-pointer relative"
         >
             <div className="aspect-square w-full bg-white p-4 flex items-center justify-center relative overflow-hidden">
                 {product.discount && (
@@ -98,14 +95,9 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
                     {/* Botão Salvar (Coração) */}
                     <button 
                         onClick={handleToggleCheck}
-                        className={`action-btn w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${
-                            isSaved 
-                            ? 'bg-red-500 text-white scale-110' 
-                            : 'bg-white/90 dark:bg-black/40 text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 backdrop-blur-sm'
-                        }`}
-                        title={isSaved ? "Remover dos Favoritos" : "Salvar nos Favoritos"}
+                        className="stop-propagation w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm bg-white/90 dark:bg-black/40 text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 backdrop-blur-sm"
                     >
-                        <span className={`material-symbols-outlined text-lg ${isSaved ? 'font-variation-FILL-1 animate-heartbeat' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
+                        <span className={`material-symbols-outlined text-lg ${isSaved ? 'text-red-500 font-variation-FILL-1 animate-heartbeat' : ''}`} style={ isSaved ? { fontVariationSettings: "'FILL' 1" } : {} }>
                             favorite
                         </span>
                     </button>
@@ -113,8 +105,7 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
                     {/* Botão Compartilhar */}
                     <button 
                         onClick={handleShare}
-                        className="action-btn w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm bg-white/90 dark:bg-black/40 text-gray-400 hover:text-blue-500 border border-gray-200 dark:border-gray-600 backdrop-blur-sm"
-                        title="Compartilhar"
+                        className="stop-propagation w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm bg-white/90 dark:bg-black/40 text-gray-400 hover:text-blue-500 border border-gray-200 dark:border-gray-600 backdrop-blur-sm"
                     >
                         <span className="material-symbols-outlined text-lg">share</span>
                     </button>
@@ -151,13 +142,19 @@ const OfferCard: React.FC<{ product: Offer }> = ({ product }) => {
                 <h3 className="text-xs font-medium text-gray-800 dark:text-gray-200 line-clamp-2 leading-relaxed mb-2 flex-1">
                     {product.name}
                 </h3>
+
                 <div className="mt-auto">
                     {product.oldPrice && (
                         <p className="text-[10px] text-gray-400 line-through">{product.oldPrice}</p>
                     )}
+                    
+                    {/* ÁREA DE PREÇO */}
                     <div className="flex items-center justify-between">
                         <p className="text-sm font-bold text-green-600 dark:text-green-400">{product.price}</p>
-                        <span className="material-symbols-outlined text-base text-gray-400 group-hover:text-primary transition-colors">arrow_forward</span>
+                        
+                        <div className="h-8 w-8 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center transition-all group-hover:bg-blue-600 group-hover:text-white">
+                            <span className="material-symbols-outlined text-xl">arrow_forward</span>
+                        </div>
                     </div>
                 </div>
             </div>
