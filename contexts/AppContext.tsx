@@ -11,31 +11,6 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; 
 
-const SURVIVAL_RECIPES: FullRecipe[] = [
-    {
-        name: "Omelete de Ervas",
-        ingredients: [{simplifiedName: "Ovos", detailedName: "3 ovos"}, {simplifiedName: "Queijo", detailedName: "50g de queijo muçarela"}],
-        instructions: ["Bata os ovos", "Frite"],
-        imageQuery: "omelete",
-        servings: "1", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
-        imageUrl: "https://images.unsplash.com/photo-1510627489930-0.1b0fa0fa3e?auto=format&fit=crop&w=800&q=80",
-        tags: ["ovo", "café da manhã", "rápido"],
-        keywords: ["omelete", "ovo", "cafe"],
-        isAlcoholic: false
-    },
-    {
-        name: "Macarrão Alho e Óleo",
-        ingredients: [{simplifiedName: "Macarrão", detailedName: "250g de espaguete"}],
-        instructions: ["Cozinhe a massa"],
-        imageQuery: "espaguete",
-        servings: "2", prepTimeInMinutes: 15, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
-        imageUrl: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80",
-        tags: ["massa", "almoço", "rápido"],
-        keywords: ["macarrao", "alho", "oleo", "massa"],
-        isAlcoholic: false
-    }
-];
-
 const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -342,37 +317,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [pendingAction, setPendingAction] = useState<string | null>(null);
     const [authTrigger, setAuthTrigger] = useState<string | null>(null);
     
-    const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>(SURVIVAL_RECIPES);
+    const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>([]);
     const [recipeSuggestions, setRecipeSuggestions] = useState<FullRecipe[]>([]);
     const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
     const [currentTheme, setCurrentTheme] = useState<string | null>(null);
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
-    const [totalRecipeCount, setTotalRecipeCount] = useState(SURVIVAL_RECIPES.length);
+    const [totalRecipeCount, setTotalRecipeCount] = useState(0);
     const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
-    const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>(SURVIVAL_RECIPES);
+    const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>([]);
 
     const [recipeSearchResults, setRecipeSearchResults] = useState<FullRecipe[]>([]);
     const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
     const apiKey = process.env.API_KEY as string;
     
-    // FALLBACK DE SEGURANÇA: Desenvolvedor sempre é Admin Master
     const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com';
     const isSuperAdmin = isOwner || user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
-    // AUTO-PROMPT LÓGICA
     useEffect(() => {
         const handler = (e: Event) => { 
             e.preventDefault(); 
             setInstallPromptEvent(e); 
-            
-            // Verifica se deve perguntar automaticamente
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
             if (!isStandalone) {
-                // Pequeno delay para garantir que o splash screen saiu
                 setTimeout(() => {
                     setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
                 }, 2000);
@@ -466,7 +436,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     } else if (fallbackCache && fallbackCache.pool) {
                         pool = mapToFullRecipeArray(fallbackCache.pool);
                     } else {
-                        pool = SURVIVAL_RECIPES;
+                        pool = [];
                     }
                     setAllRecipesPool(pool);
                     
@@ -476,7 +446,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     } else if (fallbackCache && fallbackCache.cache) {
                         cacheToSet = mapToFullRecipeArray(fallbackCache.cache);
                     } else {
-                        cacheToSet = SURVIVAL_RECIPES;
+                        cacheToSet = [];
                     }
                     setGlobalRecipeCache(cacheToSet);
                     
@@ -499,8 +469,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (fallbackCache) {
                     const poolData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.pool);
                     const cacheData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.cache);
-                    setAllRecipesPool(poolData.length > 0 ? poolData : SURVIVAL_RECIPES);
-                    setGlobalRecipeCache(cacheData.length > 0 ? cacheData : SURVIVAL_RECIPES);
+                    setAllRecipesPool(poolData);
+                    setGlobalRecipeCache(cacheData);
                     setTotalRecipeCount(fallbackCache.count || 0);
                 }
             }
