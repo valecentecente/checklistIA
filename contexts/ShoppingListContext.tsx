@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, useCallback, ReactNode, useMemo } from 'react';
 import { 
     collection, 
@@ -19,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
-import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog } from '../types';
+import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog, ArcadeStats } from '../types';
 
 interface ShoppingListContextType {
     items: ShoppingItem[];
@@ -28,6 +29,7 @@ interface ShoppingListContextType {
     favorites: FullRecipe[];
     offers: Offer[];
     savedOffers: Offer[]; 
+    arcadeStats: Record<string, number>;
     formatCurrency: (value: number) => string;
     addItem: (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => Promise<void>;
     addIngredientsBatch: (items: any[]) => Promise<void>;
@@ -58,6 +60,7 @@ interface ShoppingListContextType {
     logAdminAction: (actionType: 'create' | 'update' | 'delete' | 'login', targetName: string, details?: string) => Promise<void>;
     getTeamMembers: () => Promise<User[]>;
     getMemberLogs: (userId: string) => Promise<ActivityLog[]>;
+    updateArcadeStat: (gameId: string, score: number) => Promise<boolean>;
 }
 
 const ShoppingListContext = createContext<ShoppingListContextType | undefined>(undefined);
@@ -70,9 +73,11 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [favorites, setFavorites] = useState<FullRecipe[]>([]);
     const [savedOffers, setSavedOffers] = useState<Offer[]>([]); 
     const [offers, setOffers] = useState<Offer[]>([]);
+    const [arcadeStats, setArcadeStats] = useState<Record<string, number>>({});
 
     const STORAGE_KEY = 'guestShoppingList';
     const HISTORY_STORAGE_KEY = 'guestShoppingHistory';
+    const ARCADE_STORAGE_KEY = 'guestArcadeStats';
 
     const formatCurrency = (value: number) => {
         return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -119,6 +124,11 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             if (storedHistory) {
                 try { setHistory(JSON.parse(storedHistory)); } catch (e) { setHistory([]); }
             } else { setHistory([]); }
+
+            const storedArcade = localStorage.getItem(ARCADE_STORAGE_KEY);
+            if (storedArcade) {
+                try { setArcadeStats(JSON.parse(storedArcade)); } catch (e) { setArcadeStats({}); }
+            } else { setArcadeStats({}); }
 
             setReceivedHistory([]);
             setFavorites([]);
@@ -183,20 +193,58 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             setSavedOffers(loadedSaved);
         }, (error) => console.warn("Erro ao carregar ofertas salvas:", error.message));
 
+        const arcadeStatsRef = collection(db, `users/${user.uid}/arcade_stats`);
+        const unsubscribeArcade = onSnapshot(arcadeStatsRef, (snapshot) => {
+            const stats: Record<string, number> = {};
+            snapshot.forEach(doc => {
+                stats[doc.id] = doc.data().bestScore;
+            });
+            setArcadeStats(stats);
+        });
+
         return () => {
             unsubscribeItems();
             unsubscribeHistory();
             unsubscribeReceived();
             unsubscribeFavorites();
             unsubscribeSavedOffers();
+            unsubscribeArcade();
         };
     }, [user]);
 
     useEffect(() => {
         if (!user || user.uid.startsWith('offline-user-')) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+            localStorage.setItem(ARCADE_STORAGE_KEY, JSON.stringify(arcadeStats));
         }
-    }, [items, user]);
+    }, [items, arcadeStats, user]);
+
+    const updateArcadeStat = useCallback(async (gameId: string, score: number): Promise<boolean> => {
+        const currentBest = arcadeStats[gameId];
+        let isNewRecord = false;
+
+        // Regras de Recorde:
+        // Memory e Slide: Menos movimentos é melhor
+        // Speed: Mais pontos é melhor
+        if (gameId === 'speed') {
+            isNewRecord = !currentBest || score > currentBest;
+        } else {
+            isNewRecord = !currentBest || score < currentBest;
+        }
+
+        if (isNewRecord) {
+            if (user && !user.uid.startsWith('offline-user-') && db) {
+                await setDoc(doc(db, `users/${user.uid}/arcade_stats`, gameId), {
+                    bestScore: score,
+                    updatedAt: serverTimestamp()
+                });
+            } else {
+                setArcadeStats(prev => ({ ...prev, [gameId]: score }));
+            }
+            return true;
+        }
+        return false;
+    }, [user, arcadeStats]);
 
     const findDuplicate = useCallback((name: string, currentItems: ShoppingItem[]) => {
         const normalize = (s: string) => s.toLowerCase().trim();
@@ -409,15 +457,13 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         
         const itemsToAdd = purchase.items.map(i => ({
             name: i.name,
-            calculatedPrice: 0, // Resetamos o preço para que o usuário insira o valor atual
+            calculatedPrice: 0, 
             details: i.details,
-            // Se estiver mesclando, usa um prefixo para organizar como uma "aba" (grupo)
             recipeName: isMerging ? `Histórico: ${purchase.marketName}` : (purchase.marketName || 'Retomado'),
             isNew: true,
-            isPurchased: false // Resetamos o status para que o item apareça como "pendente" na nova compra
+            isPurchased: false 
         }));
 
-        // Se a lista estiver vazia, restaura o nome do mercado original no topo
         if (!isMerging) {
             window.dispatchEvent(new CustomEvent('restoreMarketName', { detail: purchase.marketName }));
         }
@@ -649,7 +695,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     return (
         <ShoppingListContext.Provider value={{
-            items, history, receivedHistory, favorites, offers, savedOffers, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs
+            items, history, receivedHistory, favorites, offers, savedOffers, arcadeStats, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs, updateArcadeStat
         }}>
             {children}
         </ShoppingListContext.Provider>

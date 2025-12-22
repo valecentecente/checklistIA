@@ -1,16 +1,20 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useShoppingList } from '../../contexts/ShoppingListContext';
 import type { FullRecipe } from '../../types';
 
 // ==========================================
 // GAME 1: CHEF MEMORY (JOGO DA MEMÓRIA)
 // ==========================================
 const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ recipes, onExit }) => {
+    const { arcadeStats, updateArcadeStat } = useShoppingList();
     const [cards, setCards] = useState<{ id: number; recipe: FullRecipe; flipped: boolean; matched: boolean }[]>([]);
     const [flippedIndices, setFlippedIndices] = useState<number[]>([]);
     const [moves, setMoves] = useState(0);
     const [matches, setMatches] = useState(0);
+    const [isNewRecord, setIsNewRecord] = useState(false);
 
     const initGame = useCallback(() => {
         const pool = recipes.filter(r => !!r.imageUrl).slice(0, 8);
@@ -21,6 +25,7 @@ const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ r
         setFlippedIndices([]);
         setMoves(0);
         setMatches(0);
+        setIsNewRecord(false);
     }, [recipes]);
 
     useEffect(() => { initGame(); }, [initGame]);
@@ -45,7 +50,15 @@ const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ r
                     matchedCards[second].matched = true;
                     setCards(matchedCards);
                     setFlippedIndices([]);
-                    setMatches(prev => prev + 1);
+                    const newMatches = matches + 1;
+                    setMatches(newMatches);
+                    
+                    if (newMatches === cards.length / 2) {
+                        // Game Over - Check Record
+                        updateArcadeStat('memory', moves + 1).then(record => {
+                            if (record) setIsNewRecord(true);
+                        });
+                    }
                 }, 500);
             } else {
                 setTimeout(() => {
@@ -68,9 +81,15 @@ const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ r
                     <h3 className="text-xs font-black text-cyan-500 uppercase tracking-[0.2em]">Chef Memory</h3>
                     <p className="text-xl font-black italic tracking-tighter">MOVIMENTOS: {moves}</p>
                 </div>
-                <button onClick={onExit} className="bg-white/10 p-2 rounded-full hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-all">
-                    <span className="material-symbols-outlined">close</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="text-right">
+                        <p className="text-[8px] text-gray-500 uppercase font-black">Recorde</p>
+                        <p className="text-xs font-bold text-cyan-400">{arcadeStats['memory'] || '--'} mov.</p>
+                    </div>
+                    <button onClick={onExit} className="bg-white/10 p-2 rounded-full hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-all">
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto pr-1">
@@ -82,13 +101,11 @@ const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ r
                             className="aspect-[3/4] relative perspective-1000 cursor-pointer active:scale-95 transition-transform"
                         >
                             <div className={`w-full h-full relative transition-transform duration-500 transform-style-3d ${card.flipped || card.matched ? 'rotate-y-180' : ''}`}>
-                                {/* BACK (Card Hidden) */}
                                 <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-xl border border-white/10 flex items-center justify-center shadow-lg">
                                     <div className="w-8 h-8 rounded-full border-2 border-cyan-500/30 flex items-center justify-center">
                                         <span className="material-symbols-outlined text-cyan-500/50">restaurant</span>
                                     </div>
                                 </div>
-                                {/* FRONT (Image Revealed) */}
                                 <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-xl border-2 border-cyan-500 overflow-hidden bg-white">
                                     <img src={card.recipe.imageUrl} className="w-full h-full object-cover" alt="Receita" />
                                     {card.matched && (
@@ -106,7 +123,11 @@ const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ r
             {isWin && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
                     <div className="bg-zinc-900 border-2 border-cyan-500 p-8 rounded-[2.5rem] text-center shadow-[0_0_50px_rgba(6,182,212,0.3)] animate-slideUp">
-                        <span className="text-6xl mb-4 block animate-bounce">🏆</span>
+                        {isNewRecord ? (
+                            <div className="animate-bounce mb-4">
+                                <span className="bg-cyan-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.6)]">NOVO RECORDE!</span>
+                            </div>
+                        ) : <span className="text-6xl mb-4 block animate-bounce">🏆</span>}
                         <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">Memória de Chef!</h3>
                         <p className="text-cyan-400 font-bold mb-6">Você completou em {moves} movimentos.</p>
                         <button onClick={initGame} className="w-full bg-cyan-500 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">JOGAR NOVAMENTE</button>
@@ -128,12 +149,14 @@ const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ r
 // GAME 2: VISUAL SPEED (QUAL É O PRATO?)
 // ==========================================
 const VisualSpeedGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ recipes, onExit }) => {
+    const { arcadeStats, updateArcadeStat } = useShoppingList();
     const [currentRecipe, setCurrentRecipe] = useState<FullRecipe | null>(null);
     const [options, setOptions] = useState<string[]>([]);
     const [blurLevel, setBlurLevel] = useState(24);
     const [score, setScore] = useState(0);
     const [gameState, setGameState] = useState<'playing' | 'feedback' | 'ended'>('playing');
     const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+    const [isNewRecord, setIsNewRecord] = useState(false);
 
     const nextRound = useCallback(() => {
         const pool = recipes.filter(r => !!r.imageUrl);
@@ -178,8 +201,12 @@ const VisualSpeedGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> =
             setBlurLevel(0);
             setTimeout(nextRound, 1500);
         } else {
+            // End Game - Check Record
             setGameState('ended');
             setBlurLevel(0);
+            updateArcadeStat('speed', score).then(record => {
+                if (record) setIsNewRecord(true);
+            });
         }
     };
 
@@ -190,9 +217,15 @@ const VisualSpeedGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> =
                     <h3 className="text-xs font-black text-orange-500 uppercase tracking-[0.2em]">Visual Speed</h3>
                     <p className="text-xl font-black italic tracking-tighter">PONTOS: {score}</p>
                 </div>
-                <button onClick={onExit} className="bg-white/10 p-2 rounded-full hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-all">
-                    <span className="material-symbols-outlined">close</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="text-right">
+                        <p className="text-[8px] text-gray-500 uppercase font-black">Recorde</p>
+                        <p className="text-xs font-bold text-orange-400">{arcadeStats['speed'] || '--'} pts</p>
+                    </div>
+                    <button onClick={onExit} className="bg-white/10 p-2 rounded-full hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-all">
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 flex flex-col gap-6">
@@ -234,10 +267,14 @@ const VisualSpeedGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> =
             {gameState === 'ended' && (
                 <div className="absolute inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center p-6 animate-fadeIn">
                     <div className="bg-zinc-900 border-2 border-red-500 p-8 rounded-[2.5rem] text-center shadow-2xl animate-slideUp">
-                        <span className="text-6xl mb-4 block">🍳</span>
+                        {isNewRecord ? (
+                            <div className="animate-bounce mb-4">
+                                <span className="bg-orange-500 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.6)]">NOVO RECORDE PESSOAL!</span>
+                            </div>
+                        ) : <span className="text-6xl mb-4 block">🍳</span>}
                         <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">Fogo Apagou!</h3>
                         <p className="text-gray-400 font-bold mb-6">Sua pontuação final: <span className="text-orange-500">{score}</span></p>
-                        <button onClick={() => { setScore(0); nextRound(); }} className="w-full bg-orange-500 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">TENTAR NOVAMENTE</button>
+                        <button onClick={() => { setScore(0); setIsNewRecord(false); nextRound(); }} className="w-full bg-orange-500 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">TENTAR NOVAMENTE</button>
                     </div>
                 </div>
             )}
@@ -249,12 +286,14 @@ const VisualSpeedGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> =
 // GAME 3: SLIDE CHEF (PUZZLE)
 // ==========================================
 const SlideChefGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ recipes, onExit }) => {
+    const { arcadeStats, updateArcadeStat } = useShoppingList();
     const { addRecipeToShoppingList, showToast } = useApp();
     const [tiles, setTiles] = useState<number[]>([]);
     const [emptyIndex, setEmptyIndex] = useState(8);
     const [recipe, setRecipe] = useState<FullRecipe | null>(null);
     const [isSolved, setIsSolved] = useState(false);
     const [moves, setMoves] = useState(0);
+    const [isNewRecord, setIsNewRecord] = useState(false);
 
     const startNewGame = useCallback(() => {
         const pool = recipes.filter(r => !!r.imageUrl);
@@ -282,6 +321,7 @@ const SlideChefGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = (
         setEmptyIndex(empty);
         setMoves(0);
         setIsSolved(false);
+        setIsNewRecord(false);
     }, [recipes]);
 
     useEffect(() => { startNewGame(); }, [startNewGame]);
@@ -294,8 +334,15 @@ const SlideChefGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = (
             [newTiles[index], newTiles[emptyIndex]] = [newTiles[emptyIndex], newTiles[index]];
             setTiles(newTiles);
             setEmptyIndex(index);
-            setMoves(m => m + 1);
-            if (newTiles.every((val, idx) => val === idx)) setIsSolved(true);
+            const newMoves = moves + 1;
+            setMoves(newMoves);
+            
+            if (newTiles.every((val, idx) => val === idx)) {
+                setIsSolved(true);
+                updateArcadeStat('slide', newMoves).then(record => {
+                    if (record) setIsNewRecord(true);
+                });
+            }
         }
     };
 
@@ -313,9 +360,15 @@ const SlideChefGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = (
                     <h3 className="text-xs font-black text-emerald-500 uppercase tracking-[0.2em]">Slide Chef</h3>
                     <p className="text-xl font-black italic tracking-tighter">MOVES: {moves}</p>
                 </div>
-                <button onClick={onExit} className="bg-white/10 p-2 rounded-full hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-all">
-                    <span className="material-symbols-outlined">close</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="text-right">
+                        <p className="text-[8px] text-gray-500 uppercase font-black">Recorde</p>
+                        <p className="text-xs font-bold text-emerald-400">{arcadeStats['slide'] || '--'} mov.</p>
+                    </div>
+                    <button onClick={onExit} className="bg-white/10 p-2 rounded-full hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-all">
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
             </div>
 
             <div className="w-full max-w-[320px] aspect-square bg-zinc-900 rounded-[2rem] p-3 relative shadow-[0_0_40px_rgba(0,0,0,1)] border border-white/5 shrink-0">
@@ -348,7 +401,11 @@ const SlideChefGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = (
             {isSolved && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md z-50 p-6 animate-fadeIn">
                     <div className="bg-zinc-900 border-2 border-emerald-500 p-8 rounded-[2.5rem] text-center shadow-[0_0_50px_rgba(16,185,129,0.2)] animate-slideUp">
-                        <span className="text-6xl mb-4 block">✨</span>
+                        {isNewRecord ? (
+                            <div className="animate-bounce mb-4">
+                                <span className="bg-emerald-500 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(16,185,129,0.6)]">RECORDE BATIDO! ✨</span>
+                            </div>
+                        ) : <span className="text-6xl mb-4 block">✨</span>}
                         <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">Mestre Cuca!</h3>
                         <p className="text-gray-400 font-bold mb-6">Prato montado com sucesso.</p>
                         <div className="flex flex-col gap-3">
@@ -367,13 +424,12 @@ const SlideChefGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = (
 // ==========================================
 export const ArcadeModal: React.FC = () => {
     const { isArcadeModalOpen, closeModal, getCategoryRecipesSync, openModal, showToast } = useApp();
+    const { arcadeStats } = useShoppingList();
     const { user } = useAuth();
     const [selectedGame, setSelectedGame] = useState<'memory' | 'speed' | 'slide' | null>(null);
 
-    // Asset Pool: Pega receitas do acervo para usar nos jogos
     const assetPool = useMemo(() => {
         const pool = getCategoryRecipesSync('top10');
-        // Se o acervo estiver muito vazio (ex: primeiro uso), usamos um fallback visual
         return pool.length >= 8 ? pool : getCategoryRecipesSync('random');
     }, [getCategoryRecipesSync, isArcadeModalOpen]);
 
@@ -383,9 +439,8 @@ export const ArcadeModal: React.FC = () => {
         if (game === 'memory') {
             setSelectedGame('memory');
         } else {
-            // Regra de Negócio: Visual Speed e Slide Chef exigem login
             if (!user) {
-                showToast("Faça login para desbloquear este jogo!");
+                showToast("Faça login para salvar recordes e jogar!");
                 openModal('auth');
                 return;
             }
@@ -413,7 +468,7 @@ export const ArcadeModal: React.FC = () => {
                                 <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 uppercase italic tracking-tighter leading-none mb-2">
                                     Checklist Arcade
                                 </h2>
-                                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em]">Premium Game Experience</p>
+                                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em]">Minha Arena de Recordes</p>
                             </div>
                             <button onClick={() => closeModal('arcade')} className="bg-white/5 p-3 rounded-2xl hover:bg-red-500/20 text-zinc-500 hover:text-red-500 transition-all border border-white/5">
                                 <span className="material-symbols-outlined">close</span>
@@ -421,10 +476,12 @@ export const ArcadeModal: React.FC = () => {
                         </div>
 
                         <div className="grid gap-4 flex-1 content-start">
-                            {/* Card 1: Memory (LIVRE) */}
+                            {/* Card 1: Memory */}
                             <button onClick={() => handleGameClick('memory')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-600 to-blue-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
-                                <div className="absolute right-4 top-4 bg-green-500 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest animate-pulse">Grátis</div>
+                                <div className="absolute right-4 top-4 bg-white/20 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                    🏆 Recorde: {arcadeStats['memory'] || '--'}
+                                </div>
                                 <div className="absolute right-0 bottom-0 p-2 opacity-10 rotate-12 group-hover:rotate-0 transition-transform">
                                     <span className="material-symbols-outlined text-8xl font-black">dashboard</span>
                                 </div>
@@ -434,9 +491,12 @@ export const ArcadeModal: React.FC = () => {
                                 </div>
                             </button>
 
-                            {/* Card 2: Visual Speed (RESTRITO) */}
+                            {/* Card 2: Visual Speed */}
                             <button onClick={() => handleGameClick('speed')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-orange-600 to-red-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="absolute right-4 top-4 bg-white/20 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                    🏆 Recorde: {arcadeStats['speed'] || '--'}
+                                </div>
                                 {!user && (
                                     <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
                                         <span className="material-symbols-outlined text-white/50 text-4xl">lock</span>
@@ -451,9 +511,12 @@ export const ArcadeModal: React.FC = () => {
                                 </div>
                             </button>
 
-                            {/* Card 3: Slide Chef (RESTRITO) */}
+                            {/* Card 3: Slide Chef */}
                             <button onClick={() => handleGameClick('slide')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-teal-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="absolute right-4 top-4 bg-white/20 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                    🏆 Recorde: {arcadeStats['slide'] || '--'}
+                                </div>
                                 {!user && (
                                     <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
                                         <span className="material-symbols-outlined text-white/50 text-4xl">lock</span>
@@ -470,7 +533,7 @@ export const ArcadeModal: React.FC = () => {
                         </div>
 
                         <div className="mt-8 pt-6 border-t border-white/5 text-center shrink-0">
-                            <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em]">Powered by ChecklistIA Acervo</p>
+                            <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em]">Supere seus próprios limites</p>
                         </div>
                     </div>
                 )}

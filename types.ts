@@ -1,3 +1,10 @@
+
+export interface ArcadeStats {
+  gameId: 'memory' | 'speed' | 'slide';
+  bestScore: number;
+  updatedAt: any;
+}
+
 export interface ScheduleRule {
   id: string;
   label: string;
