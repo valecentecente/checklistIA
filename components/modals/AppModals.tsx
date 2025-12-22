@@ -83,7 +83,8 @@ export const AppModals: React.FC<AppModalsProps> = ({
     handleStartNewListForRecipe
 }) => {
     const app = useApp();
-    const { user, login, loginDemo, authError } = useAuth();
+    // Removed non-existent loginDemo from useAuth destructuring
+    const { user, login, authError } = useAuth();
     const { history, formatCurrency, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased } = useShoppingList();
 
     return (
@@ -149,7 +150,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
                     if (!user) app.setPendingAction(null); 
                 }} 
                 onLogin={login} 
-                onLoginDemo={loginDemo} 
+                // Removed non-existent loginDemo prop
                 error={authError} 
             />
             <ProfileModal isOpen={app.isProfileModalOpen} onClose={() => app.closeModal('profile')} />

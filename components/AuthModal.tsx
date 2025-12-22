@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
@@ -7,11 +6,10 @@ interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
     onLogin: () => void;
-    onLoginDemo: () => void;
     error?: string | null;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, onLoginDemo, error }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, error }) => {
     const { loginWithEmail, registerWithEmail, resetPassword, clearAuthError, authErrorCode, checkUsernameUniqueness, setAuthError } = useAuth();
     const { authTrigger, theme, showToast } = useApp();
     const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
@@ -241,18 +239,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
                                     </div>
 
                                     <div className="flex flex-col gap-2">
-                                        <button onClick={onLogin} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 text-sm font-semibold transition-all">
+                                        <button onClick={onLogin} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 text-sm font-semibold transition-all">
                                             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" className="w-5 h-5" />
-                                            Google
-                                        </button>
-                                        <button onClick={onLoginDemo} className="flex h-10 w-10 shrink-0 self-center items-center justify-center rounded-full bg-gray-100 dark:bg-white/5 text-gray-400 hover:bg-gray-200 transition-all mt-1" title="Login Convidado">
-                                            <span className="material-symbols-outlined text-lg">person_off</span>
+                                            Entrar com Google
                                         </button>
                                     </div>
                                 </>
                             )}
-                            <div className="mt-3 text-center">
-                                <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600">Cancelar</button>
+                            <div className="mt-6 text-center">
+                                <button onClick={onClose} className="text-sm font-bold text-gray-400 hover:text-gray-600 uppercase tracking-widest">Cancelar</button>
                             </div>
                         </div>
                     </>

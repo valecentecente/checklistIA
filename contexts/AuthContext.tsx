@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, getDoc, writeBatch, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
@@ -20,7 +19,6 @@ interface AuthContextType {
     updateDietaryPreferences: (preferences: string[]) => Promise<void>; 
     removeProfilePhoto: () => Promise<void>;
     deleteAccount: (password: string) => Promise<void>;
-    loginDemo: () => Promise<void>;
     logout: () => Promise<void>;
     setAuthError: (error: string | null) => void;
     clearAuthError: () => void;
@@ -187,7 +185,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
-        // Ignora listeners de Firebase se for usuário Guest ou offline
         if (!user || !user.username || !db || !auth?.currentUser) return;
 
         const q = query(
@@ -229,25 +226,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.error("Erro ao migrar dados:", e);
         }
-    };
-
-    const loginDemo = async () => {
-        setAuthError(null);
-        setAuthErrorCode(null);
-        setIsAuthLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 600)); 
-        
-        setUser({
-            uid: 'offline-user-' + Date.now(),
-            displayName: 'Convidado',
-            email: 'convidado@local.app',
-            photoURL: null,
-            username: 'convidado',
-            activeListId: 'offline-user-' + Date.now(),
-            dietaryPreferences: [],
-            role: 'admin_l1' 
-        });
-        setIsAuthLoading(false);
     };
 
     const loginWithEmail = async (email: string, pass: string) => {
@@ -509,7 +487,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const value = { 
-        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, loginDemo, logout, setAuthError, clearAuthError, checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, respondToAdminInvite, refreshUserProfile 
+        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, logout, setAuthError, clearAuthError, checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, respondToAdminInvite, refreshUserProfile 
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
