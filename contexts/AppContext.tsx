@@ -406,7 +406,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             if (cachedString) {
                 try {
-                    // Fix: Explicitly cast JSON.parse result to any to avoid unknown type access errors
                     const cache = JSON.parse(cachedString) as any;
                     fallbackCache = cache; 
                     
@@ -439,16 +438,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
                     const fetched: FullRecipe[] = mapToFullRecipeArray(fetchedRaw);
 
-                    const pool: FullRecipe[] = fetched.length > 0 
-                        ? shuffleArray<FullRecipe>(fetched) 
-                        : (fallbackCache && fallbackCache.pool ? mapToFullRecipeArray(fallbackCache.pool) : SURVIVAL_RECIPES);
+                    // Fix: Use explicit if/else for better type inference of FullRecipe[] variables
+                    let pool: FullRecipe[];
+                    if (fetched.length > 0) {
+                        pool = shuffleArray<FullRecipe>(fetched);
+                    } else if (fallbackCache && fallbackCache.pool) {
+                        pool = mapToFullRecipeArray(fallbackCache.pool);
+                    } else {
+                        pool = SURVIVAL_RECIPES;
+                    }
                     setAllRecipesPool(pool);
                     
-                    const cacheToSet: FullRecipe[] = fetched.length > 0 
-                        ? fetched 
-                        : (fallbackCache && fallbackCache.cache ? mapToFullRecipeArray(fallbackCache.cache) : SURVIVAL_RECIPES);
-                    // Fix: Explicitly cast cacheToSet as FullRecipe[] to resolve unknown[] assignment error at line 393
-                    setGlobalRecipeCache(cacheToSet as FullRecipe[]);
+                    let cacheToSet: FullRecipe[];
+                    if (fetched.length > 0) {
+                        cacheToSet = fetched;
+                    } else if (fallbackCache && fallbackCache.cache) {
+                        cacheToSet = mapToFullRecipeArray(fallbackCache.cache);
+                    } else {
+                        cacheToSet = SURVIVAL_RECIPES;
+                    }
+                    setGlobalRecipeCache(cacheToSet);
                     
                     const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
                     const totalCount = countSnapshot.data().count;
@@ -716,7 +725,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }));
 
             const rawText = sanitizeJsonString(response.text || "{}");
-            // Fix: Explicitly cast JSON.parse result to any to avoid unknown type access errors
             const details = JSON.parse(rawText) as any;
             
             const finalName = details.name || recipeName;
@@ -790,7 +798,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Categorias: ${categories.join(', ')}. Return JSON array.`,
                     config: { responseMimeType: "application/json" }
                 }));
-                // Fix: Cast to any[] to handle unknown return from JSON.parse and avoid type errors during iteration
                 const categorizedItems = JSON.parse(sanitizeJsonString(response.text || "[]")) as any[];
                 const newCategoryMap = { ...itemCategories };
                 (categorizedItems).forEach(ci => {

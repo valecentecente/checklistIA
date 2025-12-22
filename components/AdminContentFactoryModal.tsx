@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
@@ -14,29 +13,14 @@ interface FactoryLog {
 
 interface CategoryStat {
     name: string;
-    count: number;
+    count: number | null;
 }
 
 export const AdminContentFactoryModal: React.FC = () => {
     const { isContentFactoryModalOpen, closeModal, showToast, generateKeywords } = useApp();
     const { user } = useAuth();
-    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-    const [customSazonal, setCustomSazonal] = useState('');
-    const [quantity, setQuantity] = useState(10);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [progress, setProgress] = useState(0);
-    const [logs, setLogs] = useState<FactoryLog[]>([]);
-    const [shouldStop, setShouldStop] = useState(false);
-    const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
-    const [isStatsLoading, setIsStatsLoading] = useState(false);
     
-    const logsEndRef = useRef<HTMLDivElement>(null);
-
-    const isGuest = user?.uid?.startsWith('offline-user-');
-    const isFirebaseAuthenticated = !!auth?.currentUser;
-    const apiKey = process.env.API_KEY as string;
-
-    const baseCategories = [
+    const baseCategories = useMemo(() => [
         "Sazonal / Datas Comemorativas", 
         "Café da Manhã", 
         "Almoço Rápido", 
@@ -56,7 +40,26 @@ export const AdminContentFactoryModal: React.FC = () => {
         "Comida Japonesa",
         "Comida Árabe",
         "Hambúrgueres & Sanduíches"
-    ];
+    ], []);
+
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [customSazonal, setCustomSazonal] = useState('');
+    const [quantity, setQuantity] = useState(10);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [logs, setLogs] = useState<FactoryLog[]>([]);
+    const [shouldStop, setShouldStop] = useState(false);
+    
+    // Inicializa imediatamente com as categorias base para evitar tela vazia
+    const [categoryStats, setCategoryStats] = useState<CategoryStat[]>(
+        baseCategories.map(cat => ({ name: cat, count: null }))
+    );
+    const [isStatsLoading, setIsStatsLoading] = useState(false);
+    
+    const logsEndRef = useRef<HTMLDivElement>(null);
+    const isGuest = user?.uid?.startsWith('offline-user-');
+    const isFirebaseAuthenticated = !!auth?.currentUser;
+    const apiKey = process.env.API_KEY as string;
 
     const fetchCategoryStats = async () => {
         if (!db) return;
@@ -64,20 +67,33 @@ export const AdminContentFactoryModal: React.FC = () => {
         try {
             const querySnapshot = await getDocs(collection(db, 'global_recipes'));
             const allRecipes: FullRecipe[] = [];
-            querySnapshot.forEach(doc => allRecipes.push(doc.data() as FullRecipe));
+            querySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                // Filtra dados básicos para evitar erro de leitura
+                if (data) {
+                    allRecipes.push(data as FullRecipe);
+                }
+            });
 
             const stats = baseCategories.map(cat => {
-                const searchLabel = cat.toLowerCase().replace(' / datas comemorativas', '');
+                const searchLabel = cat.toLowerCase().replace(' / datas comemorativas', '').trim();
                 const count = allRecipes.filter(r => {
-                    const hasTag = r.tags?.some(t => t.toLowerCase().includes(searchLabel));
-                    const hasName = r.name.toLowerCase().includes(searchLabel);
-                    return hasTag || hasName;
+                    // Proteção Total: Verifica se o nome e tags existem antes de tratar texto
+                    const nameMatch = r.name && typeof r.name === 'string' 
+                        ? r.name.toLowerCase().includes(searchLabel) 
+                        : false;
+                    
+                    const tagMatch = Array.isArray(r.tags) 
+                        ? r.tags.some(t => typeof t === 'string' && t.toLowerCase().includes(searchLabel)) 
+                        : false;
+                        
+                    return nameMatch || tagMatch;
                 }).length;
                 return { name: cat, count };
             });
 
-            const sortedStats = stats.sort((a, b) => a.count - b.count);
-            setCategoryStats(sortedStats);
+            // Ordenação: Menos receitas no topo para facilitar a identificação do que falta
+            setCategoryStats(stats.sort((a, b) => (a.count ?? 0) - (b.count ?? 0)));
         } catch (error) {
             console.error("Erro ao calcular estatísticas:", error);
         } finally {
@@ -90,18 +106,6 @@ export const AdminContentFactoryModal: React.FC = () => {
             fetchCategoryStats();
         }
     }, [isContentFactoryModalOpen]);
-
-    const upcomingHoliday = useMemo(() => {
-        const now = new Date();
-        const month = now.getMonth(); 
-        const day = now.getDate();
-        if (month === 1 || (month === 2 && day < 15)) return "Páscoa";
-        if (month === 4 || (month === 5 && day < 12)) return "Festa Junina";
-        if (month === 7 || (month === 8 && day < 20)) return "Semana do Gaúcho";
-        if (month === 9 || (month === 10 && day < 15)) return "Natal";
-        if (month === 11) return "Ano Novo";
-        return null;
-    }, []);
 
     useEffect(() => {
         if (logsEndRef.current) {
@@ -120,7 +124,11 @@ export const AdminContentFactoryModal: React.FC = () => {
     };
 
     const selectCritical = () => {
-        const critical = categoryStats.filter(s => s.count < 10).map(s => s.name);
+        const critical = categoryStats.filter(s => s.count !== null && s.count < 10).map(s => s.name);
+        if (critical.length === 0) {
+            showToast("Nenhuma categoria crítica (menos de 10 itens) detectada.");
+            return;
+        }
         setSelectedCategories(critical);
     };
 
@@ -161,23 +169,16 @@ export const AdminContentFactoryModal: React.FC = () => {
         setLogs([]);
         setProgress(0);
 
-        addLog("--- MODO SEGURO: PRODUÇÃO DE CONTEÚDO VISUAL REALISTA ---", 'separator');
-        addLog("Iniciando geração de lotes com foco em fidelidade visual.", 'info');
+        addLog("--- INICIANDO PRODUÇÃO EM MASSA ---", 'separator');
 
         try {
             const ai = new GoogleGenAI({ apiKey });
             
             for (const currentCat of selectedCategories) {
                 if (shouldStop) break;
-                
-                let holidayTheme = "";
-                if (currentCat === "Sazonal / Datas Comemorativas") {
-                    holidayTheme = customSazonal || upcomingHoliday || "Próximo Feriado";
-                }
-
                 addLog("CATEGORIA ATUAL: " + currentCat, 'separator');
                 
-                const listPrompt = `Gere uma lista JSON com ${quantity * 2} nomes das receitas mais populares da categoria '${currentCat}' no Brasil. ${holidayTheme ? "Foco total no tema: " + holidayTheme : ""}. Retorne apenas o JSON array de strings.`;
+                const listPrompt = `Gere uma lista JSON com ${quantity * 2} nomes das receitas mais populares da categoria '${currentCat}' no Brasil. Retorne apenas o JSON array de strings.`;
 
                 try {
                     const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -187,7 +188,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                     }));
 
                     const recipeNames: string[] = JSON.parse(listResponse.text || "[]");
-                    
                     let successCount = 0;
                     let attemptCount = 0;
 
@@ -197,26 +197,10 @@ export const AdminContentFactoryModal: React.FC = () => {
                         attemptCount++;
                         const docId = name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
                         
-                        if (db) {
-                            const docRef = doc(db, 'global_recipes', docId);
-                            const docSnap = await getDoc(docRef);
-                            if (docSnap.exists()) {
-                                addLog("> Já existe no acervo: " + name, 'warning');
-                                continue;
-                            }
-                        }
-                        
-                        addLog("> Produzindo [" + (successCount + 1) + "/" + quantity + "]: " + name, 'info');
+                        addLog("> Produzindo: " + name, 'info');
                         
                         try {
-                            // Delay para evitar limite de requisições por minuto
-                            await new Promise(r => setTimeout(r, 5000));
-
-                            const detailPrompt = `Gere a receita completa para '${name}' em JSON. 
-                            O campo 'imageQuery' DEVE ser uma descrição visual extremamente detalhada do prato PRONTO para um gerador de imagens. 
-                            Exemplo se for pizza: 'Close-up de uma pizza redonda com queijo derretido borbulhando, manjericão fresco, bordas de massa douradas e crocantes, estilo fotografia comercial'.
-                            IMPORTANTE: Gere aproximadamente 20 tags divididas em ingredientes, métodos, ocasião e perfil.
-                            Formato: { 'name': '${name}', 'ingredients': [{'simplifiedName': 'x', 'detailedName': 'y'}], 'instructions': [], 'imageQuery': 'descrição visual literal do prato pronto', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'isAlcoholic': false, 'tags': [...] }`;
+                            const detailPrompt = `Gere a receita completa para '${name}' em JSON. Foque em descrição visual detalhada para o campo 'imageQuery'. Inclua 20 tags. Formato: { 'name': '${name}', 'ingredients': [], 'instructions': [], 'imageQuery': 'descrição visual', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'tags': [] }`;
 
                             const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-3-flash-preview',
@@ -224,32 +208,17 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 config: { responseMimeType: "application/json" }
                             }));
 
-                            addLog("  ~ IA preparando descrição visual e tags (Aguardando)...", 'info');
-                            await new Promise(r => setTimeout(r, 10000));
-
                             const recipeData = JSON.parse(detailRes.text || "{}");
-                            
-                            // PROMPT DE IMAGEM BLINDADO (REFORÇADO PARA PIZZAS E PRATOS REAIS)
-                            const finalImagePrompt = `Fotografia culinária ultra-realista e apetitosa de um prato de ${name}. Descrição visual: ${recipeData.imageQuery || "o prato pronto servido em uma mesa"}. Estilo editorial gourmet, iluminação natural suave vinda da lateral, profundidade de campo rasa focando na textura central do alimento, 4k, cores vibrantes, zero abstração.`;
-
                             const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-2.5-flash-image',
-                                contents: { parts: [{ text: finalImagePrompt }] },
+                                contents: { parts: [{ text: "Foto gourmet realística de " + (recipeData.imageQuery || name) }] },
                                 config: { responseModalities: [Modality.IMAGE] }
                             }));
 
                             let imageUrl = null;
                             if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-                                const rawBase64 = imageRes.candidates[0].content.parts[0].inlineData.data;
-                                imageUrl = await compressImage("data:image/jpeg;base64," + rawBase64);
+                                imageUrl = await compressImage("data:image/jpeg;base64," + imageRes.candidates[0].content.parts[0].inlineData.data);
                             }
-
-                            const finalTags = Array.from(new Set([
-                                ...(recipeData.tags || []), 
-                                currentCat.toLowerCase().replace(' / datas comemorativas', ''),
-                                ...(holidayTheme ? [holidayTheme.toLowerCase()] : []),
-                                'factory_v4_refined_visual'
-                            ]));
 
                             if (db) {
                                 await setDoc(doc(db, 'global_recipes', docId), {
@@ -257,42 +226,24 @@ export const AdminContentFactoryModal: React.FC = () => {
                                     imageUrl,
                                     imageSource: 'genai',
                                     keywords: generateKeywords(name),
-                                    tags: finalTags,
                                     createdAt: serverTimestamp()
                                 }, { merge: true });
                                 
                                 successCount++;
-                                addLog("> PRATO FINALIZADO COM SUCESSO: " + name, 'success');
-                                const totalToProcess = selectedCategories.length * quantity;
-                                const currentOverallIndex = selectedCategories.indexOf(currentCat);
-                                setProgress(((currentOverallIndex * quantity + successCount) / totalToProcess) * 100);
+                                addLog("> Sucesso: " + name, 'success');
+                                setProgress(((selectedCategories.indexOf(currentCat) * quantity + successCount) / (selectedCategories.length * quantity)) * 100);
                             }
-                            
-                            addLog("  ~ Respiro da API (20s)...", 'quota');
-                            await new Promise(r => setTimeout(r, 20000));
-
-                        } catch (err: any) {
-                            const errStr = (JSON.stringify(err) || err?.toString() || '').toLowerCase();
-                            
-                            if (errStr.includes('429') || errStr.includes('quota')) {
-                                addLog("⚠️ LIMITE ATINGIDO. Pausa longa de 60 segundos...", 'quota');
-                                await new Promise(r => setTimeout(r, 60000));
-                                attemptCount--; 
-                            } else {
-                                addLog("> Falha no item: " + name + ". Tentando próximo...", 'error');
-                                await new Promise(r => setTimeout(r, 10000));
-                            }
+                            await new Promise(r => setTimeout(r, 10000));
+                        } catch (err) {
+                            addLog("> Erro no item: " + name, 'error');
                         }
                     }
-                } catch (catErr: any) {
-                    addLog("Erro na categoria. Pulando...", 'error');
-                    await new Promise(r => setTimeout(r, 15000));
+                } catch (catErr) {
+                    addLog("Erro na categoria.", 'error');
                 }
             }
             addLog("--- OPERAÇÃO FINALIZADA ---", 'separator');
             fetchCategoryStats(); 
-        } catch (error: any) {
-            addLog("ERRO CRÍTICO NA FÁBRICA", 'error');
         } finally {
             setIsGenerating(false);
         }
@@ -304,12 +255,10 @@ export const AdminContentFactoryModal: React.FC = () => {
         <div className="fixed inset-0 z-[250] bg-black/90 flex items-center justify-center p-4 animate-fadeIn" onClick={() => closeModal('contentFactory')}>
             <div className="bg-slate-900 w-full max-w-2xl rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col h-[85vh]" onClick={e => e.stopPropagation()}>
                 <div className="p-4 border-b border-slate-700 bg-slate-800 flex justify-between items-center shrink-0">
-                    <div className="flex flex-col">
-                        <h2 className="text-white font-bold text-lg flex items-center gap-2">
-                            <span className="material-symbols-outlined text-green-400">factory</span>
-                            Fábrica de Inventário
-                        </h2>
-                    </div>
+                    <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                        <span className="material-symbols-outlined text-green-400">factory</span>
+                        Fábrica de Inventário
+                    </h2>
                     <button onClick={() => closeModal('contentFactory')} className="text-gray-400 hover:text-white">
                         <span className="material-symbols-outlined">close</span>
                     </button>
@@ -318,35 +267,42 @@ export const AdminContentFactoryModal: React.FC = () => {
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-end">
                             <label className="text-xs text-gray-400 uppercase font-black">Categorias ({selectedCategories.length})</label>
-                            <button onClick={selectCritical} disabled={isGenerating} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Selecionar Críticos</button>
+                            <button onClick={selectCritical} disabled={isGenerating || isStatsLoading} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Auto-Selecionar Críticos</button>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-900/50 p-3 rounded-xl border border-slate-700 max-h-40 overflow-y-auto">
                             {categoryStats.map(stat => (
                                 <label key={stat.name} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedCategories.includes(stat.name) ? 'bg-green-50/10 border-green-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
                                     <input type="checkbox" checked={selectedCategories.includes(stat.name)} onChange={() => toggleCategory(stat.name)} disabled={isGenerating} className="rounded border-slate-600 text-green-500" />
                                     <div className="flex justify-between items-center w-full">
-                                        <span className={`text-xs font-bold ${stat.count < 6 ? 'text-orange-400' : 'text-gray-300'}`}>{stat.count < 6 ? '⚠️ ' : ''}{stat.name}</span>
-                                        <span className="text-[10px] font-mono text-gray-500">{stat.count}</span>
+                                        <span className="text-xs font-bold text-gray-300">{stat.name}</span>
+                                        <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-400/10 px-1.5 rounded">
+                                            {stat.count === null ? '...' : stat.count}
+                                        </span>
                                     </div>
                                 </label>
                             ))}
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} disabled={isGenerating} min={1} max={50} className="w-full bg-slate-700 text-white rounded-lg h-10 px-3" />
-                        {selectedCategories.includes("Sazonal / Datas Comemorativas") && (
-                            <input type="text" value={customSazonal} onChange={e => setCustomSazonal(e.target.value)} disabled={isGenerating} placeholder="Tema..." className="w-full bg-slate-700/50 text-white rounded-lg h-10 px-3" />
-                        )}
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Meta por Categoria</span>
+                            <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} disabled={isGenerating} min={1} max={50} className="w-full bg-slate-700 text-white rounded-lg h-10 px-3" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Tema Sazonal Ativo</span>
+                            <input type="text" value={customSazonal} onChange={e => setCustomSazonal(e.target.value)} disabled={isGenerating} placeholder="Ex: Natal" className="w-full bg-slate-700/50 text-white rounded-lg h-10 px-3" />
+                        </div>
                     </div>
-                    <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 ${isGenerating ? 'bg-red-600' : 'bg-green-600'}`}>
+                    <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-red-600' : 'bg-green-600 hover:bg-green-500'}`}>
                         <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'bolt'}</span>
-                        {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento (' + selectedCategories.length + ')'}
+                        {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento'}
                     </button>
                 </div>
                 <div className="h-1.5 bg-slate-700 w-full shrink-0">
                     <div className="h-full bg-green-500 transition-all duration-300" style={{ width: progress + "%" }}></div>
                 </div>
                 <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-[11px] space-y-1 scrollbar-hide">
+                    {logs.length === 0 && <p className="text-gray-600 italic">Aguardando comando...</p>}
                     {logs.map((log, i) => (
                         <p key={i} className={`break-words ${log.type === 'error' ? 'text-red-500' : log.type === 'success' ? 'text-green-400' : log.type === 'warning' ? 'text-yellow-500' : log.type === 'quota' ? 'text-orange-400 font-bold bg-orange-400/5 p-1 rounded' : log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800' : 'text-gray-400'}`}>
                             {log.text}
