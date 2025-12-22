@@ -133,7 +133,7 @@ export const WebSidebarLeft: React.FC = () => {
 
             {/* AI RECIPES BUTTON (GLASS BLUE STYLE) */}
             <button
-                onClick={() => app.openModal('recipeAssistant')}
+                onClick={() => handleProtectedAction(() => app.openModal('recipeAssistant'), 'recipeAssistant')}
                 className="mx-2 mb-6 py-3.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-200 border border-blue-500/20 backdrop-blur-md rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 group"
             >
                 <span className="material-symbols-outlined text-xl animate-pulse text-blue-400 group-hover:text-blue-300 transition-colors">auto_awesome</span>

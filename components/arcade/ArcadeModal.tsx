@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
 import type { FullRecipe } from '../../types';
 
 // ==========================================
@@ -365,7 +366,8 @@ const SlideChefGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = (
 // MAIN ARCADE MODAL (HUB)
 // ==========================================
 export const ArcadeModal: React.FC = () => {
-    const { isArcadeModalOpen, closeModal, getCategoryRecipesSync } = useApp();
+    const { isArcadeModalOpen, closeModal, getCategoryRecipesSync, openModal, showToast } = useApp();
+    const { user } = useAuth();
     const [selectedGame, setSelectedGame] = useState<'memory' | 'speed' | 'slide' | null>(null);
 
     // Asset Pool: Pega receitas do acervo para usar nos jogos
@@ -376,6 +378,20 @@ export const ArcadeModal: React.FC = () => {
     }, [getCategoryRecipesSync, isArcadeModalOpen]);
 
     if (!isArcadeModalOpen) return null;
+
+    const handleGameClick = (game: 'memory' | 'speed' | 'slide') => {
+        if (game === 'memory') {
+            setSelectedGame('memory');
+        } else {
+            // Regra de Negócio: Visual Speed e Slide Chef exigem login
+            if (!user) {
+                showToast("Faça login para desbloquear este jogo!");
+                openModal('auth');
+                return;
+            }
+            setSelectedGame(game);
+        }
+    };
 
     const renderGame = () => {
         switch(selectedGame) {
@@ -405,9 +421,10 @@ export const ArcadeModal: React.FC = () => {
                         </div>
 
                         <div className="grid gap-4 flex-1 content-start">
-                            {/* Card 1: Memory */}
-                            <button onClick={() => setSelectedGame('memory')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
+                            {/* Card 1: Memory (LIVRE) */}
+                            <button onClick={() => handleGameClick('memory')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-600 to-blue-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="absolute right-4 top-4 bg-green-500 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest animate-pulse">Grátis</div>
                                 <div className="absolute right-0 bottom-0 p-2 opacity-10 rotate-12 group-hover:rotate-0 transition-transform">
                                     <span className="material-symbols-outlined text-8xl font-black">dashboard</span>
                                 </div>
@@ -417,9 +434,14 @@ export const ArcadeModal: React.FC = () => {
                                 </div>
                             </button>
 
-                            {/* Card 2: Visual Speed */}
-                            <button onClick={() => setSelectedGame('speed')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
+                            {/* Card 2: Visual Speed (RESTRITO) */}
+                            <button onClick={() => handleGameClick('speed')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-orange-600 to-red-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                                {!user && (
+                                    <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
+                                        <span className="material-symbols-outlined text-white/50 text-4xl">lock</span>
+                                    </div>
+                                )}
                                 <div className="absolute right-0 bottom-0 p-2 opacity-10 -rotate-12 group-hover:rotate-0 transition-transform">
                                     <span className="material-symbols-outlined text-8xl font-black">visibility</span>
                                 </div>
@@ -429,9 +451,14 @@ export const ArcadeModal: React.FC = () => {
                                 </div>
                             </button>
 
-                            {/* Card 3: Slide Chef */}
-                            <button onClick={() => setSelectedGame('slide')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
+                            {/* Card 3: Slide Chef (RESTRITO) */}
+                            <button onClick={() => handleGameClick('slide')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-teal-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                                {!user && (
+                                    <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
+                                        <span className="material-symbols-outlined text-white/50 text-4xl">lock</span>
+                                    </div>
+                                )}
                                 <div className="absolute right-0 bottom-0 p-2 opacity-10 rotate-45 group-hover:rotate-0 transition-transform">
                                     <span className="material-symbols-outlined text-8xl font-black">grid_view</span>
                                 </div>
