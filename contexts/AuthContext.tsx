@@ -1,8 +1,8 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, getDoc, writeBatch, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, writeBatch, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot, or, and } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../firebase';
-import type { User, ShoppingItem, AdminInvite } from '../types';
+import type { User, ShoppingItem, AdminInvite, AdminPermissions } from '../types';
 
 interface AuthContextType {
     user: User | null;
@@ -14,7 +14,7 @@ interface AuthContextType {
     registerWithEmail: (name: string, username: string, email: string, pass: string, birthDate: string) => Promise<void>;
     resetPassword: (email: string) => Promise<void>;
     updateUserProfile: (name: string, photoURL?: string, birthDate?: string) => Promise<void>;
-    updateUserPassword: (currentPass: string, newPass: string) => Promise<void>;
+    updateUserPassword: (currentPass: string, name: string) => Promise<void>;
     updateUsername: (newUsername: string) => Promise<void>;
     updateDietaryPreferences: (preferences: string[]) => Promise<void>; 
     removeProfilePhoto: () => Promise<void>;
@@ -26,7 +26,8 @@ interface AuthContextType {
     
     // Funções Admin
     pendingAdminInvite: AdminInvite | null;
-    sendAdminInvite: (username: string, level: 'admin_l1' | 'admin_l2') => Promise<{ success: boolean; message: string }>;
+    sendAdminInvite: (identifier: string, permissions: AdminPermissions) => Promise<{ success: boolean; message: string }>;
+    cancelAdminInvite: (inviteId: string) => Promise<void>;
     respondToAdminInvite: (inviteId: string, accept: boolean) => Promise<void>;
     refreshUserProfile: () => Promise<void>; 
 }
@@ -114,6 +115,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let preferencesToUse: string[] = []; 
         let birthDateToUse: string | undefined = undefined;
         let roleToUse: 'user' | 'admin_l1' | 'admin_l2' = 'user';
+        let permissionsToUse: AdminPermissions | undefined = undefined;
 
         if (db) {
             try {
@@ -127,6 +129,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (data.dietaryPreferences) preferencesToUse = data.dietaryPreferences;
                     if (data.birthDate) birthDateToUse = data.birthDate;
                     if (data.role) roleToUse = data.role;
+                    if (data.permissions) permissionsToUse = data.permissions;
                 }
 
                 if (currentUser.email) {
@@ -153,7 +156,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             activeListId: activeListIdToUse,
             dietaryPreferences: preferencesToUse,
             birthDate: birthDateToUse,
-            role: roleToUse
+            role: roleToUse,
+            permissions: permissionsToUse
         };
     };
 
@@ -184,13 +188,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => unsubscribe();
     }, []);
 
+    // Listener de convites (por email ou username)
     useEffect(() => {
-        if (!user || !user.username || !db || !auth?.currentUser) return;
+        if (!user || !db || !auth?.currentUser) return;
+
+        const email = user.email?.toLowerCase();
+        const username = user.username?.toLowerCase();
+
+        if (!email && !username) return;
 
         const q = query(
             collection(db, 'admin_invites'), 
-            where('toUsername', '==', user.username), 
-            where('status', '==', 'pending')
+            and(
+                where('status', '==', 'pending'),
+                or(
+                    where('toIdentifier', '==', email || '---'),
+                    where('toIdentifier', '==', username || '---')
+                )
+            )
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -205,28 +220,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         return () => unsubscribe();
-    }, [user?.username, user?.uid]);
-
-    const migrateGuestData = async (userId: string) => {
-        try {
-            const guestItemsJSON = localStorage.getItem('guestShoppingList');
-            if (guestItemsJSON && db) {
-                const guestItems: ShoppingItem[] = JSON.parse(guestItemsJSON);
-                if (guestItems.length > 0) {
-                    const batch = writeBatch(db);
-                    const itemsCollectionRef = collection(db, `users/${userId}/items`);
-                    guestItems.forEach(item => {
-                        const { id, ...itemData } = item;
-                        batch.set(doc(itemsCollectionRef), itemData);
-                    });
-                    await batch.commit();
-                    localStorage.removeItem('guestShoppingList');
-                }
-            }
-        } catch (e) {
-            console.error("Erro ao migrar dados:", e);
-        }
-    };
+    }, [user?.email, user?.username, user?.uid]);
 
     const loginWithEmail = async (email: string, pass: string) => {
         setAuthError(null);
@@ -239,11 +233,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const result = await signInWithEmailAndPassword(auth, email, pass);
             localStorage.setItem('remembered_email', email);
-            await migrateGuestData(result.user.uid);
         } catch (error: any) {
-            console.error("Email Login Error Trace:", error);
             const errorCode = error.code || '';
-            
             if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
                 setAuthErrorCode('INVALID_CREDENTIALS');
                 setAuthError("E-mail ou senha incorretos.");
@@ -287,7 +278,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             await syncUserToPublicDirectory({ ...result.user, displayName: name }, undefined, cleanUsername);
-            await migrateGuestData(result.user.uid);
 
             const newUser: User = {
                 uid: result.user.uid,
@@ -303,7 +293,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUser(newUser);
 
         } catch (error: any) {
-            console.error("Registration Error:", error);
             const errorCode = error.code || '';
             if (errorCode === 'auth/email-already-in-use') {
                 setAuthErrorCode('EMAIL_IN_USE');
@@ -434,10 +423,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     finalUsername = await generateUniqueUsername(result.user.email.split('@')[0]);
                 }
             }
-            await migrateGuestData(result.user.uid);
             await syncUserToPublicDirectory(result.user, undefined, finalUsername);
         } catch (error: any) {
-            console.error("Google Login Error Trace:", error);
             const errorCode = error.code || '';
             if (errorCode === 'auth/unauthorized-domain') {
                  setAuthErrorCode('DOMAIN_ERROR');
@@ -455,18 +442,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const clearAuthError = () => { setAuthError(null); setAuthErrorCode(null); }
 
-    const sendAdminInvite = async (username: string, level: 'admin_l1' | 'admin_l2') => {
+    const sendAdminInvite = async (identifier: string, permissions: AdminPermissions) => {
         if (!db || !user) return { success: false, message: 'Erro interno.' };
         try {
-            const q = query(collection(db, 'users_public'), where('username', '==', username.toLowerCase()));
-            const querySnapshot = await getDocs(q);
-            if (querySnapshot.empty) return { success: false, message: 'Usuário não encontrado.' };
-            const targetUser = querySnapshot.docs[0].data();
-            if (targetUser.uid === user.uid) return { success: false, message: 'Você não pode convidar a si mesmo.' };
-            await addDoc(collection(db, 'admin_invites'), { fromUid: user.uid, fromName: user.displayName, toUsername: username.toLowerCase(), level: level, status: 'pending', createdAt: serverTimestamp() });
-            return { success: true, message: `Convite enviado para @${username}` };
+            const cleanId = identifier.trim().toLowerCase();
+            const inviteRef = await addDoc(collection(db, 'admin_invites'), { 
+                fromUid: user.uid, 
+                fromName: user.displayName, 
+                toIdentifier: cleanId, 
+                permissions: permissions,
+                status: 'pending', 
+                createdAt: serverTimestamp() 
+            });
+            return { success: true, message: `Convite enviado para ${cleanId}` };
         } catch (error) {
             return { success: false, message: 'Falha ao enviar convite.' };
+        }
+    };
+
+    const cancelAdminInvite = async (inviteId: string) => {
+        if (!db) return;
+        try {
+            await deleteDoc(doc(db, 'admin_invites', inviteId));
+        } catch (error) {
+            console.error("Erro ao cancelar convite:", error);
         }
     };
 
@@ -477,7 +476,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const inviteSnap = await getDoc(inviteRef);
             if (inviteSnap.exists()) {
                 const inviteData = inviteSnap.data() as AdminInvite;
-                if (accept) await updateDoc(doc(db, 'users', user.uid), { role: inviteData.level });
+                if (accept) {
+                    // Regra: Se todas marcadas = L1 (Azul), senão L2 (Verde)
+                    const perms = inviteData.permissions;
+                    const allChecked = Object.values(perms).every(v => v === true);
+                    const newRole = allChecked ? 'admin_l1' : 'admin_l2';
+                    
+                    await updateDoc(doc(db, 'users', user.uid), { 
+                        role: newRole,
+                        permissions: perms
+                    });
+                }
                 await updateDoc(inviteRef, { status: accept ? 'accepted' : 'rejected' });
             }
             setPendingAdminInvite(null); 
@@ -487,7 +496,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const value = { 
-        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, logout, setAuthError, clearAuthError, checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, respondToAdminInvite, refreshUserProfile 
+        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, logout, setAuthError, clearAuthError, checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, cancelAdminInvite, respondToAdminInvite, refreshUserProfile 
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

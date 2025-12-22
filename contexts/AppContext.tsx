@@ -358,7 +358,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const apiKey = process.env.API_KEY as string;
     
-    const isSuperAdmin = user?.role === 'admin_l1';
+    // FALLBACK DE SEGURANÇA: Desenvolvedor sempre é Admin Master
+    const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com';
+    const isSuperAdmin = isOwner || user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
     // AUTO-PROMPT LÓGICA

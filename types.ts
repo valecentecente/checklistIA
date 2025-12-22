@@ -1,12 +1,21 @@
-
 export interface ScheduleRule {
   id: string;
   label: string;
   startHour: number;
   endHour: number;
   tags: string[];
-  startDate?: string | null; // Formato "MM-DD" para recorrência anual
-  endDate?: string | null;   // Formato "MM-DD"
+  startDate?: string | null; 
+  endDate?: string | null;   
+}
+
+export interface AdminPermissions {
+    offers: boolean;
+    schedule: boolean;
+    factory: boolean;
+    recipes: boolean;
+    reviews: boolean;
+    team: boolean;
+    reports: boolean;
 }
 
 export interface ShoppingItem {
@@ -18,14 +27,10 @@ export interface ShoppingItem {
   recipeName?: string | null;
   isNew?: boolean;
   isPurchased: boolean;
-  
-  // NOVOS CAMPOS PARA ATRIBUIÇÃO (Criador)
   creatorUid?: string | null;
   creatorDisplayName?: string | null;
   creatorPhotoURL?: string | null;
   listId?: string | null;
-
-  // NOVOS CAMPOS PARA DELEGAÇÃO (Responsável)
   responsibleUid?: string | null;
   responsibleDisplayName?: string | null;
 }
@@ -76,7 +81,7 @@ export interface FullRecipe {
   keywords?: string[]; 
   tags?: string[]; 
   isAlcoholic?: boolean; 
-  suggestedLeads?: string[]; // Novos produtos sugeridos pela IA
+  suggestedLeads?: string[]; 
 }
 
 export interface RecipeSuggestion {
@@ -110,7 +115,8 @@ export interface User {
   activeListId?: string; 
   dietaryPreferences?: string[]; 
   birthDate?: string; 
-  role?: 'user' | 'admin_l1' | 'admin_l2'; 
+  role?: 'user' | 'admin_l1' | 'admin_l2';
+  permissions?: AdminPermissions;
 }
 
 export interface AuthorMetadata {
@@ -171,8 +177,8 @@ export interface AdminInvite {
     id: string;
     fromUid: string;
     fromName: string;
-    toUsername: string;
-    level: 'admin_l1' | 'admin_l2';
+    toIdentifier: string; // Pode ser email ou username
+    permissions: AdminPermissions;
     status: 'pending' | 'accepted' | 'rejected';
     createdAt: any;
 }

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
@@ -100,6 +99,14 @@ export const WebSidebarLeft: React.FC = () => {
         },
     ];
 
+    // Lógica de Permissões: Se não houver objeto de permissões, mas for Admin, assume TRUE (Acesso Total)
+    const p = user?.permissions;
+    const hasPerm = (key: string) => {
+        if (!app.isAdmin) return false;
+        if (!p) return true; // Fallback para Admin antigo ou proprietário
+        return (p as any)[key] !== false;
+    };
+
     return (
         <div className="hidden lg:flex lg:w-72 flex-col h-full bg-[#121212] border-r border-white/10 p-6 flex-shrink-0">
             {/* Logo Area */}
@@ -193,7 +200,7 @@ export const WebSidebarLeft: React.FC = () => {
                                 Meu Perfil
                             </button>
 
-                            {/* ADMIN SECTION */}
+                            {/* ADMIN SECTION COM PERMISSÕES DINÂMICAS */}
                             {app.isAdmin && (
                                 <div className="mt-1 mb-1 border-y border-white/5 py-1">
                                     <button 
@@ -209,39 +216,53 @@ export const WebSidebarLeft: React.FC = () => {
 
                                     {isAdminExpanded && (
                                         <div className="flex flex-col gap-1 pl-2 mt-1 animate-slideUp">
-                                            <button onClick={() => app.openModal('admin')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
-                                                <span className="material-symbols-outlined text-base">shopping_bag</span>
-                                                Ofertas
-                                            </button>
+                                            {hasPerm('offers') && (
+                                                <button onClick={() => app.openModal('admin')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
+                                                    <span className="material-symbols-outlined text-base">shopping_bag</span>
+                                                    Ofertas
+                                                </button>
+                                            )}
                                             
-                                            {/* Super Admin Options */}
-                                            {app.isSuperAdmin && (
-                                                <>
-                                                    <button onClick={() => app.openModal('adminSchedule')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-indigo-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-indigo-500/50">
-                                                        <span className="material-symbols-outlined text-base">calendar_month</span>
-                                                        Grade de Vitrine
-                                                    </button>
-                                                    <button onClick={() => app.openModal('contentFactory')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-green-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-green-500/50">
-                                                        <span className="material-symbols-outlined text-base">factory</span>
-                                                        Fábrica de Conteúdo
-                                                    </button>
-                                                    <button onClick={() => app.openModal('adminRecipes')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
-                                                        <span className="material-symbols-outlined text-base">menu_book</span>
-                                                        Receitas
-                                                    </button>
-                                                    <button onClick={() => app.openModal('adminReviews')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
-                                                        <span className="material-symbols-outlined text-base">rate_review</span>
-                                                        Avaliações
-                                                    </button>
-                                                    <button onClick={() => app.openModal('manageTeam')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
-                                                        <span className="material-symbols-outlined text-base">group</span>
-                                                        Equipe
-                                                    </button>
-                                                    <button onClick={() => app.openModal('teamReports')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
-                                                        <span className="material-symbols-outlined text-base">monitoring</span>
-                                                        Relatórios Equipe
-                                                    </button>
-                                                </>
+                                            {hasPerm('schedule') && (
+                                                <button onClick={() => app.openModal('adminSchedule')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-indigo-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-indigo-500/50">
+                                                    <span className="material-symbols-outlined text-base">calendar_month</span>
+                                                    Grade de Vitrine
+                                                </button>
+                                            )}
+
+                                            {hasPerm('factory') && (
+                                                <button onClick={() => app.openModal('contentFactory')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-green-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-green-500/50">
+                                                    <span className="material-symbols-outlined text-base">factory</span>
+                                                    Fábrica de Conteúdo
+                                                </button>
+                                            )}
+
+                                            {hasPerm('recipes') && (
+                                                <button onClick={() => app.openModal('adminRecipes')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
+                                                    <span className="material-symbols-outlined text-base">menu_book</span>
+                                                    Receitas
+                                                </button>
+                                            )}
+
+                                            {hasPerm('reviews') && (
+                                                <button onClick={() => app.openModal('adminReviews')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
+                                                    <span className="material-symbols-outlined text-base">rate_review</span>
+                                                    Avaliações
+                                                </button>
+                                            )}
+
+                                            {hasPerm('team') && (
+                                                <button onClick={() => app.openModal('manageTeam')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
+                                                    <span className="material-symbols-outlined text-base">group</span>
+                                                    Equipe
+                                                </button>
+                                            )}
+
+                                            {hasPerm('reports') && (
+                                                <button onClick={() => app.openModal('teamReports')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
+                                                    <span className="material-symbols-outlined text-base">monitoring</span>
+                                                    Relatórios Equipe
+                                                </button>
                                             )}
                                         </div>
                                     )}
