@@ -58,8 +58,6 @@ interface ShoppingListContextType {
     logAdminAction: (actionType: 'create' | 'update' | 'delete' | 'login', targetName: string, details?: string) => Promise<void>;
     getTeamMembers: () => Promise<User[]>;
     getMemberLogs: (userId: string) => Promise<ActivityLog[]>;
-    currentMarketName: string | null;
-    setCurrentMarketName: (name: string | null) => void;
 }
 
 const ShoppingListContext = createContext<ShoppingListContextType | undefined>(undefined);
@@ -72,7 +70,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [favorites, setFavorites] = useState<FullRecipe[]>([]);
     const [savedOffers, setSavedOffers] = useState<Offer[]>([]); 
     const [offers, setOffers] = useState<Offer[]>([]);
-    const [currentMarketName, setCurrentMarketNameState] = useState<string | null>(null);
 
     const STORAGE_KEY = 'guestShoppingList';
     const HISTORY_STORAGE_KEY = 'guestShoppingHistory';
@@ -96,37 +93,43 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
     }, [user]);
 
-    // LISTENERS E SYNC
     useEffect(() => {
+        if (!db) return;
+        const qOffers = query(collection(db, 'offers'), orderBy('createdAt', 'desc'));
+        const unsubscribeOffers = onSnapshot(qOffers, (snapshot) => {
+            const loadedOffers = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Offer));
+            setOffers(loadedOffers);
+        }, (error) => {
+            console.warn("Erro ao carregar ofertas:", error.message);
+        });
+        return () => unsubscribeOffers();
+    }, []);
+
+    useEffect(() => {
+        // CIRURGICO: Limpeza total de estados locais ao deslogar
         if (!user || user.uid.startsWith('offline-user-')) {
-            // Limpa estado ao deslogar
-            setItems([]);
-            setHistory([]);
-            setReceivedHistory([]);
-            setFavorites([]);
-            setSavedOffers([]);
-            setCurrentMarketNameState(null);
-            
-            // Carrega Guest se necessário
             const storedList = localStorage.getItem(STORAGE_KEY);
             if (storedList) {
                 try { setItems(JSON.parse(storedList)); } catch (e) { setItems([]); }
-            }
+            } else { setItems([]); }
+
+            const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+            if (storedHistory) {
+                try { setHistory(JSON.parse(storedHistory)); } catch (e) { setHistory([]); }
+            } else { setHistory([]); }
+
+            setReceivedHistory([]);
+            setFavorites([]);
+            setSavedOffers([]); 
             return;
         }
 
         if (!db) return;
 
         const listId = user.activeListId || user.uid;
-
-        // Listen for current session metadata (Market Name)
-        const userRef = doc(db, 'users', user.uid);
-        const unsubUser = onSnapshot(userRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                setCurrentMarketNameState(data.currentMarketName || null);
-            }
-        });
 
         const itemsRef = collection(db, `users/${listId}/items`);
         const unsubscribeItems = onSnapshot(itemsRef, (snapshot) => {
@@ -182,26 +185,12 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         }, (error) => console.warn("Erro ao carregar ofertas salvas:", error.message));
 
         return () => {
-            unsubUser();
             unsubscribeItems();
             unsubscribeHistory();
             unsubscribeReceived();
             unsubscribeFavorites();
             unsubscribeSavedOffers();
         };
-    }, [user]);
-
-    const setCurrentMarketName = useCallback(async (name: string | null) => {
-        setCurrentMarketNameState(name);
-        if (user && !user.uid.startsWith('offline-user-') && db) {
-            try {
-                await updateDoc(doc(db, 'users', user.uid), {
-                    currentMarketName: name
-                });
-            } catch (error) {
-                console.error("Error updating market name in cloud:", error);
-            }
-        }
     }, [user]);
 
     useEffect(() => {
@@ -387,11 +376,10 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 batch.delete(itemRef);
             });
             await batch.commit();
-            await setCurrentMarketName(null);
         } else {
             setItems([]);
         }
-    }, [user, items, isOnline, history, setCurrentMarketName]);
+    }, [user, items, isOnline, history]);
 
     const finishWithoutSaving = useCallback(async () => {
         setItems([]);
@@ -403,10 +391,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 const batch = writeBatch(db);
                 querySnapshot.forEach((doc) => { batch.delete(doc.ref); });
                 await batch.commit();
-                await setCurrentMarketName(null);
             } catch (error) { console.error("Erro ao limpar lista:", error); }
         }
-    }, [user, isOnline, setCurrentMarketName]);
+    }, [user, isOnline]);
 
     const addHistoricItem = useCallback(async (historicItem: HistoricItem) => {
         const newItem: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'> = {
@@ -428,10 +415,11 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             isPurchased: true 
         }));
 
-        await setCurrentMarketName(purchase.marketName);
+        window.dispatchEvent(new CustomEvent('restoreMarketName', { detail: purchase.marketName }));
+
         await addIngredientsBatch(itemsToAdd);
         return { message: `${itemsToAdd.length} itens retomados com sucesso!` };
-    }, [addIngredientsBatch, setCurrentMarketName]);
+    }, [addIngredientsBatch]);
 
     const importSharedList = useCallback(async (shareId: string) => {
         if (!db) return null;
@@ -656,7 +644,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     return (
         <ShoppingListContext.Provider value={{
-            items, history, receivedHistory, favorites, offers, savedOffers, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs, currentMarketName, setCurrentMarketName
+            items, history, receivedHistory, favorites, offers, savedOffers, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs
         }}>
             {children}
         </ShoppingListContext.Provider>

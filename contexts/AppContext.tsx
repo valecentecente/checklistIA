@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -19,7 +18,7 @@ const SURVIVAL_RECIPES: FullRecipe[] = [
         instructions: ["Bata os ovos", "Frite"],
         imageQuery: "omelete",
         servings: "1", prepTimeInMinutes: 10, difficulty: "Fácil", cost: "Baixo", imageSource: "cache",
-        imageUrl: "https://images.unsplash.com/photo-1510627489930-0.1b0ba0fa3e?auto=format&fit=crop&w=800&q=80",
+        imageUrl: "https://images.unsplash.com/photo-1510627489930-0.1b0fa0fa3e?auto=format&fit=crop&w=800&q=80",
         tags: ["ovo", "café da manhã", "rápido"],
         keywords: ["omelete", "ovo", "cafe"],
         isAlcoholic: false
@@ -55,14 +54,14 @@ const getRecipeDocId = (name: string) => {
 };
 
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) return [] as FullRecipe[];
     return data.map((r: any): FullRecipe => ({
         name: String(r.name || 'Receita'),
         ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
             simplifiedName: String(i.simplifiedName || ''),
             detailedName: String(i.detailedName || '')
-        })) : [],
-        instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [],
+        })) : [] as { simplifiedName: string; detailedName: string; }[],
+        instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
         imageQuery: String(r.imageQuery || r.name || ''),
         servings: String(r.servings || '2 porções'),
         prepTimeInMinutes: Number(r.prepTimeInMinutes || 30),
@@ -71,11 +70,43 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
         imageUrl: r.imageUrl,
         imageSource: r.imageSource || 'cache',
         description: r.description,
-        keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [],
-        tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+        keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [] as string[],
+        tags: Array.isArray(r.tags) ? r.tags.map(String) : [] as string[],
         isAlcoholic: !!r.isAlcoholic,
-        suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : []
+        suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : [] as string[]
     }));
+};
+
+const INITIAL_MODAL_STATES = {
+    isAddItemModalOpen: false, isBudgetModalOpen: false, isRecipeAssistantModalOpen: false,
+    isOptionsMenuOpen: false, isAppOptionsMenuOpen: false, isCalculatorModalOpen: false,
+    isAboutModalOpen: false, isSavePurchaseModalOpen: false, isHistoryModalOpen: false,
+    isAuthModalOpen: false, isContactModalOpen: false, isTourModalOpen: false,
+    isProfileModalOpen: false, isThemeModalOpen: false,
+    isSharedListModalOpen: false,
+    isFeedbackModalOpen: false,
+    isPreferencesModalOpen: false,
+    isSmartNudgeModalOpen: false,
+    isRecipeDecisionModalOpen: false,
+    isFavoritesModalOpen: false,
+    isOffersModalOpen: false,
+    isAdminModalOpen: false,
+    isAdminRecipesModalOpen: false,
+    isAdminReviewsModalOpen: false,
+    isAdminScheduleModalOpen: false,
+    isManageTeamModalOpen: false,
+    isTeamReportsModalOpen: false, 
+    isArcadeModalOpen: false,
+    isAdminInviteModalOpen: false,
+    isInfoModalOpen: false,
+    isStartShoppingModalOpen: false,
+    isShareListModalOpen: false,
+    isThemeRecipesModalOpen: false,
+    isToolsModalOpen: false,
+    isProductDetailsModalOpen: false,
+    isUnitConverterModalOpen: false,
+    isContentFactoryModalOpen: false,
+    isRecipeSelectionModalOpen: false
 };
 
 interface AppContextType {
@@ -260,7 +291,7 @@ const ignorePermissionError = (err: any) => {
 };
 
 export const generateKeywords = (text: string): string[] => {
-    if (!text) return [];
+    if (!text) return [] as string[];
     const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero'];
     return text
         .toLowerCase()
@@ -271,40 +302,8 @@ export const generateKeywords = (text: string): string[] => {
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, offers, currentMarketName, setCurrentMarketName } = useShoppingList();
+    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, offers } = useShoppingList();
     const { user } = useAuth();
-
-    const INITIAL_MODAL_STATES = {
-        isAddItemModalOpen: false, isBudgetModalOpen: false, isRecipeAssistantModalOpen: false,
-        isOptionsMenuOpen: false, isAppOptionsMenuOpen: false, isCalculatorModalOpen: false,
-        isAboutModalOpen: false, isSavePurchaseModalOpen: false, isHistoryModalOpen: false,
-        isAuthModalOpen: false, isContactModalOpen: false, isTourModalOpen: false,
-        isProfileModalOpen: false, isThemeModalOpen: false,
-        isSharedListModalOpen: false,
-        isFeedbackModalOpen: false,
-        isPreferencesModalOpen: false,
-        isSmartNudgeModalOpen: false,
-        isRecipeDecisionModalOpen: false,
-        isFavoritesModalOpen: false,
-        isOffersModalOpen: false,
-        isAdminModalOpen: false,
-        isAdminRecipesModalOpen: false,
-        isAdminReviewsModalOpen: false,
-        isAdminScheduleModalOpen: false,
-        isManageTeamModalOpen: false,
-        isTeamReportsModalOpen: false, 
-        isArcadeModalOpen: false,
-        isAdminInviteModalOpen: false,
-        isInfoModalOpen: false,
-        isStartShoppingModalOpen: false,
-        isShareListModalOpen: false,
-        isThemeRecipesModalOpen: false,
-        isToolsModalOpen: false,
-        isProductDetailsModalOpen: false,
-        isUnitConverterModalOpen: false,
-        isContentFactoryModalOpen: false,
-        isRecipeSelectionModalOpen: false
-    };
 
     const [modalStates, setModalStates] = useState(INITIAL_MODAL_STATES);
     
@@ -333,6 +332,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [incomingList, setIncomingList] = useState<ReceivedListRecord | null>(null);
     
     const [smartNudgeItemName, setSmartNudgeItemName] = useState<string | null>(null);
+    const [currentMarketName, setCurrentMarketName] = useState<string | null>(null);
     const [isSharedSession, setIsSharedSession] = useState(false);
     const [historyActiveTab, setHistoryActiveTabState] = useState<'my' | 'received'>('my');
     const [isHomeViewActive, setHomeViewActive] = useState(true);
@@ -359,6 +359,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
+    // CIRURGICO: Reset de UI e Modais ao deslogar
     useEffect(() => {
         if (!user) {
             setModalStates(INITIAL_MODAL_STATES);
@@ -373,7 +374,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
         const pool = globalRecipeCache;
-        if (pool.length === 0) return [];
+        if (pool.length === 0) return [] as FullRecipe[];
 
         switch(categoryKey) {
             case 'top10': 
@@ -405,7 +406,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             if (cachedString) {
                 try {
-                    const cache = JSON.parse(cachedString);
+                    // Fix: Explicitly cast JSON.parse result to any to avoid unknown type access errors
+                    const cache = JSON.parse(cachedString) as any;
                     fallbackCache = cache; 
                     
                     if (cache && Array.isArray(cache.pool)) {
@@ -445,7 +447,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const cacheToSet: FullRecipe[] = fetched.length > 0 
                         ? fetched 
                         : (fallbackCache && fallbackCache.cache ? mapToFullRecipeArray(fallbackCache.cache) : SURVIVAL_RECIPES);
-                    setGlobalRecipeCache(cacheToSet);
+                    // Fix: Explicitly cast cacheToSet as FullRecipe[] to resolve unknown[] assignment error at line 393
+                    setGlobalRecipeCache(cacheToSet as FullRecipe[]);
                     
                     const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
                     const totalCount = countSnapshot.data().count;
@@ -479,7 +482,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!db) return;
         const unsub = onSnapshot(doc(db, 'settings', 'recipe_schedule'), (snapshot) => {
             if (snapshot.exists()) {
-                setScheduleRules(snapshot.data().rules || []);
+                setScheduleRules(snapshot.data().rules || ([] as ScheduleRule[]));
             }
         }, (error) => {
             if (!ignorePermissionError(error)) console.error(error);
@@ -494,7 +497,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
-        if (pool.length === 0) return [];
+        if (pool.length === 0) return [] as FullRecipe[];
         const now = new Date();
         const hour = now.getHours();
         let activeRules = scheduleRules.filter(r => hour >= r.startHour && hour < r.endHour);
@@ -597,15 +600,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const getCachedRecipe = (name: string): FullRecipe | undefined => {
         const target = name.trim().toLowerCase();
-        const allCaches = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, globalRecipeCache];
+        const allCaches: (Record<string, FullRecipe> | FullRecipe[])[] = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, recipeSearchResults, globalRecipeCache];
         for (const cache of allCaches) {
             if (Array.isArray(cache)) {
-                // Fix: Explicitly type 'found' to ensure return type matches interface
                 const found = (cache as FullRecipe[]).find(r => r.name.toLowerCase() === target);
                 if (found) return found;
             } else {
                 const foundKey = Object.keys(cache).find(k => k.toLowerCase() === target);
-                // Fix: Ensure return type is correctly accessed via cast
                 if (foundKey) return (cache as Record<string, FullRecipe>)[foundKey];
             }
         }
@@ -643,11 +644,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
-        if (!db || !queryStr || queryStr.length < 2) return [];
+        if (!db || !queryStr || queryStr.length < 2) return [] as FullRecipe[];
         try {
             const keywords: string[] = generateKeywords(queryStr);
-            if (keywords.length === 0) return [];
-            let results: FullRecipe[] = [];
+            if (keywords.length === 0) return [] as FullRecipe[];
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
             const rawResults: any[] = [];
@@ -659,7 +659,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
             return mapToFullRecipeArray(rawResults);
         } catch (error) { 
-            return []; 
+            return [] as FullRecipe[]; 
         }
     }, []);
 
@@ -716,7 +716,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }));
 
             const rawText = sanitizeJsonString(response.text || "{}");
-            const details = JSON.parse(rawText);
+            // Fix: Explicitly cast JSON.parse result to any to avoid unknown type access errors
+            const details = JSON.parse(rawText) as any;
             
             const finalName = details.name || recipeName;
 
@@ -725,8 +726,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 ingredients: Array.isArray(details.ingredients) ? details.ingredients.map((i: any) => ({
                     simplifiedName: String(i.simplifiedName || ''),
                     detailedName: String(i.detailedName || '')
-                })) : [],
-                instructions: Array.isArray(details.instructions) ? details.instructions.map(String) : [],
+                })) : [] as { simplifiedName: string; detailedName: string; }[],
+                instructions: Array.isArray(details.instructions) ? details.instructions.map(String) : [] as string[],
                 imageQuery: details.imageQuery || finalName,
                 servings: details.servings || '2 porções',
                 prepTimeInMinutes: details.prepTimeInMinutes || 30,
@@ -736,9 +737,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 imageSource: details.imageSource || 'cache',
                 description: details.description,
                 keywords: generateKeywords(finalName),
-                tags: Array.isArray(details.tags) ? details.tags.map(String) : [],
+                tags: Array.isArray(details.tags) ? details.tags.map(String) : [] as string[],
                 isAlcoholic: !!details.isAlcoholic,
-                suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : []
+                suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : [] as string[]
             };
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
@@ -789,9 +790,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Categorias: ${categories.join(', ')}. Return JSON array.`,
                     config: { responseMimeType: "application/json" }
                 }));
-                const categorizedItems = JSON.parse(sanitizeJsonString(response.text || "[]"));
+                // Fix: Cast to any[] to handle unknown return from JSON.parse and avoid type errors during iteration
+                const categorizedItems = JSON.parse(sanitizeJsonString(response.text || "[]")) as any[];
                 const newCategoryMap = { ...itemCategories };
-                (categorizedItems as any[]).forEach(ci => {
+                (categorizedItems).forEach(ci => {
                     const item = itemsToCategorize.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
                     if (item) newCategoryMap[item.id] = ci.category;
                 });
@@ -805,12 +807,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
         setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
-        // Fix: Explicitly type the empty array as FullRecipe[] to avoid TS error on assignment
         setRecipeSuggestions([] as FullRecipe[]);
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
-            const suggestions = getCategoryRecipes(key);
+            const suggestions: FullRecipe[] = getCategoryRecipes(key);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }
     };
