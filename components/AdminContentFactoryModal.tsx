@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
-import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,7 +8,7 @@ import type { FullRecipe } from '../types';
 
 interface FactoryLog {
     text: string;
-    type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota';
+    type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota' | 'lead';
 }
 
 interface CategoryStat {
@@ -46,11 +46,11 @@ export const AdminContentFactoryModal: React.FC = () => {
     const [customSazonal, setCustomSazonal] = useState('');
     const [quantity, setQuantity] = useState(10);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
     const [progress, setProgress] = useState(0);
     const [logs, setLogs] = useState<FactoryLog[]>([]);
     const [shouldStop, setShouldStop] = useState(false);
     
-    // Inicializa imediatamente com as categorias base para evitar tela vazia
     const [categoryStats, setCategoryStats] = useState<CategoryStat[]>(
         baseCategories.map(cat => ({ name: cat, count: null }))
     );
@@ -69,7 +69,6 @@ export const AdminContentFactoryModal: React.FC = () => {
             const allRecipes: FullRecipe[] = [];
             querySnapshot.forEach(docSnap => {
                 const data = docSnap.data();
-                // Filtra dados básicos para evitar erro de leitura
                 if (data) {
                     allRecipes.push(data as FullRecipe);
                 }
@@ -78,7 +77,6 @@ export const AdminContentFactoryModal: React.FC = () => {
             const stats = baseCategories.map(cat => {
                 const searchLabel = cat.toLowerCase().replace(' / datas comemorativas', '').trim();
                 const count = allRecipes.filter(r => {
-                    // Proteção Total: Verifica se o nome e tags existem antes de tratar texto
                     const nameMatch = r.name && typeof r.name === 'string' 
                         ? r.name.toLowerCase().includes(searchLabel) 
                         : false;
@@ -92,7 +90,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                 return { name: cat, count };
             });
 
-            // Ordenação: Menos receitas no topo para facilitar a identificação do que falta
             setCategoryStats(stats.sort((a, b) => (a.count ?? 0) - (b.count ?? 0)));
         } catch (error) {
             console.error("Erro ao calcular estatísticas:", error);
@@ -113,7 +110,7 @@ export const AdminContentFactoryModal: React.FC = () => {
         }
     }, [logs]);
 
-    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota' = 'info') => {
+    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota' | 'lead' = 'info') => {
         setLogs(prev => [...prev, { text: msg, type }]);
     };
 
@@ -126,7 +123,7 @@ export const AdminContentFactoryModal: React.FC = () => {
     const selectCritical = () => {
         const critical = categoryStats.filter(s => s.count !== null && s.count < 10).map(s => s.name);
         if (critical.length === 0) {
-            showToast("Nenhuma categoria crítica (menos de 10 itens) detectada.");
+            showToast("Nenhuma categoria crítica detectada.");
             return;
         }
         setSelectedCategories(critical);
@@ -159,6 +156,104 @@ export const AdminContentFactoryModal: React.FC = () => {
         });
     };
 
+    const createLeads = async (recipeName: string, suggestedLeads: string[]) => {
+        if (!db || !suggestedLeads || suggestedLeads.length === 0) return;
+        
+        for (const term of suggestedLeads) {
+            try {
+                const leadId = `${recipeName.toLowerCase().replace(/\s+/g, '-')}-${term.toLowerCase().replace(/\s+/g, '-')}`.slice(0, 100);
+                const leadRef = doc(db, 'sales_opportunities', leadId);
+                const leadSnap = await getDoc(leadRef);
+                
+                if (!leadSnap.exists()) {
+                    await setDoc(leadRef, {
+                        term: term.toLowerCase(),
+                        recipeName: recipeName,
+                        status: 'pending',
+                        createdAt: serverTimestamp()
+                    });
+                    addLog(`[LEAD] Oportunidade: ${term}`, 'lead');
+                }
+            } catch (e) {
+                console.warn("Erro ao criar lead:", e);
+            }
+        }
+    };
+
+    const handleRetroactiveScan = async () => {
+        if (!apiKey || !db) return;
+        setIsScanning(true);
+        setShouldStop(false);
+        setLogs([]);
+        setProgress(0);
+        addLog("--- INICIANDO VARREDURA DE LEADS (RETROATIVO) ---", 'separator');
+
+        try {
+            const querySnapshot = await getDocs(collection(db, 'global_recipes'));
+            const allRecipes: any[] = [];
+            querySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const hasLeads = data.suggestedLeads && data.suggestedLeads.length > 0 && data.suggestedLeads[0] !== 'nenhum';
+                if (data.name && !hasLeads) {
+                    allRecipes.push({ id: docSnap.id, ...data });
+                }
+            });
+
+            if (allRecipes.length === 0) {
+                addLog("Nenhuma receita pendente de análise encontrada.", 'success');
+                setIsScanning(false);
+                return;
+            }
+
+            addLog(`Encontradas ${allRecipes.length} receitas para analisar.`, 'info');
+            const ai = new GoogleGenAI({ apiKey });
+
+            let processed = 0;
+            for (const recipe of allRecipes) {
+                if (shouldStop) break;
+                addLog(`Analisando (${processed + 1}/${allRecipes.length}): ${recipe.name}`, 'info');
+
+                const scanPrompt = `Analise a receita '${recipe.name}' e seus ingredientes: ${JSON.stringify(recipe.ingredients || [])}. 
+                Identifique eletrodomésticos ou utensílios específicos necessários para o preparo (ex: batedeira, airfryer, liquidificador, forma de silicone, processador). 
+                Retorne APENAS um JSON com array 'suggestedLeads'. Formato: { "suggestedLeads": ["item1", "item2"] }`;
+
+                try {
+                    const res = await callGenAIWithRetry(() => ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: scanPrompt,
+                        config: { responseMimeType: "application/json" }
+                    }));
+
+                    const data = JSON.parse(res.text || "{}");
+                    const leads = data.suggestedLeads || [];
+
+                    if (leads.length > 0) {
+                        await updateDoc(doc(db, 'global_recipes', recipe.id), {
+                            suggestedLeads: leads
+                        });
+                        await createLeads(recipe.name, leads);
+                        addLog(`> Sincronizado: ${recipe.name} (${leads.length} itens)`, 'success');
+                    } else {
+                        await updateDoc(doc(db, 'global_recipes', recipe.id), {
+                            suggestedLeads: ["nenhum"] 
+                        });
+                    }
+                    
+                    processed++;
+                    setProgress((processed / allRecipes.length) * 100);
+                    await new Promise(r => setTimeout(r, 1000));
+                } catch (err) {
+                    addLog(`Erro ao analisar: ${recipe.name}`, 'error');
+                }
+            }
+
+            addLog("--- VARREDURA FINALIZADA ---", 'separator');
+            showToast("IA Leads sincronizado!");
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
     const handleStart = async () => {
         if (!apiKey) { showToast("API Key ausente."); return; }
         if (isGuest || !isFirebaseAuthenticated) { showToast("Login real necessário."); return; }
@@ -176,9 +271,9 @@ export const AdminContentFactoryModal: React.FC = () => {
             
             for (const currentCat of selectedCategories) {
                 if (shouldStop) break;
-                addLog("CATEGORIA ATUAL: " + currentCat, 'separator');
+                addLog(`CATEGORIA: ${currentCat} (Meta: ${quantity} novos)`, 'separator');
                 
-                const listPrompt = `Gere uma lista JSON com ${quantity * 2} nomes das receitas mais populares da categoria '${currentCat}' no Brasil. Retorne apenas o JSON array de strings.`;
+                const listPrompt = `Gere uma lista JSON com 100 nomes das receitas mais populares da categoria '${currentCat}' no Brasil. Retorne apenas o JSON array de strings.`;
 
                 try {
                     const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -193,14 +288,35 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                     while (successCount < quantity && attemptCount < recipeNames.length) {
                         if (shouldStop) break;
+                        
                         const name = recipeNames[attemptCount];
                         attemptCount++;
-                        const docId = name.trim().toLowerCase().replace(/[\/\s]+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80);
                         
-                        addLog("> Produzindo: " + name, 'info');
+                        const docId = name.trim().toLowerCase()
+                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+                            .replace(/[\/\s]+/g, '-') 
+                            .replace(/[^a-z0-9-]/g, '') 
+                            .slice(0, 80);
                         
                         try {
-                            const detailPrompt = `Gere a receita completa para '${name}' em JSON. Foque em descrição visual detalhada para o campo 'imageQuery'. Inclua 20 tags. Formato: { 'name': '${name}', 'ingredients': [], 'instructions': [], 'imageQuery': 'descrição visual', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'tags': [] }`;
+                            const checkSnap = await getDoc(doc(db!, 'global_recipes', docId));
+                            if (checkSnap.exists()) {
+                                addLog(`> Pulo: "${name}" já existe no acervo.`, 'warning');
+                                continue;
+                            }
+                        } catch (checkErr) {
+                            console.warn("Falha na varredura:", name);
+                        }
+
+                        addLog("---------------------------------------", 'separator');
+                        addLog(`${successCount + 1}/${quantity} - Produzindo: ${name}`, 'info');
+                        
+                        try {
+                            const detailPrompt = `Gere a receita completa para '${name}' em JSON. 
+                            REGRAS: 
+                            1. Inclua obrigatoriamente 20 tags variadas.
+                            2. IDENTIFIQUE utensílios/eletros necessários no campo 'suggestedLeads' (ex: batedeira, airfryer).
+                            Formato: { 'name': '${name}', 'ingredients': [], 'instructions': [], 'imageQuery': '...', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'tags': [], 'suggestedLeads': ['item1'] }`;
 
                             const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-3-flash-preview',
@@ -209,6 +325,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             }));
 
                             const recipeData = JSON.parse(detailRes.text || "{}");
+                            
                             const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-2.5-flash-image',
                                 contents: { parts: [{ text: "Foto gourmet realística de " + (recipeData.imageQuery || name) }] },
@@ -229,17 +346,22 @@ export const AdminContentFactoryModal: React.FC = () => {
                                     createdAt: serverTimestamp()
                                 }, { merge: true });
                                 
-                                successCount++;
-                                addLog("> Sucesso: " + name, 'success');
+                                if (recipeData.suggestedLeads && recipeData.suggestedLeads.length > 0) {
+                                    await createLeads(name, recipeData.suggestedLeads);
+                                }
+                                
+                                successCount++; 
+                                addLog(`> SUCESSO: ${name} adicionado.`, 'success');
                                 setProgress(((selectedCategories.indexOf(currentCat) * quantity + successCount) / (selectedCategories.length * quantity)) * 100);
                             }
+                            
                             await new Promise(r => setTimeout(r, 10000));
                         } catch (err) {
-                            addLog("> Erro no item: " + name, 'error');
+                            addLog(`> ERRO no item: ${name}`, 'error');
                         }
                     }
                 } catch (catErr) {
-                    addLog("Erro na categoria.", 'error');
+                    addLog(`Erro crítico na categoria ${currentCat}`, 'error');
                 }
             }
             addLog("--- OPERAÇÃO FINALIZADA ---", 'separator');
@@ -267,12 +389,18 @@ export const AdminContentFactoryModal: React.FC = () => {
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-end">
                             <label className="text-xs text-gray-400 uppercase font-black">Categorias ({selectedCategories.length})</label>
-                            <button onClick={selectCritical} disabled={isGenerating || isStatsLoading} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Auto-Selecionar Críticos</button>
+                            <div className="flex gap-2">
+                                <button onClick={handleRetroactiveScan} disabled={isGenerating || isScanning} className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-blue-500/30 flex items-center gap-1 transition-all">
+                                    <span className="material-symbols-outlined text-[12px]">sync_alt</span>
+                                    Sincronizar IA Leads
+                                </button>
+                                <button onClick={selectCritical} disabled={isGenerating || isScanning || isStatsLoading} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Auto-Selecionar Críticos</button>
+                            </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-900/50 p-3 rounded-xl border border-slate-700 max-h-40 overflow-y-auto">
                             {categoryStats.map(stat => (
                                 <label key={stat.name} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedCategories.includes(stat.name) ? 'bg-green-50/10 border-green-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
-                                    <input type="checkbox" checked={selectedCategories.includes(stat.name)} onChange={() => toggleCategory(stat.name)} disabled={isGenerating} className="rounded border-slate-600 text-green-500" />
+                                    <input type="checkbox" checked={selectedCategories.includes(stat.name)} onChange={() => toggleCategory(stat.name)} disabled={isGenerating || isScanning} className="rounded border-slate-600 text-green-500" />
                                     <div className="flex justify-between items-center w-full">
                                         <span className="text-xs font-bold text-gray-300">{stat.name}</span>
                                         <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-400/10 px-1.5 rounded">
@@ -285,26 +413,32 @@ export const AdminContentFactoryModal: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1">
-                            <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Meta por Categoria</span>
-                            <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} disabled={isGenerating} min={1} max={50} className="w-full bg-slate-700 text-white rounded-lg h-10 px-3" />
+                            <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Meta de Novos Pratos</span>
+                            <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} disabled={isGenerating || isScanning} min={1} max={50} className="w-full bg-slate-700 text-white rounded-lg h-10 px-3" />
                         </div>
                         <div className="flex flex-col gap-1">
                             <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Tema Sazonal Ativo</span>
-                            <input type="text" value={customSazonal} onChange={e => setCustomSazonal(e.target.value)} disabled={isGenerating} placeholder="Ex: Natal" className="w-full bg-slate-700/50 text-white rounded-lg h-10 px-3" />
+                            <input type="text" value={customSazonal} onChange={e => setCustomSazonal(e.target.value)} disabled={isGenerating || isScanning} placeholder="Ex: Natal" className="w-full bg-slate-700/50 text-white rounded-lg h-10 px-3" />
                         </div>
                     </div>
-                    <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-red-600' : 'bg-green-600 hover:bg-green-500'}`}>
+                    <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} disabled={isScanning} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-red-600' : 'bg-green-600 hover:bg-green-500 disabled:opacity-50'}`}>
                         <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'bolt'}</span>
                         {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento'}
                     </button>
                 </div>
                 <div className="h-1.5 bg-slate-700 w-full shrink-0">
-                    <div className="h-full bg-green-500 transition-all duration-300" style={{ width: progress + "%" }}></div>
+                    <div className={`h-full transition-all duration-300 ${isScanning ? 'bg-blue-500' : 'bg-green-500'}`} style={{ width: progress + "%" }}></div>
                 </div>
                 <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-[11px] space-y-1 scrollbar-hide">
                     {logs.length === 0 && <p className="text-gray-600 italic">Aguardando comando...</p>}
                     {logs.map((log, i) => (
-                        <p key={i} className={`break-words ${log.type === 'error' ? 'text-red-500' : log.type === 'success' ? 'text-green-400' : log.type === 'warning' ? 'text-yellow-500' : log.type === 'quota' ? 'text-orange-400 font-bold bg-orange-400/5 p-1 rounded' : log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800' : 'text-gray-400'}`}>
+                        <p key={i} className={`break-words ${
+                            log.type === 'error' ? 'text-red-500' : 
+                            log.type === 'success' ? 'text-green-400' : 
+                            log.type === 'warning' ? 'text-yellow-500' : 
+                            log.type === 'quota' ? 'text-orange-400 font-bold bg-orange-400/5 p-1 rounded' : 
+                            log.type === 'lead' ? 'text-blue-300 font-bold bg-blue-500/5 p-1 rounded italic' :
+                            log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800' : 'text-gray-400'}`}>
                             {log.text}
                         </p>
                     ))}

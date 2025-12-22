@@ -28,28 +28,44 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
+/**
+ * Mapper Resiliente: Converte qualquer variação de formato do banco para o padrão FullRecipe.
+ * Se ingredientes vierem como strings ou objetos malformados, ele reconstrói o dado.
+ */
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [] as FullRecipe[];
-    return data.map((r: any): FullRecipe => ({
-        name: String(r.name || 'Receita'),
-        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
-            simplifiedName: String(i.simplifiedName || ''),
-            detailedName: String(i.detailedName || '')
-        })) : [] as { simplifiedName: string; detailedName: string; }[],
-        instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
-        imageQuery: String(r.imageQuery || r.name || ''),
-        servings: String(r.servings || '2 porções'),
-        prepTimeInMinutes: Number(r.prepTimeInMinutes || 30),
-        difficulty: (r.difficulty === 'Fácil' || r.difficulty === 'Médio' || r.difficulty === 'Difícil' ? r.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-        cost: (r.cost === 'Baixo' || r.cost === 'Médio' || r.cost === 'Alto' ? r.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
-        imageUrl: r.imageUrl,
-        imageSource: r.imageSource || 'cache',
-        description: r.description,
-        keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [] as string[],
-        tags: Array.isArray(r.tags) ? r.tags.map(String) : [] as string[],
-        isAlcoholic: !!r.isAlcoholic,
-        suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : [] as string[]
-    }));
+    return data.map((r: any): FullRecipe => {
+        // Normalização de ingredientes
+        let normalizedIngredients = [] as { simplifiedName: string; detailedName: string; }[];
+        if (Array.isArray(r.ingredients)) {
+            normalizedIngredients = r.ingredients.map((i: any) => {
+                if (typeof i === 'string') {
+                    return { simplifiedName: i.split(' ')[0], detailedName: i };
+                }
+                return {
+                    simplifiedName: String(i.simplifiedName || i.name || ''),
+                    detailedName: String(i.detailedName || i.value || i.name || '')
+                };
+            }).filter(i => i.detailedName.length > 0);
+        }
+
+        return {
+            name: String(r.name || 'Receita'),
+            ingredients: normalizedIngredients,
+            instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
+            imageQuery: String(r.imageQuery || r.name || ''),
+            servings: String(r.servings || '2 porções'),
+            prepTimeInMinutes: Number(r.prepTimeInMinutes || 30),
+            difficulty: (r.difficulty === 'Fácil' || r.difficulty === 'Médio' || r.difficulty === 'Difícil' ? r.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+            cost: (r.cost === 'Baixo' || r.cost === 'Médio' || r.cost === 'Alto' ? r.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
+            imageUrl: r.imageUrl,
+            imageSource: r.imageSource || 'cache',
+            description: r.description,
+            keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [] as string[],
+            tags: Array.isArray(r.tags) ? r.tags.map(String) : [] as string[],
+            isAlcoholic: !!r.isAlcoholic
+        };
+    });
 };
 
 const INITIAL_MODAL_STATES = {
@@ -231,7 +247,6 @@ interface AppContextType {
 
     selectedProduct: Offer | null; 
     openProductDetails: (product: Offer) => void; 
-    // Fix: Added isOffline to AppContextType to resolve errors in index.tsx
     isOffline: boolean;
 }
 
@@ -254,7 +269,7 @@ export const callGenAIWithRetry = async <T = GenerateContentResponse>(fn: () => 
             const jitter = Math.random() * 5000;
             const finalDelay = baseDelay + jitter;
             
-            console.warn(`[IA] Limite atingido. Aguardando ${Math.round(finalDelay/1000)}s para renovação da qota.`);
+            console.warn(`[IA] Limite atingido. Aguardando ${Math.round(finalDelay/1000)}s.`);
             await new Promise(resolve => setTimeout(resolve, finalDelay));
             return callGenAIWithRetry(fn, retries - 1);
         }
@@ -285,7 +300,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const { user } = useAuth();
 
     const [modalStates, setModalStates] = useState(INITIAL_MODAL_STATES);
-    // Fix: Added isOffline state initialization
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     
     const [theme, setThemeState] = useState<Theme>(() => {
@@ -341,7 +355,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isSuperAdmin = isOwner || user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
-    // Fix: Added effect to track online/offline status
     useEffect(() => {
         const handleOnline = () => setIsOffline(false);
         const handleOffline = () => setIsOffline(true);
@@ -385,24 +398,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (pool.length === 0) return [] as FullRecipe[];
 
         switch(categoryKey) {
-            case 'top10': 
-                return pool.slice(0, 15);
-            case 'fast': 
-                return pool.filter(r => r.prepTimeInMinutes && r.prepTimeInMinutes <= 30);
-            case 'healthy':
-                return pool.filter(r => r.tags?.some(t => ['fit', 'saudável', 'salada', 'nutritivo', 'vegano', 'fruta'].includes(t.toLowerCase())));
-            case 'cheap':
-                return pool.filter(r => r.cost === 'Baixo');
-            case 'dessert':
-                return pool.filter(r => r.tags?.some(t => ['sobremesa', 'doce', 'bolo', 'torta'].includes(t.toLowerCase())));
-            case 'new':
-                return pool.slice(0, 10);
-            case 'random':
-                return shuffleArray<FullRecipe>(pool).slice(0, 5);
-            case 'sorvetes':
-                return pool.filter(r => r.tags?.some(t => t.toLowerCase().includes('sorvete') || t.toLowerCase().includes('gelato')));
-            default:
-                return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
+            case 'top10': return pool.slice(0, 15);
+            case 'fast': return pool.filter(r => r.prepTimeInMinutes && r.prepTimeInMinutes <= 30);
+            case 'healthy': return pool.filter(r => r.tags?.some(t => ['fit', 'saudável', 'vegano'].includes(t.toLowerCase())));
+            case 'cheap': return pool.filter(r => r.cost === 'Baixo');
+            case 'dessert': return pool.filter(r => r.tags?.some(t => ['sobremesa', 'doce'].includes(t.toLowerCase())));
+            case 'new': return pool.slice(0, 10);
+            default: return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
         }
     }, [globalRecipeCache]);
 
@@ -410,85 +412,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!db) return;
         const loadData = async () => {
             const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
-            let fallbackCache: any = null;
-
             if (cachedString) {
                 try {
                     const cache = JSON.parse(cachedString) as any;
-                    fallbackCache = cache; 
-                    
-                    if (cache && Array.isArray(cache.pool)) {
-                        setAllRecipesPool(mapToFullRecipeArray(cache.pool));
-                    }
-                    if (cache && Array.isArray(cache.cache)) {
-                        setGlobalRecipeCache(mapToFullRecipeArray(cache.cache));
-                    }
-                    if (cache && typeof cache.count === 'number') {
-                        setTotalRecipeCount(cache.count);
-                    }
-                    
-                    const isExpired = (Date.now() - (cache?.timestamp || 0)) > RECIPE_CACHE_TTL;
-                    if (!isExpired) return; 
+                    if (cache && Array.isArray(cache.pool)) setAllRecipesPool(mapToFullRecipeArray(cache.pool));
+                    if (cache && Array.isArray(cache.cache)) setGlobalRecipeCache(mapToFullRecipeArray(cache.cache));
+                    if (cache && typeof cache.count === 'number') setTotalRecipeCount(cache.count);
+                    if ((Date.now() - (cache?.timestamp || 0)) < RECIPE_CACHE_TTL) return;
                 } catch (e) { localStorage.removeItem(RECIPE_CACHE_KEY); }
             }
 
             try {
-                const networkPromise = (async () => {
-                    const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
-                    const snapshotFetch = await getDocs(qFetch);
-                    const fetchedRaw: any[] = [];
-                    snapshotFetch.forEach(docSnap => {
-                        const data = docSnap.data();
-                        if (data && data.name && data.imageUrl) {
-                            fetchedRaw.push(data);
-                        }
-                    });
+                const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
+                const snapshotFetch = await getDocs(qFetch);
+                const fetchedRaw: any[] = [];
+                snapshotFetch.forEach(docSnap => {
+                    const data = docSnap.data();
+                    if (data && data.name && data.imageUrl) fetchedRaw.push(data);
+                });
 
-                    const fetched: FullRecipe[] = mapToFullRecipeArray(fetchedRaw);
+                const fetched: FullRecipe[] = mapToFullRecipeArray(fetchedRaw);
+                const pool = shuffleArray<FullRecipe>(fetched);
+                
+                setAllRecipesPool(pool);
+                setGlobalRecipeCache(fetched);
+                
+                const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
+                const totalCount = countSnapshot.data().count;
+                setTotalRecipeCount(totalCount);
 
-                    let pool: FullRecipe[];
-                    if (fetched.length > 0) {
-                        pool = shuffleArray<FullRecipe>(fetched);
-                    } else if (fallbackCache && fallbackCache.pool) {
-                        pool = mapToFullRecipeArray(fallbackCache.pool);
-                    } else {
-                        pool = [];
-                    }
-                    setAllRecipesPool(pool);
-                    
-                    let cacheToSet: FullRecipe[];
-                    if (fetched.length > 0) {
-                        cacheToSet = fetched;
-                    } else if (fallbackCache && fallbackCache.cache) {
-                        cacheToSet = mapToFullRecipeArray(fallbackCache.cache);
-                    } else {
-                        cacheToSet = [];
-                    }
-                    setGlobalRecipeCache(cacheToSet);
-                    
-                    const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
-                    const totalCount = countSnapshot.data().count;
-                    setTotalRecipeCount(totalCount);
-
-                    localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({
-                        timestamp: Date.now(),
-                        pool, cache: fetched, count: totalCount
-                    }));
-                })();
-
-                await Promise.race([
-                    networkPromise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
-                ]);
-
+                localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({
+                    timestamp: Date.now(),
+                    pool, cache: fetched, count: totalCount
+                }));
             } catch (error: any) {
-                if (fallbackCache) {
-                    const poolData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.pool);
-                    const cacheData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.cache);
-                    setAllRecipesPool(poolData);
-                    setGlobalRecipeCache(cacheData);
-                    setTotalRecipeCount(fallbackCache.count || 0);
-                }
+                console.warn("Falha no carregamento inicial.");
             }
         };
         loadData();
@@ -497,9 +455,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     useEffect(() => {
         if (!db) return;
         const unsub = onSnapshot(doc(db, 'settings', 'recipe_schedule'), (snapshot) => {
-            if (snapshot.exists()) {
-                setScheduleRules(snapshot.data().rules || ([] as ScheduleRule[]));
-            }
+            if (snapshot.exists()) setScheduleRules(snapshot.data().rules || ([] as ScheduleRule[]));
         }, (error) => {
             if (!ignorePermissionError(error)) console.error(error);
         });
@@ -509,13 +465,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const saveScheduleRules = async (rules: ScheduleRule[]) => {
         if (!db || !isAdmin) return;
         await setDoc(doc(db, 'settings', 'recipe_schedule'), { rules, updatedAt: serverTimestamp() });
-        showToast("Grade de horários atualizada!");
+        showToast("Grade atualizada!");
     };
 
     const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
         if (pool.length === 0) return [] as FullRecipe[];
-        const now = new Date();
-        const hour = now.getHours();
+        const hour = new Date().getHours();
         let activeRules = scheduleRules.filter(r => hour >= r.startHour && hour < r.endHour);
         const scored = pool.map(recipe => {
             let score = Math.random() * 10;
@@ -546,7 +501,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [toastMessage]);
 
     const openModal = (modal: string) => {
-        if (modal === 'addItem' && showStartHerePrompt) setShowStartHerePrompt(false);
         let modalKey = `is${modal.charAt(0).toUpperCase() + modal.slice(1)}ModalOpen`;
         if (modal === 'admin') modalKey = 'isAdminModalOpen';
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
@@ -587,15 +541,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
         if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
         if (modal === 'distribution') modalKey = 'isDistributionModalOpen';
-         if (modal.toLowerCase() === 'tour') {
-            localStorage.setItem('hasSeenOnboardingTour', 'true');
-            setShowStartHerePrompt(true);
-         }
         setModalStates(prev => ({ ...prev, [modalKey]: false }));
     }
+
     const toggleAppOptionsMenu = () => setModalStates(prev => ({ ...prev, isAppOptionsMenuOpen: !prev.isAppOptionsMenuOpen }));
     const toggleOptionsMenu = () => setModalStates(prev => ({ ...prev, isOptionsMenuOpen: !prev.isOptionsMenuOpen }));
-
     const setTheme = (newTheme: Theme) => setThemeState(newTheme);
 
     const handleInstall = async () => {
@@ -606,8 +556,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsPWAInstallVisible(false);
         return outcome === 'accepted';
     };
-    const handleDismissInstall = () => { setIsPWAInstallVisible(false); };
-    const showPWAInstallPromptIfAvailable = () => { if (installPromptEvent) setIsPWAInstallVisible(true); };
 
     const setBudget = (b: number) => { setBudgetState(b); closeModal('budget'); };
     const clearBudget = () => { setBudgetState(null); closeModal('budget'); };
@@ -618,14 +566,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const getCachedRecipe = (name: string): FullRecipe | undefined => {
         const target = name.trim().toLowerCase();
-        const allCaches: (Record<string, FullRecipe> | FullRecipe[])[] = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, recipeSearchResults, globalRecipeCache];
+        const allCaches = [fullRecipes, favorites, globalRecipeCache];
         for (const cache of allCaches) {
             if (Array.isArray(cache)) {
-                const found = (cache as FullRecipe[]).find(r => r.name.toLowerCase() === target);
+                const found = cache.find(r => r.name.toLowerCase() === target);
                 if (found) return found;
             } else {
                 const foundKey = Object.keys(cache).find(k => k.toLowerCase() === target);
-                if (foundKey) return (cache as Record<string, FullRecipe>)[foundKey];
+                if (foundKey) return cache[foundKey];
             }
         }
         return undefined;
@@ -638,9 +586,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const showRecipe = (input: string | FullRecipe) => { 
         let r = typeof input === 'string' ? getCachedRecipe(input) : input;
-        if (r && Array.isArray(r.ingredients) && r.ingredients.length > 0) {
-            if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
-            setSelectedRecipe(r);
+        if (r) {
+            const mapped = mapToFullRecipeArray([r])[0];
+            if (!fullRecipes[mapped.name]) setFullRecipes(prev => ({...prev, [mapped.name]: mapped}));
+            setSelectedRecipe(mapped);
         } else { showToast("Receita em manutenção."); }
     };
 
@@ -650,41 +599,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
         setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
         setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
-        
         if (db) {
-            const docId = getRecipeDocId(recipeName);
-            updateDoc(doc(db, 'global_recipes', docId), {
-                imageUrl,
-                imageSource: source,
-                updatedAt: serverTimestamp()
-            }).catch(() => console.warn("Erro ao atualizar imagem no acervo."));
+            updateDoc(doc(db, 'global_recipes', getRecipeDocId(recipeName)), {
+                imageUrl, imageSource: source, updatedAt: serverTimestamp()
+            }).catch(() => {});
         }
     };
 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
         if (!db || !queryStr || queryStr.length < 2) return [] as FullRecipe[];
         try {
-            const keywords: string[] = generateKeywords(queryStr);
+            const keywords = generateKeywords(queryStr);
             if (keywords.length === 0) return [] as FullRecipe[];
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
             const rawResults: any[] = [];
-            snap.forEach(docSnap => {
-                const data = docSnap.data();
-                if (data && data.name) {
-                    rawResults.push(data);
-                }
-            });
+            snap.forEach(docSnap => rawResults.push(docSnap.data()));
             return mapToFullRecipeArray(rawResults);
-        } catch (error) { 
-            return [] as FullRecipe[]; 
-        }
+        } catch (error) { return [] as FullRecipe[]; }
     }, []);
 
     const handleRecipeSearch = async (term: string) => {
         setIsSearchingAcervo(true); 
         try {
-            const results: FullRecipe[] = await searchGlobalRecipes(term);
+            const results = await searchGlobalRecipes(term);
             setRecipeSearchResults(results);
             setCurrentSearchTerm(term);
             closeModal('recipeAssistant'); 
@@ -693,101 +631,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const sanitizeJsonString = (str: string) => {
+        if (!str) return "{}";
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
 
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
-        if (isOffline) { showToast("Geração de IA requer conexão com a internet."); return; }
+        if (isOffline) { showToast("Requer conexão."); return; }
         if (!apiKey) return;
         setIsRecipeLoading(true);
         setRecipeError(null);
         try {
             const ai = new GoogleGenAI({ apiKey });
-            
-            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita completa, deliciosa e detalhada para: "${recipeName}".
-            REGRAS OBRIGATÓRIAS:
-            1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
-            2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
-            3. Identifique se o preparo exige equipamentos específicos (ex: batedeira, airfryer, forma, liquidificador, colher de pau, etc) para venda direcionada.
-            4. Retorne APENAS o JSON puro seguindo este formato:
-            {
-                "name": "${recipeName}",
-                "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz agulhinha"}],
-                "instructions": ["Passo 1...", "Passo 2..."],
-                "imageQuery": "Foto close-up apetitosa de ${recipeName}, luz de estúdio",
-                "servings": "2 porções",
-                "prepTimeInMinutes": 30,
-                "difficulty": "Médio",
-                "cost": "Médio",
-                "isAlcoholic": false,
-                "tags": ["tag1", "tag2"],
-                "suggestedLeads": ["batedeira", "forma de bolo"]
-            }`;
-
+            let systemPrompt = `Você é o Chef IA. Gere JSON para: "${recipeName}". Formato: { "name": "${recipeName}", "ingredients": [{"simplifiedName": "...", "detailedName": "..."}], "instructions": ["..."], "imageQuery": "...", "prepTimeInMinutes": 30, "difficulty": "Médio", "cost": "Médio", "tags": ["tag1"] }`;
             const parts: any[] = [];
             if (imageBase64) parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64.split(',')[1] } });
             parts.push({ text: systemPrompt });
 
-            const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
+            const response = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview', 
                 contents: { parts },
                 config: { responseMimeType: "application/json" }
             }));
 
-            const rawText = sanitizeJsonString(response.text || "{}");
-            const details = JSON.parse(rawText) as any;
-            
-            const finalName = details.name || recipeName;
-
-            const fullData: FullRecipe = { 
-                name: finalName,
-                ingredients: Array.isArray(details.ingredients) ? details.ingredients.map((i: any) => ({
-                    simplifiedName: String(i.simplifiedName || ''),
-                    detailedName: String(i.detailedName || '')
-                })) : [] as { simplifiedName: string; detailedName: string; }[],
-                instructions: Array.isArray(details.instructions) ? details.instructions.map(String) : [] as string[],
-                imageQuery: details.imageQuery || finalName,
-                servings: details.servings || '2 porções',
-                prepTimeInMinutes: details.prepTimeInMinutes || 30,
-                difficulty: (details.difficulty === 'Fácil' || details.difficulty === 'Médio' || details.difficulty === 'Difícil' ? details.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-                cost: (details.cost === 'Baixo' || details.cost === 'Médio' || details.cost === 'Alto' ? details.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
-                imageUrl: details.imageUrl,
-                imageSource: details.imageSource || 'cache',
-                description: details.description,
-                keywords: generateKeywords(finalName),
-                tags: Array.isArray(details.tags) ? details.tags.map(String) : [] as string[],
-                isAlcoholic: !!details.isAlcoholic,
-                suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : [] as string[]
-            };
+            const details = JSON.parse(sanitizeJsonString(response.text || "{}"));
+            const fullDataArray = mapToFullRecipeArray([{ ...details, name: details.name || recipeName }]);
+            const fullData = fullDataArray[0];
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             closeModal('recipeAssistant');
 
             if (db) {
-                const docId = getRecipeDocId(fullData.name);
-                await setDoc(doc(db, 'global_recipes', docId), {
-                    ...fullData,
-                    tags: [...(fullData.tags || []), 'gerada_pelo_usuario'],
-                    createdAt: serverTimestamp()
-                }, { merge: true }).catch(() => console.warn("Acervo offline ao salvar texto."));
+                await setDoc(doc(db, 'global_recipes', getRecipeDocId(fullData.name)), {
+                    ...fullData, createdAt: serverTimestamp()
+                }, { merge: true }).catch(() => {});
             }
 
             if (autoAdd) await addRecipeToShoppingList(fullData);
         } catch (e: any) { 
-            setRecipeError("O Chef está ocupado ou a conexão falhou. Tente em instantes."); 
-        } finally { 
-            setIsRecipeLoading(false); 
-        }
+            setRecipeError("Falha na geração. Tente novamente."); 
+        } finally { setIsRecipeLoading(false); }
     }, [apiKey, isOffline]); 
 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
-        const itemsToAdd: any[] = [];
-        recipe.ingredients.forEach((ing) => {
-            if (!findDuplicate(ing.simplifiedName, items)) {
-                itemsToAdd.push({ name: ing.simplifiedName, calculatedPrice: 0, details: ing.detailedName, recipeName: recipe.name, isNew: true, isPurchased: false });
-            }
-        });
+        const itemsToAdd = recipe.ingredients
+            .filter(ing => !findDuplicate(ing.simplifiedName, items))
+            .map(ing => ({ name: ing.simplifiedName, calculatedPrice: 0, details: ing.detailedName, recipeName: recipe.name, isNew: true, isPurchased: false }));
         if (itemsToAdd.length > 0) {
             await addIngredientsBatch(itemsToAdd);
             showToast(`${itemsToAdd.length} itens adicionados!`);
@@ -795,87 +684,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const toggleGrouping = useCallback(async () => {
-        if (isOffline) { showToast("Organização por corredores requer internet."); return; }
+        if (isOffline) return;
         if (groupingMode === 'recipe') {
             const itemsToCategorize = items.filter(item => !itemCategories[item.id]);
             if (itemsToCategorize.length === 0) { setGroupingMode('aisle'); closeModal('options'); return; }
             setIsOrganizing(true);
             try {
-                if (!apiKey) throw new Error("API Key missing");
                 const ai = new GoogleGenAI({ apiKey });
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue", "🥛 Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene", "❓ Outros" ];
-                const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
+                const response = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-3-flash-preview',
                     contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Categorias: ${categories.join(', ')}. Return JSON array.`,
                     config: { responseMimeType: "application/json" }
                 }));
-                const categorizedItems = JSON.parse(sanitizeJsonString(response.text || "[]")) as any[];
+                const categorizedItems = JSON.parse(sanitizeJsonString(response.text || "[]"));
                 const newCategoryMap = { ...itemCategories };
-                (categorizedItems).forEach(ci => {
+                categorizedItems.forEach((ci: any) => {
                     const item = itemsToCategorize.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
                     if (item) newCategoryMap[item.id] = ci.category;
                 });
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
-            } catch (error: any) { showToast("Muitas tentativas."); }
+            } catch (error: any) { showToast("Erro ao organizar."); }
             finally { setIsOrganizing(false); }
         } else { setGroupingMode('recipe'); }
         closeModal('options');
     }, [groupingMode, items, itemCategories, apiKey, isOffline]);
 
-    const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
+    const fetchThemeSuggestions = async (key: string) => {
         setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
         setRecipeSuggestions([] as FullRecipe[]);
-        setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
+        openModal('themeRecipes');
         setIsSuggestionsLoading(true);
         try {
-            const suggestions: FullRecipe[] = getCategoryRecipes(key);
-            setRecipeSuggestions(suggestions);
+            setRecipeSuggestions(getCategoryRecipes(key));
         } finally { setIsSuggestionsLoading(false); }
-    };
-
-    const getCategoryRecipesSync = useCallback((categoryKey: string): FullRecipe[] => {
-        return getCategoryRecipes(categoryKey);
-    }, [getCategoryRecipes]);
-
-    const clearIncomingList = useCallback(() => setIncomingList(null), []);
-
-    const handleExploreRecipeClick = useCallback((recipe: string | FullRecipe) => {
-        const recipeName = typeof recipe === 'string' ? recipe : recipe.name;
-        if (!user) {
-            showToast("Faça login para ver esta receita!");
-            setPendingExploreRecipe(recipeName);
-            openModal('auth');
-            return;
-        }
-        if (items.length > 0 || currentMarketName) {
-            setPendingExploreRecipe(recipeName);
-            openModal('recipeDecision');
-        } else {
-            setPendingExploreRecipe(recipeName);
-            openModal('startShopping');
-        }
-    }, [user, items.length, currentMarketName, showToast, openModal]);
-
-    const openProductDetails = (product: Offer) => {
-        setSelectedProduct(product);
-        openModal('productDetails');
     };
 
     const value = {
         ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme: setThemeState,
-        installPromptEvent, handleInstall, handleDismissInstall, isPWAInstallVisible,
+        installPromptEvent, handleInstall, handleDismissInstall: () => setModalStates(prev => ({...prev, isDistributionModalOpen: false})), isPWAInstallVisible,
         budget, setBudget, clearBudget, toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
         fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
         editingItemId, startEdit, cancelEdit, duplicateInfo, setDuplicateInfo, groupingMode, setGroupingMode, isOrganizing, toggleGrouping,
-        itemCategories, showStartHerePrompt, authTrigger, setAuthTrigger, incomingList, clearIncomingList,
+        itemCategories, showStartHerePrompt, authTrigger, setAuthTrigger, incomingList, clearIncomingList: () => setIncomingList(null),
         unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, smartNudgeItemName, currentMarketName, setCurrentMarketName,
         isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
-        featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
-        addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
-        getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline 
+        featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick: (r: any) => {}, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
+        addRecipeToShoppingList, showPWAInstallPromptIfAvailable: () => {}, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
+        getCategoryRecipes, getCategoryRecipesSync: (key: string) => getCategoryRecipes(key), getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
+        pendingAction, setPendingAction, selectedProduct, openProductDetails: (p: any) => {}, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline 
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
