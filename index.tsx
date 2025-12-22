@@ -13,7 +13,6 @@ import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
 import { AppModals } from './components/modals/AppModals';
 
 const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
-    // FIX: Removed incorrect assignment setSliderX = useState(0) which was causing a block-scoped variable usage error and constant assignment error.
     const [sliderX, setSliderX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -464,7 +463,7 @@ const AppContent: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-3">
                             <div className="relative">
-                                <button onClick={handleProfileClick} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-white/20 dark:text-slate-300 overflow-hidden border border-white/40 shadow-sm backdrop-blur-md">
+                                <button onClick={handleProfileClick} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-white/20 dark:text-slate-300 overflow-hidden border-2 border-white ring-1 ring-black/5 shadow-sm backdrop-blur-md">
                                     {user?.photoURL ? <img src={user.photoURL} alt="Foto" className="h-full w-full object-cover" /> : <span className="material-symbols-outlined !text-2xl">account_circle</span>}
                                 </button>
                                 {showProfileBadge && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-bold rounded-full h-4 w-4 flex items-center justify-center border border-white">!</span>}
@@ -483,7 +482,7 @@ const AppContent: React.FC = () => {
                                 <input
                                     ref={marketInputRef}
                                     autoFocus
-                                    className="bg-transparent border-b border-primary/40 focus:border-primary outline-none font-black text-primary dark:text-orange-400 text-sm leading-none w-full max-w-[220px]"
+                                    className="bg-transparent border-b border-primary/40 focus:border-primary opacity-100 outline-none font-black text-primary dark:text-orange-400 text-sm leading-none w-full max-w-[220px]"
                                     value={tempMarketName}
                                     onChange={(e) => setTempMarketName(e.target.value)}
                                     onBlur={saveMarketNameChange}
@@ -499,6 +498,17 @@ const AppContent: React.FC = () => {
                             )}
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
+                            {/* INDICADOR DE CONECTIVIDADE NUVEM */}
+                            {app.isOffline ? (
+                                <div className="h-9 w-9 flex items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 animate-pulse" title="Modo Offline Ativo (Cache)">
+                                    <span className="material-symbols-outlined text-xl">cloud_off</span>
+                                </div>
+                            ) : (
+                                <div className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/10 text-blue-400 opacity-40" title="Sincronizado com a Nuvem">
+                                    <span className="material-symbols-outlined text-xl">cloud_done</span>
+                                </div>
+                            )}
+
                             <button 
                                 onClick={handleBudgetClick} 
                                 className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${piggyStyle}`}

@@ -170,7 +170,7 @@ export const WebSidebarLeft: React.FC = () => {
                             onClick={() => setIsProfileExpanded(!isProfileExpanded)}
                             className={`flex items-center gap-3 p-3 w-full text-left hover:bg-white/10 transition-colors ${isProfileExpanded ? 'bg-white/10' : ''}`}
                         >
-                            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
+                            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border-2 border-white/30 ring-1 ring-white/10 shrink-0">
                                 {user.photoURL ? (
                                     <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" />
                                 ) : (

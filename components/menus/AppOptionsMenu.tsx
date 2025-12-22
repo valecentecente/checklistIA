@@ -48,7 +48,7 @@ export const AppOptionsMenu: React.FC = () => {
                     className="w-full text-left p-4 border-b border-border-light dark:border-border-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group bg-gray-50 dark:bg-white/5 shrink-0"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
+                        <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-white ring-1 ring-black/5 shadow-sm">
                             {user?.photoURL ? (
                                 <img src={user.photoURL} alt="Perfil" className="w-full h-full object-cover" />
                             ) : (

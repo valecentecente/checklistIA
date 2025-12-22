@@ -1,5 +1,8 @@
 {
   "name": "ChecklistIA (V2.3 Stable Refined)",
-  "description": "Versão estável com Fábrica de Conteúdo, Categoria Sorvetes e UI polida. Backup de segurança realizado.",
-  "requestFramePermissions": []
+  "description": "Versão de Produção Blindada. Inclui: IA Hardening, Offline Mode, Segurança RBAC L1/L2 e UI Editorial.",
+  "version": "2.3.0",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

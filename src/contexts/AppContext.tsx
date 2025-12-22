@@ -231,11 +231,11 @@ interface AppContextType {
 
     selectedProduct: Offer | null; 
     openProductDetails: (product: Offer) => void; 
+    isOffline: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Fix: Adding missing callGenAIWithRetry utility
 export const callGenAIWithRetry = async <T = GenerateContentResponse>(fn: () => Promise<T>, retries = 8): Promise<T> => {
     try {
         return await fn();
@@ -284,6 +284,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const { user } = useAuth();
 
     const [modalStates, setModalStates] = useState(INITIAL_MODAL_STATES);
+    const [isOffline, setIsOffline] = useState(!navigator.onLine);
     
     const [theme, setThemeState] = useState<Theme>(() => {
         const stored = localStorage.getItem('theme');
@@ -337,6 +338,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com';
     const isSuperAdmin = isOwner || user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
+
+    useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     useEffect(() => {
         const handler = (e: Event) => { 
@@ -682,6 +694,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
+        if (isOffline) { showToast("Geração de IA requer conexão com a internet."); return; }
         if (!apiKey) return;
         setIsRecipeLoading(true);
         setRecipeError(null);
@@ -763,7 +776,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } finally { 
             setIsRecipeLoading(false); 
         }
-    }, [apiKey]); 
+    }, [apiKey, isOffline]); 
 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
@@ -779,6 +792,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const toggleGrouping = useCallback(async () => {
+        if (isOffline) { showToast("Organização por corredores requer internet."); return; }
         if (groupingMode === 'recipe') {
             const itemsToCategorize = items.filter(item => !itemCategories[item.id]);
             if (itemsToCategorize.length === 0) { setGroupingMode('aisle'); closeModal('options'); return; }
@@ -804,7 +818,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             finally { setIsOrganizing(false); }
         } else { setGroupingMode('recipe'); }
         closeModal('options');
-    }, [groupingMode, items, itemCategories, apiKey]);
+    }, [groupingMode, items, itemCategories, apiKey, isOffline]);
 
     const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
         setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
@@ -852,14 +866,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
         editingItemId, startEdit, cancelEdit, duplicateInfo, setDuplicateInfo, groupingMode, setGroupingMode, isOrganizing, toggleGrouping,
         itemCategories, showStartHerePrompt, authTrigger, setAuthTrigger, incomingList, clearIncomingList,
-        // Fix for Error in file src/contexts/AppContext.tsx on line 459: No value exists in scope for the shorthand property 'unreadNotificationCount'.
         unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, smartNudgeItemName, currentMarketName, setCurrentMarketName,
         isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
+        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline 
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

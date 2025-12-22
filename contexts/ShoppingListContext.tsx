@@ -108,7 +108,10 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             } as Offer));
             setOffers(loadedOffers);
         }, (error) => {
-            console.warn("Erro ao carregar ofertas:", error.message);
+            // Silencia erro de permissão para ofertas se for guest
+            if (error.code !== 'permission-denied') {
+                console.warn("Erro ao carregar ofertas:", error.message);
+            }
         });
         return () => unsubscribeOffers();
     }, []);
@@ -147,7 +150,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 ...doc.data()
             } as ShoppingItem));
             setItems(loadedItems);
-        }, (error) => console.warn("Erro ao carregar itens:", error.message));
+        }, (error) => {
+             if (error.code !== 'permission-denied') console.warn("Erro ao carregar itens:", error.message);
+        });
 
         const historyRef = collection(db, `users/${listId}/history`);
         const qHistory = query(historyRef, orderBy('date', 'desc'));
@@ -157,7 +162,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 ...doc.data()
             } as PurchaseRecord));
             setHistory(loadedHistory);
-        }, (error) => console.warn("Erro ao carregar histórico:", error.message));
+        }, (error) => {
+             if (error.code !== 'permission-denied') console.warn("Erro ao carregar histórico:", error.message);
+        });
 
         const receivedRef = collection(db, `users/${user.uid}/received_lists`);
         const qReceived = query(receivedRef, orderBy('date', 'desc'));
@@ -171,14 +178,18 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 } as ReceivedListRecord;
             });
             setReceivedHistory(loadedReceived);
-        }, (error) => console.warn("Erro ao carregar listas recebidas:", error.message));
+        }, (error) => {
+             if (error.code !== 'permission-denied') console.warn("Erro ao carregar listas recebidas:", error.message);
+        });
 
         const favoritesRef = collection(db, `users/${user.uid}/favorites`);
         const qFavorites = query(favoritesRef, orderBy('savedAt', 'desc'));
         const unsubscribeFavorites = onSnapshot(qFavorites, (snapshot) => {
             const loadedFavorites: FullRecipe[] = snapshot.docs.map(doc => doc.data() as FullRecipe);
             setFavorites(loadedFavorites);
-        }, (error) => console.warn("Erro ao carregar favoritos:", error.message));
+        }, (error) => {
+             if (error.code !== 'permission-denied') console.warn("Erro ao carregar favoritos:", error.message);
+        });
 
         const savedOffersRef = collection(db, `users/${user.uid}/saved_offers`);
         const qSavedOffers = query(savedOffersRef, orderBy('savedAt', 'desc'));
@@ -191,7 +202,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 } as Offer;
             });
             setSavedOffers(loadedSaved);
-        }, (error) => console.warn("Erro ao carregar ofertas salvas:", error.message));
+        }, (error) => {
+             if (error.code !== 'permission-denied') console.warn("Erro ao carregar ofertas salvas:", error.message);
+        });
 
         const arcadeStatsRef = collection(db, `users/${user.uid}/arcade_stats`);
         const unsubscribeArcade = onSnapshot(arcadeStatsRef, (snapshot) => {
@@ -200,6 +213,11 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 stats[doc.id] = doc.data().bestScore;
             });
             setArcadeStats(stats);
+        }, (error) => {
+            // Correção: Adicionado handler de erro para evitar Uncaught FirebaseError
+            if (error.code !== 'permission-denied') {
+                console.warn("[Arcade] Erro no listener de estatísticas:", error.message);
+            }
         });
 
         return () => {
@@ -581,7 +599,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, [user, searchUser, isOnline]);
 
     const normalizeRecipeId = (str: string) => {
-        return str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_"); 
+        return str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9/]/g, "_"); 
     };
 
     const isFavorite = useCallback((recipeName: string) => {

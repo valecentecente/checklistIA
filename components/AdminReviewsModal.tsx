@@ -30,6 +30,13 @@ export const AdminReviewsModal: React.FC<AdminReviewsModalProps> = ({ isOpen, on
             } as Review));
             setReviews(loadedReviews);
             setIsLoading(false);
+        }, (error) => {
+            // Correção: Adicionado handler de erro
+            console.warn("[Admin] Erro ao carregar avaliações:", error.message);
+            setIsLoading(false);
+            if (error.code === 'permission-denied') {
+                showToast("Sem permissão para ver avaliações.");
+            }
         });
 
         return () => unsubscribe();
