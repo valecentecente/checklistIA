@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext';
 export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
-const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 Horas de cache
+const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; 
 
 const SURVIVAL_RECIPES: FullRecipe[] = [
     {
@@ -106,7 +106,8 @@ const INITIAL_MODAL_STATES = {
     isProductDetailsModalOpen: false,
     isUnitConverterModalOpen: false,
     isContentFactoryModalOpen: false,
-    isRecipeSelectionModalOpen: false
+    isRecipeSelectionModalOpen: false,
+    isDistributionModalOpen: false
 };
 
 interface AppContextType {
@@ -148,6 +149,7 @@ interface AppContextType {
     isRecipeSelectionModalOpen: boolean;
     isTourModalOpen: boolean;
     isProfileModalOpen: boolean;
+    isDistributionModalOpen: boolean;
     
     openModal: (modal: string) => void;
     closeModal: (modal: string) => void;
@@ -359,10 +361,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
-    // CIRURGICO: Reset de UI e Modais ao deslogar
+    // AUTO-PROMPT LÓGICA
+    useEffect(() => {
+        const handler = (e: Event) => { 
+            e.preventDefault(); 
+            setInstallPromptEvent(e); 
+            
+            // Verifica se deve perguntar automaticamente
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+            if (!isStandalone) {
+                // Pequeno delay para garantir que o splash screen saiu
+                setTimeout(() => {
+                    setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
+                }, 2000);
+            }
+        };
+        window.addEventListener('beforeinstallprompt', handler);
+        return () => window.removeEventListener('beforeinstallprompt', handler);
+    }, []);
+
     useEffect(() => {
         if (!user) {
-            setModalStates(INITIAL_MODAL_STATES);
+            setModalStates(prev => ({...prev, ...INITIAL_MODAL_STATES}));
             setHomeViewActive(true);
             setFocusMode(false);
             setFullRecipes({});
@@ -390,7 +410,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             case 'new':
                 return pool.slice(0, 10);
             case 'random':
-                // Explicitly provide type to shuffleArray to avoid 'unknown[]' inference
                 return shuffleArray<FullRecipe>(pool).slice(0, 5);
             case 'sorvetes':
                 return pool.filter(r => r.tags?.some(t => t.toLowerCase().includes('sorvete') || t.toLowerCase().includes('gelato')));
@@ -439,7 +458,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
                     const fetched: FullRecipe[] = mapToFullRecipeArray(fetchedRaw);
 
-                    // Fix: Use explicit if/else for better type inference of FullRecipe[] variables
                     let pool: FullRecipe[];
                     if (fetched.length > 0) {
                         pool = shuffleArray<FullRecipe>(fetched);
@@ -558,6 +576,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'converter') modalKey = 'isUnitConverterModalOpen';
         if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
         if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
+        if (modal === 'distribution') modalKey = 'isDistributionModalOpen';
         setModalStates(prev => ({...prev, [modalKey]: true}));
     };
 
@@ -579,6 +598,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'converter') modalKey = 'isUnitConverterModalOpen';
         if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
         if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
+        if (modal === 'distribution') modalKey = 'isDistributionModalOpen';
          if (modal.toLowerCase() === 'tour') {
             localStorage.setItem('hasSeenOnboardingTour', 'true');
             setShowStartHerePrompt(true);
@@ -819,7 +839,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
-            // Fix: Explicitly type suggestions from getCategoryRecipes to avoid unknown[] inference
             const suggestions: FullRecipe[] = getCategoryRecipes(key);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }

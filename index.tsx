@@ -218,6 +218,23 @@ const AppContent: React.FC = () => {
     const formattedTotal = useMemo(() => formatCurrency(rawTotal), [rawTotal, formatCurrency]);
     const budgetProgress = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.min((rawTotal / app.budget) * 100, 100), [rawTotal, app.budget]);
 
+    // Lógica Dinâmica de Cores do Porquinho
+    const piggyStyle = useMemo(() => {
+        if (app.budget === null) return 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/10';
+        
+        const percent = (rawTotal / app.budget) * 100;
+        
+        if (percent > 100) {
+            return 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)] border-red-700';
+        } else if (percent >= 95) {
+            return 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800';
+        } else if (percent >= 80) {
+            return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800';
+        } else {
+            return 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800';
+        }
+    }, [app.budget, rawTotal]);
+
     const groupedItems = useMemo(() => {
         const groups: Record<string, ShoppingItem[]> = {};
         if (app.groupingMode === 'aisle') {
@@ -479,10 +496,10 @@ const AppContent: React.FC = () => {
                             )}
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
-                            {/* BOTÃO DE ORÇAMENTO RÁPIDO */}
+                            {/* BOTÃO DE ORÇAMENTO RÁPIDO COM FEEDBACK DINÂMICO */}
                             <button 
                                 onClick={() => app.openModal('budget')} 
-                                className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${app.budget !== null ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/10'}`}
+                                className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${piggyStyle}`}
                                 title="Definir Orçamento"
                             >
                                 <span className={`material-symbols-outlined text-xl ${app.budget !== null ? 'font-variation-FILL-1' : ''}`} style={ app.budget !== null ? { fontVariationSettings: "'FILL' 1" } : {} }>savings</span>
@@ -505,7 +522,7 @@ const AppContent: React.FC = () => {
                         {app.budget !== null && !showHomeView && (
                             <div className="flex flex-col gap-4 rounded-xl bg-white/5 p-5 border border-white/10">
                                 <div className="flex items-center justify-between text-white"><p className="text-base font-semibold">Gasto Previsto</p><span>{formattedTotal} / {formatCurrency(app.budget)}</span></div>
-                                <div className="h-2.5 rounded-full bg-white/10"><div className="h-2.5 rounded-full bg-blue-500" style={{ width: `${budgetProgress}%` }}></div></div>
+                                <div className="h-2.5 rounded-full bg-white/10"><div className={`h-2.5 rounded-full transition-all duration-500 ${rawTotal > app.budget ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${budgetProgress}%` }}></div></div>
                             </div>
                         )}
                         {showHomeView ? <EmptyStateCTA onShowRecipeAssistant={() => app.openModal('recipeAssistant')} onShowBudget={() => app.openModal('budget')} /> : <ShoppingList groupedItems={groupedItems} onDeleteItem={deleteItem} onDeleteGroup={deleteRecipeGroup} onStartEdit={app.startEdit} onShowRecipe={app.showRecipe} onTogglePurchased={toggleItemPurchased} />}
