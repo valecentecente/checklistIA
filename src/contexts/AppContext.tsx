@@ -6,6 +6,31 @@ import { useAuth } from './AuthContext';
 
 export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
+// Helper function to safely map data to FullRecipe objects
+const mapToFullRecipeArray = (data: any): FullRecipe[] => {
+    if (!Array.isArray(data)) return [];
+    return data.map((r: any): FullRecipe => ({
+        name: String(r.name || 'Receita'),
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
+            simplifiedName: String(i.simplifiedName || ''),
+            detailedName: String(i.detailedName || '')
+        })) : [],
+        instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [],
+        imageQuery: String(r.imageQuery || r.name || ''),
+        servings: String(r.servings || '2 porções'),
+        prepTimeInMinutes: Number(r.prepTimeInMinutes || 30),
+        difficulty: (r.difficulty === 'Fácil' || r.difficulty === 'Médio' || r.difficulty === 'Difícil' ? r.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
+        cost: (r.cost === 'Baixo' || r.cost === 'Médio' || r.cost === 'Alto' ? r.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
+        imageUrl: r.imageUrl,
+        imageSource: r.imageSource || 'cache',
+        description: r.description,
+        keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [],
+        tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+        isAlcoholic: !!r.isAlcoholic,
+        suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : []
+    }));
+};
+
 interface AppContextType {
     // Modal States
     isAddItemModalOpen: boolean;
@@ -152,7 +177,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isOffersModalOpen: false,
         isAdminModalOpen: false,
         isAdminRecipesModalOpen: false,
-        // Fix: initialize with default boolean values instead of type keywords
         isInfoModalOpen: false,
         isStartShoppingModalOpen: false,
         isShareListModalOpen: false,
@@ -347,9 +371,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              const ai = new GoogleGenAI({ apiKey });
              const response: GenerateContentResponse = await ai.models.generateContent({
                  model: 'gemini-2.5-flash-image',
-                 contents: {
-                     parts: [{ text: `Uma foto de comida profissional, realista e apetitosa de ${imageQuery}` }]
-                 }
+                 contents: `Uma foto de comida profissional, realista e apetitosa de ${imageQuery}`
              });
              
              // Fixed tool usage and image extraction based on guidelines
@@ -416,7 +438,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let textResponse = response.text || "";
             textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
 
-            const recipeDetails = JSON.parse(textResponse) as any;
+            const recipeDetails = JSON.parse(textResponse);
             
             if (!recipeDetails.ingredients || !Array.isArray(recipeDetails.ingredients)) {
                 throw new Error('Receita incompleta ou inválida');
@@ -424,7 +446,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const finalRecipeName = recipeDetails.name || recipeName || "Receita Identificada";
             
-            // Correctly mapping all properties of the FullRecipe interface
             const fullRecipeData: FullRecipe = { 
                 name: String(finalRecipeName),
                 ingredients: Array.isArray(recipeDetails.ingredients) ? recipeDetails.ingredients.map((ing: any) => ({
@@ -557,82 +578,4 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const fetchThemeSuggestions = async (prompt: string) => {
         setCurrentTheme(prompt);
-        setRecipeSuggestions([] as FullRecipe[]);
-        setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
-        setIsSuggestionsLoading(true);
-        
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: `Sugira 5 receitas para o tema: "${prompt}". Retorne JSON completo: [{"name": "Nome", "ingredients": [], "instructions": [], "imageQuery": "desc", "servings": "X", "prepTimeInMinutes": 30, "difficulty": "Médio", "cost": "Médio"}]`,
-                config: { responseMimeType: "application/json" }
-            });
-            
-            // Fixed Type 'unknown[]' is not assignable to type 'FullRecipe[]' by explicitly casting the parsed JSON array and ensuring all required properties are present
-            // Line 378 fix: added detailed validation and default values for mandatory properties
-            const suggestionsRaw = JSON.parse(response.text || "[]");
-            const suggestions: FullRecipe[] = (Array.isArray(suggestionsRaw) ? suggestionsRaw : []).map((s: any): FullRecipe => ({
-                name: String(s.name || 'Receita Sugerida'),
-                ingredients: Array.isArray(s.ingredients) ? s.ingredients.map((ing: any) => ({
-                    simplifiedName: String(ing.simplifiedName || ''),
-                    detailedName: String(ing.detailedName || '')
-                })) : [],
-                instructions: Array.isArray(s.instructions) ? s.instructions.map(String) : [],
-                imageQuery: String(s.imageQuery || s.name || ''),
-                servings: String(s.servings || '2 porções'),
-                prepTimeInMinutes: Number(s.prepTimeInMinutes || 30),
-                difficulty: (['Fácil', 'Médio', 'Difícil'].includes(s.difficulty) ? s.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-                cost: (['Baixo', 'Médio', 'Alto'].includes(s.cost) ? s.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
-                keywords: [],
-                tags: [],
-                isAlcoholic: false,
-                suggestedLeads: []
-            }));
-            setRecipeSuggestions(suggestions);
-        } catch (error) {
-            console.error("Erro ao buscar sugestões:", error);
-            showToast("Erro ao buscar sugestões.");
-        } finally {
-            setIsSuggestionsLoading(false);
-        }
-    };
-
-    const value = {
-        ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu,
-        theme, setTheme,
-        installPromptEvent, handleInstall, handleDismissInstall, isPWAInstallVisible,
-        budget, setBudget, clearBudget,
-        toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
-        fullRecipes, selectedRecipe, isRecipeLoading, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
-        editingItemId, startEdit, cancelEdit,
-        duplicateInfo, setDuplicateInfo,
-        groupingMode, setGroupingMode, isOrganizing, toggleGrouping,
-        itemCategories,
-        showStartHerePrompt,
-        authTrigger, setAuthTrigger,
-        incomingList, clearIncomingList,
-        unreadNotificationCount: unreadReceivedCount,
-        isAdmin,
-        smartNudgeItemName,
-        currentMarketName, setCurrentMarketName,
-        isSharedSession, setIsSharedSession,
-        historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab),
-        isHomeViewActive, setHomeViewActive,
-        isFocusMode, setFocusMode,
-        featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
-        addRecipeToShoppingList,
-        showPWAInstallPromptIfAvailable,
-        getCategoryRecipesSync: (k: string) => [] as FullRecipe[]
-    };
-
-    return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-};
-
-export const useApp = (): AppContextType => {
-    const context = useContext(AppContext);
-    if (context === undefined) {
-        throw new Error('useApp must be used within an AppProvider');
-    }
-    return context;
-};
+        setRecipeSuggestions([] as

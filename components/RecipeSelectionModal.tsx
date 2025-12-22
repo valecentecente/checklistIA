@@ -5,7 +5,7 @@ import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useAuth } from '../contexts/AuthContext';
 import type { FullRecipe } from '../types';
 
-// EQUIPE CHECKLIST IA - Fotos Atualizadas
+// EQUIPE CHECKLIST IA - Fotos de Staff
 const STAFF_MEMBERS = [
     { id: 1, url: 'https://i.imgur.com/oaDEmhp.png' },
     { id: 2, url: 'https://i.imgur.com/yo2ArRP.png' },
@@ -46,7 +46,7 @@ export const RecipeSelectionModal: React.FC = () => {
     if (!isRecipeSelectionModalOpen) return null;
 
     const handleSelect = (recipe: FullRecipe) => {
-        showRecipe(recipe);
+        showRecipe(recipe.name);
         closeModal('recipeSelection');
     };
 
@@ -89,9 +89,10 @@ export const RecipeSelectionModal: React.FC = () => {
         }
     };
 
-    const handleGenerateNew = (term: string) => {
-        const finalTerm = term.trim() || currentSearchTerm;
-        showToast(`Pedido anotado! Preparando...`);
+    const handleGenerateNew = () => {
+        const finalTerm = customOrder.trim() || currentSearchTerm;
+        if (!finalTerm) return;
+        showToast(`Pedido anotado! O Chef já começou...`);
         fetchRecipeDetails(finalTerm);
         closeModal('recipeSelection');
     };
@@ -105,7 +106,7 @@ export const RecipeSelectionModal: React.FC = () => {
             <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-50">
                 <div className="bg-black/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                     <h2 className="text-white text-sm font-black uppercase tracking-tighter italic">
-                        {hasResults ? 'Acervo Sugerido' : 'Pedido Personalizado'}
+                        {hasResults ? 'Sugestões do Acervo' : 'Pedido Especial'}
                     </h2>
                 </div>
                 <button 
@@ -116,10 +117,9 @@ export const RecipeSelectionModal: React.FC = () => {
                 </button>
             </div>
 
-            {/* Container do Carousel com Setas para Web */}
+            {/* Carousel Container */}
             <div className="relative w-full flex items-center group/carousel h-[85vh]">
                 
-                {/* SETA ESQUERDA (WEB) */}
                 <button 
                     onClick={() => handleScroll('left')}
                     className="hidden lg:flex absolute left-4 z-50 w-14 h-14 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md border border-white/10 transition-all opacity-0 group-hover/carousel:opacity-100"
@@ -127,13 +127,12 @@ export const RecipeSelectionModal: React.FC = () => {
                     <span className="material-symbols-outlined text-3xl">chevron_left</span>
                 </button>
 
-                {/* Carousel Container */}
                 <div 
                     ref={scrollContainerRef}
                     className="w-full flex overflow-x-auto snap-x snap-mandatory gap-6 px-8 pb-10 scrollbar-hide items-center h-full"
                 >
                     
-                    {/* 1. Cards do Acervo (Editorial Look) */}
+                    {/* Cards do Acervo (se houver) */}
                     {recipeSearchResults.map((recipe, idx) => {
                         const isFav = isFavorite(recipe.name);
                         return (
@@ -142,13 +141,9 @@ export const RecipeSelectionModal: React.FC = () => {
                                 onClick={() => handleSelect(recipe)}
                                 className="snap-center shrink-0 w-[85vw] sm:w-[360px] h-[75vh] relative rounded-[3rem] overflow-hidden shadow-2xl cursor-pointer group border border-white/10 transition-transform active:scale-95 bg-[#1a1a1a] flex flex-col"
                             >
-                                {/* Foto de fundo com Ken Burns suave */}
                                 <div className="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-[10s] ease-out" style={{ backgroundImage: `url(${recipe.imageUrl})` }}></div>
-                                
-                                {/* Gradientes Estratégicos (Escuro no topo e na base) */}
                                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90"></div>
                                 
-                                {/* NOME NO TOPO (Design Estiloso e Playful - Fonte Reduzida conforme solicitado) */}
                                 <div className="absolute top-0 left-0 w-full p-10 pt-16">
                                     <h3 className="font-display text-[32px] sm:text-[38px] font-black text-white leading-[0.95] uppercase italic tracking-[-0.05em] line-clamp-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transform -rotate-1 origin-left">
                                         {recipe.name}
@@ -156,10 +151,9 @@ export const RecipeSelectionModal: React.FC = () => {
                                     <div className="h-1.5 w-16 bg-primary mt-4 rounded-full"></div>
                                 </div>
 
-                                {/* AÇÕES NA BASE */}
                                 <div className="absolute bottom-0 left-0 w-full p-10 flex justify-between items-center">
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em]">ChecklistIA Premium</span>
+                                        <span className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em]">Acervo ChecklistIA</span>
                                         <div className="flex items-center gap-2">
                                             <span className="bg-white/10 backdrop-blur-md px-2 py-1 rounded text-[10px] text-white font-bold">{recipe.difficulty}</span>
                                             <span className="bg-primary/20 backdrop-blur-md px-2 py-1 rounded text-[10px] text-primary font-bold">{recipe.prepTimeInMinutes}min</span>
@@ -167,16 +161,12 @@ export const RecipeSelectionModal: React.FC = () => {
                                     </div>
                                     
                                     <div className="flex gap-3 shrink-0 z-30">
-                                        {/* Botão de Compartilhamento Restaurado */}
                                         <button 
                                             onClick={(e) => handleShare(e, recipe)}
                                             className="w-12 h-12 rounded-[1.2rem] flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 bg-black/40 text-white hover:bg-black/60"
-                                            title="Compartilhar"
                                         >
                                             <span className="material-symbols-outlined text-xl">share</span>
                                         </button>
-
-                                        {/* Botão Favorito */}
                                         <button 
                                             onClick={(e) => handleToggleFavorite(e, recipe)}
                                             className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 ${
@@ -189,18 +179,11 @@ export const RecipeSelectionModal: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-
-                                {/* Indicador Visual Lateral (Playful Decor) */}
-                                <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-1 items-center px-2 opacity-20">
-                                    <div className="w-1 h-1 bg-white rounded-full"></div>
-                                    <div className="w-1 h-12 bg-white rounded-full"></div>
-                                    <div className="w-1 h-1 bg-white rounded-full"></div>
-                                </div>
                             </div>
                         );
                     })}
 
-                    {/* 2. CARD DA GARÇONETE IA */}
+                    {/* CARD DA GARÇONETE IA - REFINADO */}
                     <div 
                         className="snap-center shrink-0 w-[85vw] sm:w-[360px] h-[75vh] relative rounded-[3rem] overflow-hidden shadow-2xl bg-[#0a0a0a] border border-white/10 flex flex-col"
                     >
@@ -209,40 +192,54 @@ export const RecipeSelectionModal: React.FC = () => {
                             style={{ backgroundImage: `url("${staffMember.url}")` }}
                         ></div>
 
-                        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80"></div>
+                        {/* Gradiente inferior para legibilidade da área de input e texto */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent"></div>
 
-                        <div className="absolute top-0 left-0 w-full p-10 pt-16">
-                            <h3 className="font-display text-[32px] sm:text-[38px] font-black text-blue-400 leading-[0.95] uppercase italic tracking-[-0.05em] transform -rotate-1 origin-left drop-shadow-lg">
-                                Não achou o que queria?
-                            </h3>
-                            <p className="text-white/60 text-xs font-black uppercase tracking-widest mt-4">Peça agora para nossa IA</p>
+                        {/* CONTEÚDO POSICIONADO NA BASE - Rostos e Crachás ficam livres no topo/centro */}
+                        <div className="absolute inset-x-0 bottom-0 p-8 pb-12 flex flex-col gap-4">
+                            
+                            {/* Input Slim com Botão Lupa */}
+                            <div className="relative w-full group">
+                                <div className="w-full bg-white/10 backdrop-blur-2xl rounded-2xl p-1.5 border border-white/20 shadow-2xl flex items-center gap-2">
+                                    <input 
+                                        type="text"
+                                        value={customOrder}
+                                        onChange={(e) => setCustomOrder(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleGenerateNew()}
+                                        placeholder="O que você quer cozinhar?"
+                                        className="flex-1 bg-transparent border-0 text-white placeholder:text-white/30 focus:ring-0 text-base font-bold h-10 px-3"
+                                    />
+                                    <button 
+                                        onClick={handleGenerateNew}
+                                        disabled={!customOrder.trim()}
+                                        className="h-10 w-10 bg-primary hover:bg-primary-hover text-white rounded-xl shadow-lg transition-all active:scale-90 flex items-center justify-center disabled:opacity-30 disabled:grayscale"
+                                        title="Começar Busca"
+                                    >
+                                        <span className="material-symbols-outlined !text-2xl">search</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Textos de Apoio Movidos para baixo do campo */}
+                            <div className="text-center space-y-1">
+                                <h3 className="font-display text-2xl font-black text-blue-400 uppercase italic tracking-tighter drop-shadow-md">
+                                    Não achou o que queria?
+                                </h3>
+                                <p className="text-[10px] text-white/50 font-bold uppercase tracking-[0.2em] leading-tight">
+                                    Peça agora para nossa IA <br/> preparar sua receita na hora
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="absolute inset-x-0 bottom-0 p-10">
-                            <div className="w-full bg-white/10 backdrop-blur-3xl rounded-[2rem] p-3 border border-white/20 shadow-2xl mb-4 flex items-center gap-2 pr-5">
-                                <input 
-                                    type="text"
-                                    value={customOrder}
-                                    onChange={(e) => setCustomOrder(e.target.value)}
-                                    placeholder="Ex: Bolo de Brigadeiro..."
-                                    className="flex-1 bg-transparent border-0 text-white placeholder:text-white/20 focus:ring-0 text-lg font-bold h-14 px-4"
-                                />
-                                <button 
-                                    onClick={() => handleGenerateNew(customOrder)}
-                                    disabled={!customOrder.trim()}
-                                    className="h-14 w-14 bg-blue-600 hover:bg-blue-500 text-white rounded-[1.2rem] shadow-lg transition-all active:scale-90 flex items-center justify-center disabled:opacity-30"
-                                >
-                                    <span className="material-symbols-outlined !text-3xl">send</span>
-                                </button>
-                            </div>
-                            <p className="text-[10px] text-center text-white/40 font-bold uppercase tracking-[0.2em]">O Chef IA preparará sua receita na hora</p>
+                        {/* Indicador de Status Discreto na Lateral */}
+                        <div className="absolute top-10 left-10 opacity-30">
+                             <span className="text-[8px] font-black text-white uppercase tracking-[0.4em] [writing-mode:vertical-lr] rotate-180">STAFF IA</span>
                         </div>
                     </div>
 
                     <div className="snap-center shrink-0 w-8"></div>
                 </div>
 
-                {/* SETA DIREITA (WEB) */}
                 <button 
                     onClick={() => handleScroll('right')}
                     className="hidden lg:flex absolute right-4 z-50 w-14 h-14 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md border border-white/10 transition-all opacity-0 group-hover/carousel:opacity-100"
@@ -251,19 +248,19 @@ export const RecipeSelectionModal: React.FC = () => {
                 </button>
             </div>
 
+            {/* Pagination Style dots */}
             <div className="flex gap-2 mb-8">
-                <div className="h-1.5 w-8 bg-primary rounded-full"></div>
-                <div className="h-1.5 w-1.5 bg-white/20 rounded-full"></div>
-                <div className="h-1.5 w-1.5 bg-white/20 rounded-full"></div>
+                <div className={`h-1.5 rounded-full transition-all ${hasResults ? 'w-2 bg-white/20' : 'w-8 bg-primary'}`}></div>
+                <div className={`h-1.5 rounded-full transition-all ${!hasResults ? 'w-2 bg-white/20' : 'w-8 bg-primary'}`}></div>
             </div>
 
             <style>{`
                 @keyframes slowZoom {
                     from { transform: scale(1); }
-                    to { transform: scale(1.1); }
+                    to { transform: scale(1.08); }
                 }
                 .animate-slowZoom {
-                    animation: slowZoom 40s infinite alternate ease-in-out;
+                    animation: slowZoom 30s infinite alternate ease-in-out;
                 }
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

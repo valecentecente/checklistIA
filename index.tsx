@@ -479,12 +479,20 @@ const AppContent: React.FC = () => {
                             )}
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
-                            {!app.isFocusMode && (
-                                <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors hover:bg-black/10">
-                                    <span className="material-symbols-outlined text-xl">shopping_cart</span>
-                                    {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
-                                </button>
-                            )}
+                            {/* BOTÃO DE ORÇAMENTO RÁPIDO */}
+                            <button 
+                                onClick={() => app.openModal('budget')} 
+                                className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${app.budget !== null ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/10'}`}
+                                title="Definir Orçamento"
+                            >
+                                <span className={`material-symbols-outlined text-xl ${app.budget !== null ? 'font-variation-FILL-1' : ''}`} style={ app.budget !== null ? { fontVariationSettings: "'FILL' 1" } : {} }>savings</span>
+                            </button>
+
+                            <button onClick={() => app.showCartTooltip()} className="relative h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors hover:bg-black/10">
+                                <span className="material-symbols-outlined text-xl">shopping_cart</span>
+                                {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
+                            </button>
+                            
                             <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-all active:scale-95">
                                 <span className="material-symbols-outlined text-xl">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
                             </button>

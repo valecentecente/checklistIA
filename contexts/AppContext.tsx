@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -53,7 +54,6 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
-// Moved helper outside AppProvider to ensure robust typing and scope
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [];
     return data.map((r: any): FullRecipe => ({
@@ -271,10 +271,10 @@ export const generateKeywords = (text: string): string[] => {
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, offers } = useShoppingList();
+    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, offers, currentMarketName, setCurrentMarketName } = useShoppingList();
     const { user } = useAuth();
 
-    const [modalStates, setModalStates] = useState({
+    const INITIAL_MODAL_STATES = {
         isAddItemModalOpen: false, isBudgetModalOpen: false, isRecipeAssistantModalOpen: false,
         isOptionsMenuOpen: false, isAppOptionsMenuOpen: false, isCalculatorModalOpen: false,
         isAboutModalOpen: false, isSavePurchaseModalOpen: false, isHistoryModalOpen: false,
@@ -304,7 +304,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isUnitConverterModalOpen: false,
         isContentFactoryModalOpen: false,
         isRecipeSelectionModalOpen: false
-    });
+    };
+
+    const [modalStates, setModalStates] = useState(INITIAL_MODAL_STATES);
     
     const [theme, setThemeState] = useState<Theme>(() => {
         const stored = localStorage.getItem('theme');
@@ -331,12 +333,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [incomingList, setIncomingList] = useState<ReceivedListRecord | null>(null);
     
     const [smartNudgeItemName, setSmartNudgeItemName] = useState<string | null>(null);
-    const [currentMarketName, setCurrentMarketName] = useState<string | null>(null);
     const [isSharedSession, setIsSharedSession] = useState(false);
-    const [historyActiveTab, setHistoryActiveTab] = useState<'my' | 'received'>('my');
+    const [historyActiveTab, setHistoryActiveTabState] = useState<'my' | 'received'>('my');
     const [isHomeViewActive, setHomeViewActive] = useState(true);
     const [isFocusMode, setFocusMode] = useState(false);
     const [pendingAction, setPendingAction] = useState<string | null>(null);
+    const [authTrigger, setAuthTrigger] = useState<string | null>(null);
     
     const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>(SURVIVAL_RECIPES);
     const [recipeSuggestions, setRecipeSuggestions] = useState<FullRecipe[]>([]);
@@ -356,6 +358,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const isSuperAdmin = user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
+
+    useEffect(() => {
+        if (!user) {
+            setModalStates(INITIAL_MODAL_STATES);
+            setHomeViewActive(true);
+            setFocusMode(false);
+            setFullRecipes({});
+            setSelectedRecipe(null);
+            setIncomingList(null);
+            setIsSharedSession(false);
+        }
+    }, [user]);
 
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
         const pool = globalRecipeCache;
@@ -421,7 +435,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         }
                     });
 
-                    // Fixed: Explicitly mapping to avoid 'unknown[]' or missing property errors
                     const fetched: FullRecipe[] = mapToFullRecipeArray(fetchedRaw);
 
                     const pool: FullRecipe[] = fetched.length > 0 
@@ -587,11 +600,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const allCaches = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, globalRecipeCache];
         for (const cache of allCaches) {
             if (Array.isArray(cache)) {
-                const found = cache.find(r => r.name.toLowerCase() === target);
+                // Fix: Explicitly type 'found' to ensure return type matches interface
+                const found = (cache as FullRecipe[]).find(r => r.name.toLowerCase() === target);
                 if (found) return found;
             } else {
                 const foundKey = Object.keys(cache).find(k => k.toLowerCase() === target);
-                if (foundKey) return cache[foundKey];
+                // Fix: Ensure return type is correctly accessed via cast
+                if (foundKey) return (cache as Record<string, FullRecipe>)[foundKey];
             }
         }
         return undefined;
@@ -788,16 +803,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         closeModal('options');
     }, [groupingMode, items, itemCategories, apiKey]);
 
-    // Fix: Explicitly construction using mapToFullRecipeArray and ensure state is properly typed to avoid 'unknown[]' errors.
     const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
         setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
+        // Fix: Explicitly type the empty array as FullRecipe[] to avoid TS error on assignment
         setRecipeSuggestions([] as FullRecipe[]);
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
-            // Use explicit helper to map results and guarantee FullRecipe type adherence
-            const rawSuggestions = getCategoryRecipes(key);
-            const suggestions = mapToFullRecipeArray(rawSuggestions);
+            const suggestions = getCategoryRecipes(key);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }
     };
@@ -831,14 +844,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         budget, setBudget, clearBudget, toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
         fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
         editingItemId, startEdit, cancelEdit, duplicateInfo, setDuplicateInfo, groupingMode, setGroupingMode, isOrganizing, toggleGrouping,
-        itemCategories, showStartHerePrompt, authTrigger: null, setAuthTrigger: () => {}, incomingList, clearIncomingList,
+        itemCategories, showStartHerePrompt, authTrigger, setAuthTrigger, incomingList, clearIncomingList,
         unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, smartNudgeItemName, currentMarketName, setCurrentMarketName,
-        isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: (tab: any) => setHistoryActiveTab(tab),
+        isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction: null, setPendingAction: () => {}, selectedProduct: null, openProductDetails: (p: Offer) => {}, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
+        pendingAction, setPendingAction, selectedProduct, openProductDetails: setSelectedProduct, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules 
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
