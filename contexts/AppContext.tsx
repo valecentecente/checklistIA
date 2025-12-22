@@ -390,7 +390,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             case 'new':
                 return pool.slice(0, 10);
             case 'random':
-                return shuffleArray(pool).slice(0, 5);
+                // Explicitly provide type to shuffleArray to avoid 'unknown[]' inference
+                return shuffleArray<FullRecipe>(pool).slice(0, 5);
             case 'sorvetes':
                 return pool.filter(r => r.tags?.some(t => t.toLowerCase().includes('sorvete') || t.toLowerCase().includes('gelato')));
             default:
@@ -818,6 +819,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
         setIsSuggestionsLoading(true);
         try {
+            // Fix: Explicitly type suggestions from getCategoryRecipes to avoid unknown[] inference
             const suggestions: FullRecipe[] = getCategoryRecipes(key);
             setRecipeSuggestions(suggestions);
         } finally { setIsSuggestionsLoading(false); }

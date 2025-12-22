@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -33,7 +32,7 @@ export const WebSidebarRight: React.FC = () => {
         return newPick || (featuredRecipes.length > 0 ? featuredRecipes[0] : null);
     }, [featuredRecipes, getRandomCachedRecipe, suggestion]);
 
-    // Timer da Capa - 40 segundos (Giro suave)
+    // Timer da Capa - 40 segundos (Troca elegante)
     useEffect(() => {
         if (!suggestion) setSuggestion(pickNewSuggestion());
 
@@ -42,7 +41,7 @@ export const WebSidebarRight: React.FC = () => {
             setTimeout(() => {
                 setSuggestion(pickNewSuggestion());
                 setIsRecipeTransitioning(false);
-            }, 1000); // Sincronizado com a animação de fade-out
+            }, 1200); // Crossfade suave
         }, 40000); 
 
         return () => clearInterval(interval);
@@ -56,7 +55,7 @@ export const WebSidebarRight: React.FC = () => {
                 const nextIndex = (CHEF_TIPS.indexOf(currentTip) + 1) % CHEF_TIPS.length;
                 setCurrentTip(CHEF_TIPS[nextIndex]);
                 setIsTipTransitioning(false);
-            }, 600);
+            }, 800);
         }, 25000);
 
         return () => clearInterval(interval);
@@ -80,112 +79,110 @@ export const WebSidebarRight: React.FC = () => {
 
     return (
         <div className="hidden lg:flex lg:w-96 flex-col h-full bg-[#0a0a0a] border-l border-white/5 p-8 overflow-hidden shrink-0">
-            {/* Header Sofisticado */}
+            {/* Header de Estilo Editorial */}
             <div className="flex items-center justify-between mb-8 shrink-0">
                 <div className="flex flex-col gap-1">
-                    <h3 className="text-white/40 text-[9px] font-black uppercase tracking-[0.3em]">
-                        ChecklistIA Exclusive
+                    <h3 className="text-white/40 text-[9px] font-black uppercase tracking-[0.4em]">
+                        CHECKLISTIA EXCLUSIVE
                     </h3>
-                    <div className="h-[1px] w-8 bg-primary/60"></div>
+                    <div className="h-[1px] w-12 bg-white/20"></div>
                 </div>
-                <div className="h-[2px] w-20 bg-white/5 rounded-full overflow-hidden">
-                    <div key={suggestion.name} className="h-full bg-gradient-to-r from-primary/20 via-primary to-primary/20 animate-glamourProgress"></div>
+                <div className="text-[9px] text-primary font-black uppercase tracking-widest flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></span>
+                    Live Now
                 </div>
             </div>
 
-            {/* Main Stage - Cine-Reveal Transition */}
-            <div className="flex-1 relative mb-10 group">
+            {/* Stage Principal - Estilo Capa de Revista */}
+            <div className="flex-1 relative mb-10">
                 <div 
                     onClick={handleCardClick}
-                    className={`h-full w-full cursor-pointer relative rounded-[3rem] overflow-hidden shadow-[0_30px_60px_-15px_rgba(0,0,0,0.7)] transition-all duration-[1200ms] cubic-bezier(0.4, 0, 0.2, 1) ${
+                    className={`h-full w-full cursor-pointer relative rounded-[3.5rem] overflow-hidden shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] transition-all duration-[1500ms] ease-in-out bg-[#111] border border-white/5 ${
                         isRecipeTransitioning 
-                        ? 'opacity-0 scale(1.1) blur(20px) translate-y-4' 
-                        : 'opacity-100 scale(1) blur(0) translate-y-0 animate-cineReveal'
+                        ? 'opacity-40 scale-105 blur-sm' 
+                        : 'opacity-100 scale-100 blur-0'
                     }`}
                 >
-                    {/* Background com Ken Burns effect contínuo */}
+                    {/* Imagem com Ken Burns sutil e contínuo */}
                     <div 
-                        className="absolute inset-0 bg-cover bg-center transition-transform duration-[40000ms] linear scale-100 group-hover:scale-110"
-                        style={{ backgroundImage: `url(${suggestion.imageUrl})`, backgroundColor: '#111' }}
+                        className="absolute inset-0 bg-cover bg-center transition-transform duration-[45000ms] linear scale-110 animate-kenBurnsSlow"
+                        style={{ backgroundImage: `url(${suggestion.imageUrl})` }}
                     ></div>
                     
-                    {/* Overlays de luxo */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90"></div>
-                    <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-[3rem]"></div>
+                    {/* Overlays de Profundidade */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/20"></div>
+                    <div className="absolute inset-0 bg-black/10"></div>
                     
-                    {/* Conteúdo Informativo */}
-                    <div className="absolute bottom-0 left-0 w-full p-10">
-                        <div className="flex gap-3 mb-5 overflow-hidden">
-                            <span className="bg-white/10 backdrop-blur-xl text-white text-[8px] px-3 py-1.5 rounded-full font-black uppercase tracking-[0.1em] border border-white/10 animate-slideUpReveal">
-                                {suggestion.difficulty || 'Mestre'}
-                            </span>
-                            <span className="bg-primary/20 backdrop-blur-xl text-primary text-[8px] px-3 py-1.5 rounded-full font-black uppercase tracking-[0.1em] border border-primary/20 flex items-center gap-1.5 animate-slideUpReveal delay-100">
-                                <span className="material-symbols-outlined text-[12px] font-variation-FILL-1">timer</span> 
+                    {/* TÍTULO NO TOPO (ESTILO MAGAZINE) */}
+                    <div className="absolute top-0 left-0 w-full p-10 pt-14 flex flex-col items-start z-10">
+                         <div className="flex items-center gap-3 mb-4 animate-slideDownReveal">
+                            <span className="bg-white text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">FÁCIL</span>
+                            <span className="text-white/60 text-[9px] font-bold uppercase flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">schedule</span>
                                 {suggestion.prepTimeInMinutes || 30} MIN
                             </span>
                         </div>
                         
-                        <h2 className="text-4xl font-black text-white leading-[1.1] mb-6 drop-shadow-2xl capitalize font-display tracking-tight animate-slideUpReveal delay-200">
+                        <h2 className="text-[42px] font-black text-white leading-[0.9] uppercase italic tracking-[-0.06em] font-display drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)] animate-magazineTitle">
                             {suggestion.name}
                         </h2>
                         
-                        <div className="flex items-center gap-3 text-white/50 font-black text-[10px] uppercase tracking-[0.2em] group-hover:text-primary transition-colors animate-slideUpReveal delay-300">
-                            <span>Ver Detalhes</span>
-                            <div className="w-10 h-[1px] bg-white/20 group-hover:w-16 group-hover:bg-primary transition-all"></div>
-                        </div>
+                        <div className="h-1 w-10 bg-primary mt-6 animate-slideDownReveal" style={{animationDelay: '0.4s'}}></div>
+                    </div>
+
+                    {/* Badge Lateral Inferior */}
+                    <div className="absolute bottom-10 left-10 flex items-center gap-3 animate-fadeIn">
+                         <div className="flex flex-col">
+                            <span className="text-[8px] text-white/30 font-black uppercase tracking-[0.3em]">Master Selection</span>
+                            <span className="text-[10px] text-white font-bold uppercase tracking-widest opacity-80">Vol. 01 / 2025</span>
+                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Expert Tip - Minimalist Floating Widget */}
+            {/* Dica do Especialista - Minimalista e Clean */}
             <div className="relative shrink-0 pt-6 border-t border-white/5">
                 <div className="flex items-center gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-primary text-lg font-variation-FILL-1">temp_preferences_custom</span>
-                    </div>
-                    <h4 className="text-white/60 font-black text-[9px] uppercase tracking-[0.2em]">Saber de Especialista</h4>
+                    <span className="material-symbols-outlined text-primary text-xl animate-color-pulse">temp_preferences_custom</span>
+                    <h4 className="text-white/30 font-black text-[9px] uppercase tracking-[0.3em]">Saber de Especialista</h4>
                 </div>
                 
-                <div className={`transition-all duration-700 ease-in-out ${isTipTransitioning ? 'opacity-0 -translate-y-2 blur-sm' : 'opacity-100 translate-y-0 blur-0'}`}>
-                    <p className="text-white/80 text-sm leading-relaxed font-medium italic serif">
+                <div className={`transition-all duration-1000 ease-in-out ${isTipTransitioning ? 'opacity-0 translate-y-1 blur-sm' : 'opacity-100 translate-y-0 blur-0'}`}>
+                    <p className="text-white/80 text-sm leading-relaxed font-medium italic">
                         "{currentTip}"
                     </p>
                 </div>
                 
-                {/* Decoration */}
-                <div className="absolute -bottom-2 -right-2 opacity-5 pointer-events-none">
-                    <span className="material-symbols-outlined text-8xl">format_quote</span>
+                {/* Decoration Quote */}
+                <div className="absolute -bottom-2 -right-2 opacity-[0.03] pointer-events-none">
+                    <span className="material-symbols-outlined text-[120px]">format_quote</span>
                 </div>
             </div>
 
             <style>{`
-                @keyframes glamourProgress {
-                    from { transform: translateX(-100%); }
-                    to { transform: translateX(100%); }
+                @keyframes kenBurnsSlow {
+                    from { transform: scale(1.1) rotate(0deg); }
+                    to { transform: scale(1) rotate(1deg); }
                 }
-                .animate-glamourProgress {
-                    animation: glamourProgress 40s linear infinite;
-                }
-                
-                @keyframes cineReveal {
-                    0% { opacity: 0; transform: scale(1.1) translateY(20px); filter: blur(20px); }
-                    100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
-                }
-                .animate-cineReveal {
-                    animation: cineReveal 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+                .animate-kenBurnsSlow {
+                    animation: kenBurnsSlow 45s linear infinite alternate;
                 }
 
-                @keyframes slideUpReveal {
-                    from { opacity: 0; transform: translateY(15px); }
+                @keyframes magazineTitle {
+                    0% { opacity: 0; transform: translateY(-20px) scale(1.1); filter: blur(10px); }
+                    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+                }
+                .animate-magazineTitle {
+                    animation: magazineTitle 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+                }
+
+                @keyframes slideDownReveal {
+                    from { opacity: 0; transform: translateY(-10px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
-                .animate-slideUpReveal {
-                    animation: slideUpReveal 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+                .animate-slideDownReveal {
+                    animation: slideDownReveal 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
                 }
-
-                .delay-100 { animation-delay: 0.1s; }
-                .delay-200 { animation-delay: 0.2s; }
-                .delay-300 { animation-delay: 0.3s; }
             `}</style>
         </div>
     );
