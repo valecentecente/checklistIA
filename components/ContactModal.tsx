@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 const InstagramIcon: React.FC<{className?: string}> = ({ className }) => (
@@ -40,7 +39,7 @@ const XIcon: React.FC<{className?: string}> = ({ className }) => (
 
 export const ContactContent: React.FC = () => {
     const [copied, setCopied] = useState(false);
-    const email = 'contato@checklistia.com.br';
+    const email = 'checklistiasp@gmail.com';
 
     const handleCopy = () => {
         navigator.clipboard.writeText(email).then(() => {
@@ -61,7 +60,7 @@ export const ContactContent: React.FC = () => {
             </p>
 
             <div className="mt-5 w-full">
-                <p className="text-xs font-bold uppercase tracking-wider text-text-secondary-light dark:text-text-secondary-dark mb-1 ml-1">Nosso E-mail</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-text-secondary-light dark:text-text-secondary-dark mb-1 ml-1">NOSSO E-MAIL</p>
                 <div className="rounded-lg bg-background-light dark:bg-background-dark p-2.5 border border-border-light dark:border-border-dark">
                     <div className="flex items-center gap-3 mb-2">
                        <span className="material-symbols-outlined text-primary text-xl">mail</span>
@@ -69,7 +68,7 @@ export const ContactContent: React.FC = () => {
                     </div>
                     <button 
                         onClick={handleCopy}
-                        className={`w-full text-xs font-bold py-2 px-3 rounded-md transition-colors uppercase tracking-wide ${
+                        className={`w-full text-xs font-bold py-2 px-3 rounded-md transition-colors uppercase tracking-wide shadow-sm ${
                             copied 
                             ? 'bg-green-600 text-white' 
                             : 'bg-primary text-white hover:bg-primary/90'
@@ -81,7 +80,7 @@ export const ContactContent: React.FC = () => {
             </div>
 
             <div className="mt-5 w-full">
-                <p className="text-xs font-bold uppercase tracking-wider text-text-secondary-light dark:text-text-secondary-dark mb-2 text-center">Redes Sociais</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-text-secondary-light dark:text-text-secondary-dark mb-2 text-center">REDES SOCIAIS</p>
                 <div className="flex justify-center gap-3 flex-wrap">
                     <a href="https://www.instagram.com/checklistiaof/" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors" aria-label="Instagram">
                         <InstagramIcon className="w-6 h-6 text-pink-600" />

@@ -13,6 +13,7 @@ import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
 import { AppModals } from './components/modals/AppModals';
 
 const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
+    // FIX: Removed incorrect assignment setSliderX = useState(0) which was causing a block-scoped variable usage error and constant assignment error.
     const [sliderX, setSliderX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -122,6 +123,16 @@ const AppContent: React.FC = () => {
     
     const handleBottomMenuClick = () => {
         app.openModal('tools');
+    };
+
+    const handleBudgetClick = () => {
+        if (!user) {
+            app.showToast("Faça login para definir seu orçamento.");
+            app.setPendingAction('budget');
+            app.openModal('auth');
+        } else {
+            app.openModal('budget');
+        }
     };
 
     const closeDistributionModal = () => setIsDistributionModalOpen(false);
@@ -489,7 +500,7 @@ const AppContent: React.FC = () => {
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
                             <button 
-                                onClick={() => app.openModal('budget')} 
+                                onClick={handleBudgetClick} 
                                 className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${piggyStyle}`}
                                 title="Definir Orçamento"
                             >
