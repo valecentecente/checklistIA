@@ -109,7 +109,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, []);
 
     useEffect(() => {
-        // CIRURGICO: Limpeza total de estados locais ao deslogar
         if (!user || user.uid.startsWith('offline-user-')) {
             const storedList = localStorage.getItem(STORAGE_KEY);
             if (storedList) {
@@ -406,20 +405,26 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, [addItem]);
 
     const repeatPurchase = useCallback(async (purchase: PurchaseRecord) => {
+        const isMerging = items.length > 0;
+        
         const itemsToAdd = purchase.items.map(i => ({
             name: i.name,
-            calculatedPrice: i.calculatedPrice,
+            calculatedPrice: 0, // Resetamos o preço para que o usuário insira o valor atual
             details: i.details,
-            recipeName: purchase.marketName || 'Retomado',
+            // Se estiver mesclando, usa um prefixo para organizar como uma "aba" (grupo)
+            recipeName: isMerging ? `Histórico: ${purchase.marketName}` : (purchase.marketName || 'Retomado'),
             isNew: true,
-            isPurchased: true 
+            isPurchased: false // Resetamos o status para que o item apareça como "pendente" na nova compra
         }));
 
-        window.dispatchEvent(new CustomEvent('restoreMarketName', { detail: purchase.marketName }));
+        // Se a lista estiver vazia, restaura o nome do mercado original no topo
+        if (!isMerging) {
+            window.dispatchEvent(new CustomEvent('restoreMarketName', { detail: purchase.marketName }));
+        }
 
         await addIngredientsBatch(itemsToAdd);
-        return { message: `${itemsToAdd.length} itens retomados com sucesso!` };
-    }, [addIngredientsBatch]);
+        return { message: `${itemsToAdd.length} itens prontos para uma nova compra!` };
+    }, [addIngredientsBatch, items.length]);
 
     const importSharedList = useCallback(async (shareId: string) => {
         if (!db) return null;

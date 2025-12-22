@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -75,7 +74,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
     // Support States
     const [copied, setCopied] = useState(false);
     const [showThankYou, setShowThankYou] = useState(false);
-    const pixKey = 'itensnamao@gmail.com'; 
+    // Chave PIX atualizada conforme solicitação do usuário
+    const pixKey = 'checklistiasp@gmail.com'; 
 
     useEffect(() => {
         if (isOpen) {

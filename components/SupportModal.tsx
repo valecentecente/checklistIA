@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 
 interface SupportModalProps {
@@ -8,8 +7,8 @@ interface SupportModalProps {
 
 export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
     const [copied, setCopied] = useState(false);
-    // CHAVE PIX FICTÍCIA - O usuário deve substituir por uma real
-    const pixKey = 'itensnamao@gmail.com'; 
+    // Chave PIX atualizada conforme solicitação do usuário
+    const pixKey = 'checklistiasp@gmail.com'; 
 
     useEffect(() => {
         if (isOpen) document.body.style.overflow = 'hidden';

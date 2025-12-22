@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import type { PurchaseRecord, HistoricItem, AuthorMetadata, ReceivedListRecord } from '../types';
 import { useShoppingList } from '../contexts/ShoppingListContext';
@@ -110,7 +109,7 @@ const SocialProfileModal: React.FC<{ author: AuthorMetadata; onClose: () => void
 };
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, history, onRepeatPurchase, onAddItem, formatCurrency }) => {
-    const { receivedHistory, shareListWithEmail, markReceivedListAsRead, searchUser, items: currentList } = useShoppingList();
+    const { receivedHistory, shareListWithEmail, markReceivedListAsRead, searchUser } = useShoppingList();
     const { showToast, historyActiveTab, setHistoryActiveTab, setHomeViewActive } = useApp();
     const [activeTab, setActiveTab] = useState<'my' | 'received'>(historyActiveTab);
     const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRecord | null>(null);
@@ -149,19 +148,10 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
     }
     
     const handleReactivate = (purchase: PurchaseRecord) => {
-        const performReactivation = () => {
-            onRepeatPurchase(purchase);
-            setHomeViewActive(false);
-            onClose();
-        };
-
-        if (currentList.length > 0) {
-            if (window.confirm("Você já tem itens na lista atual. Deseja adicionar os itens desta compra à lista existente?")) {
-                performReactivation();
-            }
-        } else {
-            performReactivation();
-        }
+        // Fluxo Sem Interrupção: Mescla como uma nova seção (aba) na lista atual
+        onRepeatPurchase(purchase);
+        setHomeViewActive(false);
+        onClose();
     };
 
     if (!isOpen) return null;

@@ -1,6 +1,6 @@
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import * as firebaseApp from 'firebase/app';
+import * as firebaseAuth from 'firebase/auth';
 import { 
   initializeFirestore, 
   persistentLocalCache, 
@@ -21,9 +21,9 @@ const firebaseConfig = {
 // Verifica se a configuração foi feita
 const isConfigured = firebaseConfig.apiKey !== "" && firebaseConfig.projectId !== "";
 
-// Inicializa o Firebase
-const app = isConfigured ? initializeApp(firebaseConfig) : undefined;
-const auth = app ? getAuth(app) : undefined;
+// FIX: Using namespace imports to resolve exported member errors
+const app = isConfigured ? firebaseApp.initializeApp(firebaseConfig) : undefined;
+const auth = app ? firebaseAuth.getAuth(app) : undefined;
 
 // Inicialização Robusta do Firestore com Cache Persistente (Blindagem contra erros de rede)
 const db = app ? initializeFirestore(app, {
@@ -32,9 +32,9 @@ const db = app ? initializeFirestore(app, {
   })
 }) : undefined;
 
-// Configuração de Persistência de Autenticação
+// FIX: Using namespace import for setPersistence and browserLocalPersistence
 if (auth) {
-    setPersistence(auth, browserLocalPersistence).catch((error) => {
+    firebaseAuth.setPersistence(auth, firebaseAuth.browserLocalPersistence).catch((error) => {
         console.error("Erro ao definir persistência do Firebase Auth:", error);
     });
 }

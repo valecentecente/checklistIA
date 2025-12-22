@@ -1,5 +1,6 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendPasswordResetEmail } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { doc, setDoc, getDoc, writeBatch, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot, or, and } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../firebase';
 import type { User, ShoppingItem, AdminInvite, AdminPermissions } from '../types';
@@ -172,7 +173,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsAuthLoading(false);
             return;
         }
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        // FIX: Using namespace import for onAuthStateChanged
+        const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 const userData = await processUserData(currentUser);
                 setUser(userData);
@@ -231,7 +233,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         try {
-            const result = await signInWithEmailAndPassword(auth, email, pass);
+            // FIX: Using namespace import for signInWithEmailAndPassword
+            const result = await firebaseAuth.signInWithEmailAndPassword(auth, email, pass);
             localStorage.setItem('remembered_email', email);
         } catch (error: any) {
             const errorCode = error.code || '';
@@ -263,8 +266,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return;
             }
 
-            const result = await createUserWithEmailAndPassword(auth, email, pass);
-            await updateProfile(result.user, {
+            // FIX: Using namespace import for createUserWithEmailAndPassword
+            const result = await firebaseAuth.createUserWithEmailAndPassword(auth, email, pass);
+            // FIX: Using namespace import for updateProfile
+            await firebaseAuth.updateProfile(result.user, {
                 displayName: name
             });
             localStorage.setItem('remembered_email', email);
@@ -308,7 +313,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const resetPassword = async (email: string) => {
         if (!auth) return;
         try {
-            await sendPasswordResetEmail(auth, email);
+            // FIX: Using namespace import for sendPasswordResetEmail
+            await firebaseAuth.sendPasswordResetEmail(auth, email);
         } catch (error: any) {
             throw new Error(error.message);
         }
@@ -352,13 +358,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const deleteAccount = async (password: string) => {
         if (!auth || !auth.currentUser || !auth.currentUser.email || !db) throw new Error("Erro de autenticação.");
         try {
-            const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
-            await reauthenticateWithCredential(auth.currentUser, credential);
+            // FIX: Using namespace import for EmailAuthProvider and reauthenticateWithCredential
+            const credential = firebaseAuth.EmailAuthProvider.credential(auth.currentUser.email, password);
+            await firebaseAuth.reauthenticateWithCredential(auth.currentUser, credential);
             const uid = auth.currentUser.uid;
             const email = auth.currentUser.email;
             await deleteDoc(doc(db, 'users_public', email.toLowerCase()));
             await deleteDoc(doc(db, 'users', uid));
-            await deleteUser(auth.currentUser);
+            // FIX: Using namespace import for deleteUser
+            await firebaseAuth.deleteUser(auth.currentUser);
             setUser(null);
         } catch (error: any) {
             throw new Error(error.code === 'auth/wrong-password' ? "Senha incorreta." : error.message);
@@ -368,7 +376,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updateUserProfile = async (name: string, photoURL?: string, birthDate?: string) => {
         if (!auth || !auth.currentUser) throw new Error("Usuário não autenticado.");
         try {
-            await updateProfile(auth.currentUser, { displayName: name });
+            // FIX: Using namespace import for updateProfile
+            await firebaseAuth.updateProfile(auth.currentUser, { displayName: name });
             if (db) {
                 const userDocRef = doc(db, 'users', auth.currentUser.uid);
                 const updates: any = {};
@@ -386,7 +395,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const removeProfilePhoto = async () => {
         if (!auth || !auth.currentUser) throw new Error("Usuário não autenticado.");
         try {
-            await updateProfile(auth.currentUser, { photoURL: "" });
+            // FIX: Using namespace import for updateProfile
+            await firebaseAuth.updateProfile(auth.currentUser, { photoURL: "" });
             if (db) await setDoc(doc(db, 'users', auth.currentUser.uid), { photoBase64: null }, { merge: true });
             await syncUserToPublicDirectory(auth.currentUser, "", user?.username || undefined);
             setUser(prev => prev ? ({ ...prev, photoURL: null }) : null);
@@ -398,9 +408,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updateUserPassword = async (currentPass: string, newPass: string) => {
         if (!auth || !auth.currentUser || !auth.currentUser.email) throw new Error("Usuário não autenticado.");
         try {
-            const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPass);
-            await reauthenticateWithCredential(auth.currentUser, credential);
-            await updatePassword(auth.currentUser, newPass);
+            // FIX: Using namespace import for EmailAuthProvider and reauthenticateWithCredential
+            const credential = firebaseAuth.EmailAuthProvider.credential(auth.currentUser.email, currentPass);
+            await firebaseAuth.reauthenticateWithCredential(auth.currentUser, credential);
+            // FIX: Using namespace import for updatePassword
+            await firebaseAuth.updatePassword(auth.currentUser, newPass);
         } catch (error: any) {
             if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') throw new Error("A senha atual está incorreta.");
             throw new Error(error.message);
@@ -411,10 +423,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAuthError(null);
         setAuthErrorCode(null);
         if (!auth) return;
-        const provider = new GoogleAuthProvider();
+        // FIX: Using namespace import for GoogleAuthProvider
+        const provider = new firebaseAuth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            const result = await signInWithPopup(auth, provider);
+            // FIX: Using namespace import for signInWithPopup
+            const result = await firebaseAuth.signInWithPopup(auth, provider);
             let finalUsername = undefined;
             if (db && result.user.email) {
                 const publicUserRef = doc(db, 'users_public', result.user.email.toLowerCase());
@@ -437,7 +451,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const logout = async () => {
         if (!auth) return;
-        try { await signOut(auth); setUser(null); } catch (error) { setUser(null); }
+        try { 
+            // FIX: Using namespace import for signOut
+            await firebaseAuth.signOut(auth); 
+            setUser(null); 
+        } catch (error) { setUser(null); }
     };
 
     const clearAuthError = () => { setAuthError(null); setAuthErrorCode(null); }
