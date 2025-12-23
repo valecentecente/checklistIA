@@ -707,12 +707,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
 
-    // --- NOVA LÓGICA DE REUNIÃO: CRIAÇÃO DE LEADS AUTOMÁTICA ---
     const processSalesLeads = async (recipeName: string, suggestedLeads: string[]) => {
         if (!db || !suggestedLeads || suggestedLeads.length === 0) return;
         
         try {
-            // 1. Pegar estoque atual (para não criar lead do que já temos)
             const offersSnap = await getDocs(collection(db, 'offers'));
             const inventoryItems: string[] = [];
             offersSnap.forEach(oDoc => {
@@ -723,33 +721,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             });
 
-            // Limpeza de nome para ID seguro
             const cleanRecipePart = recipeName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
 
             for (const term of suggestedLeads) {
                 const termLower = term.toLowerCase().trim();
                 
-                // Fuzzy matching simples: se o termo está no estoque, pula
                 const alreadyHasInStock = inventoryItems.some(item => 
                     item.includes(termLower) || termLower.includes(item)
                 );
 
                 if (alreadyHasInStock) continue;
 
-                // Criação do ID de Lead ultra-limpo (ID-DATA-TERMO)
                 const cleanTermPart = termLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-                const leadId = `LEAD-${cleanRecipePart.slice(0,12)}-${cleanTermPart.slice(0,15)}`;
                 
-                const leadRef = doc(db, 'sales_opportunities', leadId);
-                await setDoc(leadRef, {
+                await addDoc(collection(db, 'sales_opportunities'), {
                     term: termLower,
                     recipeName: recipeName,
                     status: 'pending',
                     createdAt: serverTimestamp()
-                }, { merge: true });
+                });
+                
+                console.log(`[IA LEAD] Gravado: ${termLower}`);
             }
         } catch (e) {
-            console.warn("[IA Leads] Falha silenciosa ao processar oportunidades:", e);
+            console.warn("[IA Leads] Falha ao processar oportunidades:", e);
         }
     };
 
@@ -827,7 +822,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     createdAt: serverTimestamp()
                 }, { merge: true });
 
-                // GERAÇÃO DE LEADS EM TEMPO REAL: Se a receita gerada sugerir utensílios, verifica estoque agora!
                 if (fullData.suggestedLeads && fullData.suggestedLeads.length > 0) {
                     processSalesLeads(fullData.name, fullData.suggestedLeads);
                 }
