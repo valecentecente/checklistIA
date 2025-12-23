@@ -282,15 +282,57 @@ const ignorePermissionError = (err: any) => {
     return false;
 };
 
+/**
+ * LÓGICA DE BUSCA FLEXÍVEL (SENSÍVEL A PLURAL E VARIAÇÕES)
+ * Gera a "raiz" das palavras para permitir que 'pizzas' ache 'pizza' e vice-versa.
+ */
 export const generateKeywords = (text: string): string[] => {
     if (!text) return [] as string[];
-    const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero'];
-    return text
+    const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero', 'com', 'como', 'fazer'];
+    
+    // 1. Limpeza básica
+    const words = text
         .toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-        .replace(/[^a-z0-9\s]/g, '') 
+        .replace(/[^a-z0-9\s]/g, ' ') 
         .split(/\s+/) 
-        .filter(word => word.length > 2 && !stopWords.includes(word)); 
+        .filter(word => word.length > 2 && !stopWords.includes(word));
+
+    const result = new Set<string>();
+
+    words.forEach(word => {
+        // Adiciona a palavra original
+        result.add(word);
+
+        // --- Lógica de Flexão Portuguesa (Stemming Manual) ---
+        
+        // Regra do 'S' (Pizza/Pizzas, Bolo/Bolos)
+        if (word.endsWith('s')) {
+            result.add(word.slice(0, -1));
+        } else {
+            result.add(word + 's');
+        }
+
+        // Regra do 'ES' (Carne/Carnes, Hamburguer/Hamburgueres)
+        if (word.endsWith('es')) {
+            const stem = word.slice(0, -2);
+            if (stem.length > 2) result.add(stem);
+        }
+
+        // Regra do 'NS' / 'M' (Nuvem/Nuvens, Bombom/Bombons)
+        if (word.endsWith('ns')) {
+            result.add(word.slice(0, -2) + 'm');
+        } else if (word.endsWith('m')) {
+            result.add(word.slice(0, -1) + 'ns');
+        }
+
+        // Regra do 'IS' / 'L' (Anel/Aneis, Pastel/Pasteis)
+        if (word.endsWith('eis')) {
+            result.add(word.slice(0, -3) + 'el');
+        }
+    });
+
+    return Array.from(result); 
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -677,6 +719,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const keywords: string[] = generateKeywords(queryStr);
             if (keywords.length === 0) return [] as FullRecipe[];
+            // Busca expandida: Usa até 10 variações léxicas do termo buscado
             const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
             const snap = await getDocs(q);
             const rawResults: any[] = [];
@@ -707,47 +750,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
 
-    const processSalesLeads = async (recipeName: string, suggestedLeads: string[]) => {
-        if (!db || !suggestedLeads || suggestedLeads.length === 0) return;
-        
-        try {
-            const offersSnap = await getDocs(collection(db, 'offers'));
-            const inventoryItems: string[] = [];
-            offersSnap.forEach(oDoc => {
-                const o = oDoc.data();
-                if (o.name) inventoryItems.push(o.name.toLowerCase().trim());
-                if (o.tags && Array.isArray(o.tags)) {
-                    o.tags.forEach((t: string) => inventoryItems.push(t.toLowerCase().trim()));
-                }
-            });
-
-            const cleanRecipePart = recipeName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-
-            for (const term of suggestedLeads) {
-                const termLower = term.toLowerCase().trim();
-                
-                const alreadyHasInStock = inventoryItems.some(item => 
-                    item.includes(termLower) || termLower.includes(item)
-                );
-
-                if (alreadyHasInStock) continue;
-
-                const cleanTermPart = termLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-                
-                await addDoc(collection(db, 'sales_opportunities'), {
-                    term: termLower,
-                    recipeName: recipeName,
-                    status: 'pending',
-                    createdAt: serverTimestamp()
-                });
-                
-                console.log(`[IA LEAD] Gravado: ${termLower}`);
-            }
-        } catch (e) {
-            console.warn("[IA Leads] Falha ao processar oportunidades:", e);
-        }
-    };
-
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
         if (isOffline) { showToast("Geração de IA requer conexão com a internet."); return; }
         if (!apiKey) return;
@@ -760,8 +762,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             REGRAS OBRIGATÓRIAS:
             1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
             2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
-            3. IDENTIFIQUE todos os utensílios, acessórios e eletros necessários no campo 'suggestedLeads'. 
-               Ex: batedeira, airfryer, forma de pudim, fouet, espátula. Seja específico.
+            3. Identifique se o preparo exige equipamentos específicos (ex: batedeira, airfryer, forma, liquidificador, colher de pau, etc) para venda direcionada.
             4. Retorne APENAS o JSON puro seguindo este formato:
             {
                 "name": "${recipeName}",
@@ -774,7 +775,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 "cost": "Médio",
                 "isAlcoholic": false,
                 "tags": ["tag1", "tag2"],
-                "suggestedLeads": ["forma de pudim", "fouet"]
+                "suggestedLeads": ["batedeira", "forma de bolo"]
             }`;
 
             const parts: any[] = [];
@@ -794,7 +795,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const fullData: FullRecipe = { 
                 name: finalName,
-                ingredients: normalizeIngredients(details.ingredients),
+                ingredients: Array.isArray(details.ingredients) ? details.ingredients.map((i: any) => ({
+                    simplifiedName: String(i.simplifiedName || ''),
+                    detailedName: String(i.detailedName || '')
+                })) : [] as { simplifiedName: string; detailedName: string; }[],
                 instructions: Array.isArray(details.instructions) ? details.instructions.map(String) : [] as string[],
                 imageQuery: details.imageQuery || finalName,
                 servings: details.servings || '2 porções',
@@ -820,11 +824,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     ...fullData,
                     tags: [...(fullData.tags || []), 'gerada_pelo_usuario'],
                     createdAt: serverTimestamp()
-                }, { merge: true });
-
-                if (fullData.suggestedLeads && fullData.suggestedLeads.length > 0) {
-                    processSalesLeads(fullData.name, fullData.suggestedLeads);
-                }
+                }, { merge: true }).catch(() => console.warn("Acervo offline ao salvar texto."));
             }
 
             if (autoAdd) await addRecipeToShoppingList(fullData);

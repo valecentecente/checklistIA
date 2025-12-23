@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
-import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +21,9 @@ export const AdminContentFactoryModal: React.FC = () => {
     const { isContentFactoryModalOpen, closeModal, showToast, generateKeywords } = useApp();
     const { user } = useAuth();
     
+    const [activeSubTab, setActiveSubTab] = useState<'bulk' | 'manual'>('bulk');
+    const [manualRecipeName, setManualRecipeName] = useState('');
+
     const baseCategories = useMemo(() => [
         "Sazonal / Datas Comemorativas", 
         "Café da Manhã", 
@@ -70,9 +73,7 @@ export const AdminContentFactoryModal: React.FC = () => {
             const allRecipes: FullRecipe[] = [];
             querySnapshot.forEach(docSnap => {
                 const data = docSnap.data();
-                if (data) {
-                    allRecipes.push(data as FullRecipe);
-                }
+                if (data) allRecipes.push(data as FullRecipe);
             });
 
             const stats = baseCategories.map(cat => {
@@ -81,11 +82,9 @@ export const AdminContentFactoryModal: React.FC = () => {
                     const nameMatch = r.name && typeof r.name === 'string' 
                         ? r.name.toLowerCase().includes(searchLabel) 
                         : false;
-                    
                     const tagMatch = Array.isArray(r.tags) 
                         ? r.tags.some(t => typeof t === 'string' && t.toLowerCase().includes(searchLabel)) 
                         : false;
-                        
                     return nameMatch || tagMatch;
                 }).length;
                 return { name: cat, count };
@@ -176,41 +175,28 @@ export const AdminContentFactoryModal: React.FC = () => {
     const createLeads = async (recipeName: string, suggestedLeads: string[]) => {
         if (!db || !suggestedLeads || suggestedLeads.length === 0) return;
         
-        const offersSnap = await getDocs(collection(db, 'offers'));
-        const inventoryItems: string[] = [];
-        
-        offersSnap.forEach(oDoc => {
-            const o = oDoc.data();
-            if (o.name) inventoryItems.push(o.name.toLowerCase().trim());
-            if (o.tags && Array.isArray(o.tags)) {
-                o.tags.forEach((t: string) => inventoryItems.push(t.toLowerCase().trim()));
-            }
-        });
-
-        const cleanRecipePart = recipeName.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9]/g, '');
-
-        for (const term of suggestedLeads) {
-            try {
-                const termLower = term.toLowerCase().trim();
-                
-                const alreadyHasInStock = inventoryItems.some(item => 
-                    item.includes(termLower) || termLower.includes(item)
-                );
-
-                if (alreadyHasInStock) {
-                    addLog(`[ESTOQUE] Pulando: "${term}"`, 'info');
-                    continue;
+        try {
+            const offersSnap = await getDocs(collection(db, 'offers'));
+            const inventoryItems: string[] = [];
+            offersSnap.forEach(oDoc => {
+                const o = oDoc.data();
+                if (o.name) inventoryItems.push(o.name.toLowerCase().trim());
+                if (o.tags && Array.isArray(o.tags)) {
+                    o.tags.forEach((t: string) => inventoryItems.push(t.toLowerCase().trim()));
                 }
+            });
+
+            const cleanRecipePart = recipeName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+
+            for (const term of suggestedLeads) {
+                const termLower = term.toLowerCase().trim();
+                const alreadyHasInStock = inventoryItems.some(item => item.includes(termLower) || termLower.includes(item));
+                if (alreadyHasInStock) continue;
 
                 const cleanTermPart = termLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-                // ID ULTRA-SIMPLIFICADO E CURTO PARA EVITAR ERROS
                 const leadId = `LEAD-${cleanRecipePart.slice(0,12)}-${cleanTermPart.slice(0,15)}`;
                 
-                const leadRef = doc(db, 'sales_opportunities', leadId);
-                
-                await setDoc(leadRef, {
+                await setDoc(doc(db, 'sales_opportunities', leadId), {
                     term: termLower,
                     recipeName: recipeName,
                     status: 'pending',
@@ -218,9 +204,87 @@ export const AdminContentFactoryModal: React.FC = () => {
                 }, { merge: true });
                 
                 addLog(`[IA LEAD] Gravado: ${term}`, 'lead');
-            } catch (e) {
-                console.warn("Erro ao gravar lead:", e);
             }
+        } catch (e) {
+            console.warn("Erro ao gravar lead:", e);
+        }
+    };
+
+    const handleManualProduction = async () => {
+        if (!manualRecipeName.trim()) return;
+        if (!apiKey) { showToast("API Key ausente."); return; }
+        
+        setIsGenerating(true);
+        setLogs([]);
+        setProgress(0);
+        addLog(`--- INICIANDO PEDIDO ESPECIAL: ${manualRecipeName.toUpperCase()} ---`, 'separator');
+
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+            const docId = manualRecipeName.trim().toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+                .replace(/[\/\s]+/g, '-') 
+                .replace(/[^a-z0-9-]/g, '') 
+                .slice(0, 80);
+
+            // 1. Gerar Receita
+            addLog(`1/3 - Escrevendo receita gourmet...`, 'info');
+            const detailPrompt = `Gere a receita completa para '${manualRecipeName}' em JSON.
+            O campo 'ingredients' deve ser um array de objetos {simplifiedName, detailedName}.
+            Identifique TODOS os equipamentos e utensílios necessários no campo 'suggestedLeads'.
+            Adicione tags relevantes.
+            Formato: { 'name': '${manualRecipeName}', 'ingredients': [], 'instructions': [], 'prepTimeInMinutes': 30, 'difficulty': 'Médio', 'cost': 'Médio', 'tags': [], 'suggestedLeads': [] }`;
+
+            const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: detailPrompt,
+                config: { responseMimeType: "application/json" }
+            }));
+
+            const recipeData = JSON.parse(detailRes.text || "{}");
+            setProgress(40);
+
+            // 2. Gerar Imagem
+            addLog(`2/3 - Fotografando prato via IA...`, 'info');
+            const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: { parts: [{ text: "Foto profissional de alta gastronomia, luz suave, close-up de: " + manualRecipeName }] },
+                config: { responseModalities: [Modality.IMAGE] }
+            }));
+
+            let imageUrl = null;
+            if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+                imageUrl = await compressImage("data:image/jpeg;base64," + imageRes.candidates[0].content.parts[0].inlineData.data);
+            }
+            setProgress(80);
+
+            // 3. Salvar e Processar Leads
+            addLog(`3/3 - Salvando no Acervo Global...`, 'info');
+            if (db) {
+                const finalRecipe = {
+                    ...recipeData,
+                    ingredients: normalizeIngredients(recipeData.ingredients),
+                    imageUrl,
+                    imageSource: 'genai',
+                    keywords: generateKeywords(manualRecipeName),
+                    createdAt: serverTimestamp()
+                };
+
+                await setDoc(doc(db, 'global_recipes', docId), finalRecipe, { merge: true });
+                
+                if (recipeData.suggestedLeads && recipeData.suggestedLeads.length > 0) {
+                    await createLeads(manualRecipeName, recipeData.suggestedLeads);
+                }
+                
+                addLog(`SUCESSO TOTAL! "${manualRecipeName}" disponível no acervo.`, 'success');
+                setProgress(100);
+                setManualRecipeName('');
+                fetchCategoryStats();
+            }
+        } catch (err) {
+            addLog(`ERRO: Falha na produção unitária.`, 'error');
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -237,9 +301,7 @@ export const AdminContentFactoryModal: React.FC = () => {
             const allRecipes: any[] = [];
             querySnapshot.forEach(docSnap => {
                 const data = docSnap.data();
-                if (data.name) {
-                    allRecipes.push({ id: docSnap.id, ...data });
-                }
+                if (data.name) allRecipes.push({ id: docSnap.id, ...data });
             });
 
             if (allRecipes.length === 0) {
@@ -276,13 +338,11 @@ export const AdminContentFactoryModal: React.FC = () => {
                         await updateDoc(doc(db, 'global_recipes', recipe.id), { suggestedLeads: leads });
                         await createLeads(recipe.name, leads);
                         addLog(`> ${recipe.name}: ${leads.length} itens mapeados.`, 'success');
-                    } else {
-                        addLog(`> ${recipe.name}: Nenhum utensílio novo.`, 'info');
                     }
                     
                     processed++;
                     setProgress((processed / allRecipes.length) * 100);
-                    await new Promise(r => setTimeout(r, 2000));
+                    await new Promise(r => setTimeout(r, 1500));
                 } catch (err) {
                     addLog(`Erro ao analisar: ${recipe.name}`, 'error');
                 }
@@ -329,7 +389,6 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                     while (successCount < quantity && attemptCount < recipeNames.length) {
                         if (shouldStop) break;
-                        
                         const name = recipeNames[attemptCount];
                         attemptCount++;
                         
@@ -385,16 +444,13 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 };
 
                                 await setDoc(doc(db, 'global_recipes', docId), finalRecipe, { merge: true });
-                                
                                 if (recipeData.suggestedLeads && recipeData.suggestedLeads.length > 0) {
                                     await createLeads(name, recipeData.suggestedLeads);
                                 }
-                                
                                 successCount++; 
                                 addLog(`> SUCESSO: ${name}`, 'success');
                                 setProgress(((selectedCategories.indexOf(currentCat) * quantity + successCount) / (selectedCategories.length * quantity)) * 100);
                             }
-                            
                             await new Promise(r => setTimeout(r, 12000));
                         } catch (err) {
                             addLog(`> ERRO no item: ${name}`, 'error');
@@ -425,47 +481,96 @@ export const AdminContentFactoryModal: React.FC = () => {
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
-                <div className="p-4 bg-slate-800/50 flex flex-col gap-4 border-b border-slate-700 shrink-0">
-                    <div className="flex flex-col gap-2">
-                        <div className="flex justify-between items-end">
-                            <label className="text-xs text-gray-400 uppercase font-black">Categorias ({selectedCategories.length})</label>
-                            <div className="flex gap-2">
-                                <button onClick={handleRetroactiveScan} disabled={isGenerating || isScanning} className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-blue-500/30 flex items-center gap-1 transition-all">
-                                    <span className="material-symbols-outlined text-[12px]">search_check</span>
-                                    Scanner de Leads (Acervo)
-                                </button>
-                                <button onClick={selectCritical} disabled={isGenerating || isScanning || isStatsLoading} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Auto-Selecionar Críticos</button>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-900/50 p-3 rounded-xl border border-slate-700 max-h-40 overflow-y-auto">
-                            {categoryStats.map(stat => (
-                                <label key={stat.name} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedCategories.includes(stat.name) ? 'bg-green-50/10 border-green-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
-                                    <input type="checkbox" checked={selectedCategories.includes(stat.name)} onChange={() => toggleCategory(stat.name)} disabled={isGenerating || isScanning} className="rounded border-slate-600 text-green-500" />
-                                    <div className="flex justify-between items-center w-full">
-                                        <span className="text-xs font-bold text-gray-300">{stat.name}</span>
-                                        <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-400/10 px-1.5 rounded">
-                                            {stat.count === null ? '...' : stat.count}
-                                        </span>
-                                    </div>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1">
-                            <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Meta de Novos Pratos</span>
-                            <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} disabled={isGenerating || isScanning} min={1} max={50} className="w-full bg-slate-700 text-white rounded-lg h-10 px-3" />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Tema Sazonal Ativo</span>
-                            <input type="text" value={customSazonal} onChange={e => setCustomSazonal(e.target.value)} disabled={isGenerating || isScanning} placeholder="Ex: Natal" className="w-full bg-slate-700/50 text-white rounded-lg h-10 px-3" />
-                        </div>
-                    </div>
-                    <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} disabled={isScanning} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-red-600' : 'bg-green-600 hover:bg-green-500 disabled:opacity-50'}`}>
-                        <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'bolt'}</span>
-                        {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento'}
+
+                {/* --- SUB-TABS SELECTOR --- */}
+                <div className="flex bg-slate-800 shrink-0 border-b border-slate-700">
+                    <button 
+                        onClick={() => setActiveSubTab('bulk')}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'bulk' ? 'text-green-400 bg-white/5 border-b-2 border-green-400' : 'text-gray-500'}`}
+                    >
+                        Produção em Massa
+                    </button>
+                    <button 
+                        onClick={() => setActiveSubTab('manual')}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'manual' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-400' : 'text-gray-500'}`}
+                    >
+                        Produção Unitária (Especial)
                     </button>
                 </div>
+
+                <div className="p-4 bg-slate-800/50 flex flex-col gap-4 border-b border-slate-700 shrink-0">
+                    {activeSubTab === 'bulk' ? (
+                        /* UI PRODUÇÃO EM MASSA (Existente) */
+                        <div className="flex flex-col gap-4 animate-fadeIn">
+                            <div className="flex flex-col gap-2">
+                                <div className="flex justify-between items-end">
+                                    <label className="text-xs text-gray-400 uppercase font-black">Categorias ({selectedCategories.length})</label>
+                                    <div className="flex gap-2">
+                                        <button onClick={handleRetroactiveScan} disabled={isGenerating || isScanning} className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-blue-500/30 flex items-center gap-1 transition-all">
+                                            <span className="material-symbols-outlined text-[12px]">search_check</span>
+                                            Scanner de Leads (Acervo)
+                                        </button>
+                                        <button onClick={selectCritical} disabled={isGenerating || isScanning || isStatsLoading} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Auto-Selecionar Críticos</button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-900/50 p-3 rounded-xl border border-slate-700 max-h-40 overflow-y-auto">
+                                    {categoryStats.map(stat => (
+                                        <label key={stat.name} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedCategories.includes(stat.name) ? 'bg-green-50/10 border-green-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
+                                            <input type="checkbox" checked={selectedCategories.includes(stat.name)} onChange={() => toggleCategory(stat.name)} disabled={isGenerating || isScanning} className="rounded border-slate-600 text-green-500" />
+                                            <div className="flex justify-between items-center w-full">
+                                                <span className="text-xs font-bold text-gray-300">{stat.name}</span>
+                                                <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-400/10 px-1.5 rounded">{stat.count === null ? '...' : stat.count}</span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Meta de Novos Pratos</span>
+                                    <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} disabled={isGenerating || isScanning} min={1} max={50} className="w-full bg-slate-700 text-white rounded-lg h-10 px-3" />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Tema Sazonal Ativo</span>
+                                    <input type="text" value={customSazonal} onChange={e => setCustomSazonal(e.target.value)} disabled={isGenerating || isScanning} placeholder="Ex: Natal" className="w-full bg-slate-700/50 text-white rounded-lg h-10 px-3" />
+                                </div>
+                            </div>
+                            <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} disabled={isScanning} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-red-600' : 'bg-green-600 hover:bg-green-500 disabled:opacity-50'}`}>
+                                <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'bolt'}</span>
+                                {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento'}
+                            </button>
+                        </div>
+                    ) : (
+                        /* UI PRODUÇÃO UNITÁRIA (Nova) */
+                        <div className="flex flex-col gap-4 animate-fadeIn py-2">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs text-gray-400 uppercase font-black ml-1">Qual prato você deseja produzir?</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text"
+                                        value={manualRecipeName}
+                                        onChange={e => setManualRecipeName(e.target.value)}
+                                        disabled={isGenerating}
+                                        placeholder="Ex: Pudim de Café com Chantilly"
+                                        className="flex-1 bg-slate-700 text-white rounded-xl h-14 px-4 font-bold text-lg border-2 border-transparent focus:border-blue-500 outline-none"
+                                    />
+                                    <button 
+                                        onClick={handleManualProduction}
+                                        disabled={isGenerating || !manualRecipeName.trim()}
+                                        className="h-14 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2"
+                                    >
+                                        {isGenerating ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">auto_awesome</span>}
+                                        Produzir
+                                    </button>
+                                </div>
+                                <p className="text-[9px] text-gray-500 italic mt-1 ml-1">
+                                    O sistema irá gerar a receita, foto profissional e leads de venda para este item específico.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <div className="h-1.5 bg-slate-700 w-full shrink-0">
                     <div className={`h-full transition-all duration-300 ${isScanning ? 'bg-blue-500' : 'bg-green-500'}`} style={{ width: progress + "%" }}></div>
                 </div>
