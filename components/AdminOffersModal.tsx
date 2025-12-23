@@ -34,47 +34,46 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     useEffect(() => {
         if (!isOpen || !db || !auth?.currentUser) return;
 
-        // 1. LISTENER DE OFERTAS (Com tratamento de erro)
+        // 1. LISTENER DE OFERTAS
         const qOffers = query(collection(db, 'offers'), limit(100));
         const unsubscribeOffers = onSnapshot(qOffers, 
             (snapshot) => {
                 setOffers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Offer)));
             },
             (error) => {
-                console.warn("[Admin Offers] Permissão negada ou erro de rede:", error.message);
+                console.warn("[Admin Offers] Erro:", error.message);
             }
         );
 
-        // 2. LISTENER DE LEADS (Com tratamento de erro - CRÍTICO PARA O ERRO RELATADO)
+        // 2. LISTENER DE LEADS
         const qLeads = query(collection(db, 'sales_opportunities'), limit(100));
         const unsubscribeLeads = onSnapshot(qLeads, 
             (snapshot) => {
                 const allLeads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SalesOpportunity));
-                console.log("[DEBUG LEADS] Dados brutos do banco:", allLeads);
                 setLeads(allLeads.filter(l => l.status === 'pending' || !l.status));
             },
             (error) => {
-                // Silencia o erro no console e apenas avisa internamente
-                console.warn("[Admin Leads] O usuário ainda não tem permissão de leitura em sales_opportunities.");
+                console.warn("[Admin Leads] Erro:", error.message);
             }
         );
 
         return () => { unsubscribeOffers(); unsubscribeLeads(); };
     }, [isOpen]);
 
-    // FUNÇÃO DE DIAGNÓSTICO (Para você testar se o banco responde)
     const handleGenerateManualTest = async () => {
         if (!db) return;
         try {
-            await addDoc(collection(db, 'sales_opportunities'), {
-                term: "Teste de Conexão " + Math.floor(Math.random() * 100),
-                recipeName: "Sistema de Diagnóstico",
+            const testRef = await addDoc(collection(db, 'sales_opportunities'), {
+                term: "TESTE " + Math.floor(Math.random() * 1000),
+                recipeName: "Diagnóstico Manual",
                 status: 'pending',
-                createdAt: serverTimestamp()
+                createdAt: new Date().toISOString() // Usando string para evitar delay de timestamp
             });
-            showToast("Lead de teste enviado!");
-        } catch (e) {
-            showToast("Erro ao gravar no banco!");
+            showToast("Lead criado com ID: " + testRef.id.slice(0,5));
+            if (navigator.vibrate) navigator.vibrate(50);
+        } catch (e: any) {
+            showToast("Erro Firebase: " + (e.code || "Permissão negada"));
+            console.error("Falha no teste:", e);
         }
     };
 
@@ -91,6 +90,16 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         setDiscount(offer.discount || '');
         setTags(offer.tags ? offer.tags.join(', ') : '');
         setActiveTab('add');
+    };
+
+    const handleDeleteOffer = async (id: string, name: string) => {
+        if (!window.confirm(`Apagar "${name}" permanentemente?`)) return;
+        try {
+            await deleteDoc(doc(db!, 'offers', id));
+            showToast("Oferta removida!");
+        } catch (e) {
+            showToast("Erro ao deletar.");
+        }
     };
 
     const handleConvertLead = (lead: SalesOpportunity) => {
@@ -161,9 +170,9 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                 </div>
 
                 <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 shrink-0">
-                    <button onClick={() => setActiveTab('list')} className={`flex-1 py-3 text-[10px] font-black uppercase ${activeTab === 'list' ? 'text-primary border-b-2 border-primary' : 'text-gray-50'}`}>Listagem</button>
-                    <button onClick={() => setActiveTab('leads')} className={`flex-1 py-3 text-[10px] font-black uppercase ${activeTab === 'leads' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-50'}`}>IA Leads ({leads.length})</button>
-                    <button onClick={() => setActiveTab('add')} className={`flex-1 py-3 text-[10px] font-black uppercase ${activeTab === 'add' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-50'}`}>{editingId ? 'Editar' : 'Novo'}</button>
+                    <button onClick={() => setActiveTab('list')} className={`flex-1 py-3 text-[10px] font-black uppercase ${activeTab === 'list' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}>Listagem</button>
+                    <button onClick={() => setActiveTab('leads')} className={`flex-1 py-3 text-[10px] font-black uppercase ${activeTab === 'leads' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>IA Leads ({leads.length})</button>
+                    <button onClick={() => setActiveTab('add')} className={`flex-1 py-3 text-[10px] font-black uppercase ${activeTab === 'add' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>{editingId ? 'Editar' : 'Novo'}</button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide bg-gray-50 dark:bg-black/10">
@@ -171,9 +180,9 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                         <div className="flex flex-col gap-3">
                             <button 
                                 onClick={handleGenerateManualTest}
-                                className="w-full py-2 bg-gray-100 dark:bg-white/5 text-[10px] font-bold text-gray-500 rounded-lg border border-dashed border-gray-300"
+                                className="w-full py-3 bg-blue-600/10 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase rounded-xl border border-dashed border-blue-400 animate-pulse"
                             >
-                                [DEBUG] GERAR LEAD DE TESTE MANUAL
+                                [DEBUG] GERAR LEAD DE TESTE AGORA
                             </button>
                             
                             {leads.length === 0 ? (
@@ -182,13 +191,13 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                                 </div>
                             ) : (
                                 leads.map(lead => (
-                                    <div key={lead.id} className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30 flex justify-between items-center group">
+                                    <div key={lead.id} className="p-4 bg-white dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30 flex justify-between items-center group">
                                         <div className="flex-1 min-w-0 pr-4">
                                             <h3 className="font-bold text-blue-900 dark:text-blue-300 capitalize truncate">{lead.term}</h3>
                                             <p className="text-[10px] text-blue-700/60 dark:text-blue-400/60 font-medium truncate">Falta para: {lead.recipeName}</p>
                                         </div>
                                         <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => handleDismissLead(lead.id)} className="h-8 w-8 bg-gray-200 dark:bg-white/10 text-gray-500 rounded-lg flex items-center justify-center hover:bg-gray-300 transition-colors"><span className="material-symbols-outlined text-sm">close</span></button>
+                                            <button onClick={() => handleDismissLead(lead.id)} className="h-8 w-8 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors"><span className="material-symbols-outlined text-sm">close</span></button>
                                             <button onClick={() => handleConvertLead(lead)} className="h-8 px-3 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase hover:bg-blue-700 transition-all">Cadastrar</button>
                                         </div>
                                     </div>
@@ -212,13 +221,16 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                     ) : (
                         <div className="flex flex-col gap-3">
                             {offers.map(offer => (
-                                <div key={offer.id} className="flex gap-3 items-center p-3 bg-white dark:bg-white/5 rounded-xl border border-gray-100 dark:border-gray-800">
-                                    <img src={offer.image} className="w-12 h-12 object-contain bg-white rounded-lg border" />
+                                <div key={offer.id} className="flex gap-3 items-center p-3 bg-white dark:bg-white/5 rounded-xl border border-gray-100 dark:border-gray-800 group">
+                                    <img src={offer.image} className="w-12 h-12 object-contain bg-white rounded-lg border shrink-0" />
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-sm truncate dark:text-white">{offer.name}</p>
                                         <p className="text-xs text-gray-500">{offer.price} • {offer.store}</p>
                                     </div>
-                                    <button onClick={() => handleEdit(offer)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"><span className="material-symbols-outlined">edit</span></button>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => handleEdit(offer)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors" title="Editar"><span className="material-symbols-outlined text-xl">edit</span></button>
+                                        <button onClick={() => handleDeleteOffer(offer.id, offer.name)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors" title="Deletar"><span className="material-symbols-outlined text-xl">delete</span></button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
