@@ -242,6 +242,13 @@ export const AdminContentFactoryModal: React.FC = () => {
             }));
 
             const recipeData = JSON.parse(detailRes.text || "{}");
+            
+            // VALIDAÇÃO CRÍTICA
+            if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
+                addLog(`ERRO: IA retornou receita vazia. Abortando.`, 'error');
+                return;
+            }
+
             setProgress(40);
 
             // 2. Gerar Imagem
@@ -422,6 +429,12 @@ export const AdminContentFactoryModal: React.FC = () => {
 
                             const recipeData = JSON.parse(detailRes.text || "{}");
                             
+                            // VALIDAÇÃO RIGOROSA
+                            if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
+                                addLog(`> DESCARTADO: "${name}" retornou dados vazios.`, 'error');
+                                continue;
+                            }
+
                             const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-2.5-flash-image',
                                 contents: { parts: [{ text: "Foto gourmet realística de " + name }] },
@@ -482,25 +495,13 @@ export const AdminContentFactoryModal: React.FC = () => {
                     </button>
                 </div>
 
-                {/* --- SUB-TABS SELECTOR --- */}
                 <div className="flex bg-slate-800 shrink-0 border-b border-slate-700">
-                    <button 
-                        onClick={() => setActiveSubTab('bulk')}
-                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'bulk' ? 'text-green-400 bg-white/5 border-b-2 border-green-400' : 'text-gray-500'}`}
-                    >
-                        Produção em Massa
-                    </button>
-                    <button 
-                        onClick={() => setActiveSubTab('manual')}
-                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'manual' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-400' : 'text-gray-500'}`}
-                    >
-                        Produção Unitária (Especial)
-                    </button>
+                    <button onClick={() => setActiveSubTab('bulk')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'bulk' ? 'text-green-400 bg-white/5 border-b-2 border-green-400' : 'text-gray-500'}`}>Produção em Massa</button>
+                    <button onClick={() => setActiveSubTab('manual')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'manual' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-400' : 'text-gray-500'}`}>Produção Unitária (Especial)</button>
                 </div>
 
                 <div className="p-4 bg-slate-800/50 flex flex-col gap-4 border-b border-slate-700 shrink-0">
                     {activeSubTab === 'bulk' ? (
-                        /* UI PRODUÇÃO EM MASSA (Existente) */
                         <div className="flex flex-col gap-4 animate-fadeIn">
                             <div className="flex flex-col gap-2">
                                 <div className="flex justify-between items-end">
@@ -541,31 +542,16 @@ export const AdminContentFactoryModal: React.FC = () => {
                             </button>
                         </div>
                     ) : (
-                        /* UI PRODUÇÃO UNITÁRIA (Nova) */
                         <div className="flex flex-col gap-4 animate-fadeIn py-2">
                             <div className="flex flex-col gap-2">
                                 <label className="text-xs text-gray-400 uppercase font-black ml-1">Qual prato você deseja produzir?</label>
                                 <div className="flex gap-2">
-                                    <input 
-                                        type="text"
-                                        value={manualRecipeName}
-                                        onChange={e => setManualRecipeName(e.target.value)}
-                                        disabled={isGenerating}
-                                        placeholder="Ex: Pudim de Café com Chantilly"
-                                        className="flex-1 bg-slate-700 text-white rounded-xl h-14 px-4 font-bold text-lg border-2 border-transparent focus:border-blue-500 outline-none"
-                                    />
-                                    <button 
-                                        onClick={handleManualProduction}
-                                        disabled={isGenerating || !manualRecipeName.trim()}
-                                        className="h-14 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2"
-                                    >
+                                    <input type="text" value={manualRecipeName} onChange={e => setManualRecipeName(e.target.value)} disabled={isGenerating} placeholder="Ex: Pudim de Café com Chantilly" className="flex-1 bg-slate-700 text-white rounded-xl h-14 px-4 font-bold text-lg border-2 border-transparent focus:border-blue-500 outline-none" />
+                                    <button onClick={handleManualProduction} disabled={isGenerating || !manualRecipeName.trim()} className="h-14 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2">
                                         {isGenerating ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">auto_awesome</span>}
                                         Produzir
                                     </button>
                                 </div>
-                                <p className="text-[9px] text-gray-500 italic mt-1 ml-1">
-                                    O sistema irá gerar a receita, foto profissional e leads de venda para este item específico.
-                                </p>
                             </div>
                         </div>
                     )}

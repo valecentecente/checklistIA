@@ -284,13 +284,11 @@ const ignorePermissionError = (err: any) => {
 
 /**
  * LÓGICA DE BUSCA FLEXÍVEL (SENSÍVEL A PLURAL E VARIAÇÕES)
- * Gera a "raiz" das palavras para permitir que 'pizzas' ache 'pizza' e vice-versa.
  */
 export const generateKeywords = (text: string): string[] => {
     if (!text) return [] as string[];
     const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero', 'com', 'como', 'fazer'];
     
-    // 1. Limpeza básica
     const words = text
         .toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
@@ -301,32 +299,21 @@ export const generateKeywords = (text: string): string[] => {
     const result = new Set<string>();
 
     words.forEach(word => {
-        // Adiciona a palavra original
         result.add(word);
-
-        // --- Lógica de Flexão Portuguesa (Stemming Manual) ---
-        
-        // Regra do 'S' (Pizza/Pizzas, Bolo/Bolos)
         if (word.endsWith('s')) {
             result.add(word.slice(0, -1));
         } else {
             result.add(word + 's');
         }
-
-        // Regra do 'ES' (Carne/Carnes, Hamburguer/Hamburgueres)
         if (word.endsWith('es')) {
             const stem = word.slice(0, -2);
             if (stem.length > 2) result.add(stem);
         }
-
-        // Regra do 'NS' / 'M' (Nuvem/Nuvens, Bombom/Bombons)
         if (word.endsWith('ns')) {
             result.add(word.slice(0, -2) + 'm');
         } else if (word.endsWith('m')) {
             result.add(word.slice(0, -1) + 'ns');
         }
-
-        // Regra do 'IS' / 'L' (Anel/Aneis, Pastel/Pasteis)
         if (word.endsWith('eis')) {
             result.add(word.slice(0, -3) + 'el');
         }
@@ -689,63 +676,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return globalRecipeCache[Math.floor(Math.random() * globalRecipeCache.length)];
     }, [globalRecipeCache]);
 
-    const showRecipe = (input: string | FullRecipe) => { 
-        let r = typeof input === 'string' ? getCachedRecipe(input) : input;
-        if (r && Array.isArray(r.ingredients) && r.ingredients.length > 0) {
-            if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
-            setSelectedRecipe(r);
-        } else { showToast("Receita em manutenção."); }
-    };
-
-    const closeRecipe = () => setSelectedRecipe(null);
-    const resetRecipeState = () => { setIsRecipeLoading(false); setRecipeError(null); };
-    
-    const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
-        setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
-        setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
-        
-        if (db) {
-            const docId = getRecipeDocId(recipeName);
-            updateDoc(doc(db, 'global_recipes', docId), {
-                imageUrl,
-                imageSource: source,
-                updatedAt: serverTimestamp()
-            }).catch(() => console.warn("Erro ao atualizar imagem no acervo."));
-        }
-    };
-
-    const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
-        if (!db || !queryStr || queryStr.length < 2) return [] as FullRecipe[];
-        try {
-            const keywords: string[] = generateKeywords(queryStr);
-            if (keywords.length === 0) return [] as FullRecipe[];
-            // Busca expandida: Usa até 10 variações léxicas do termo buscado
-            const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
-            const snap = await getDocs(q);
-            const rawResults: any[] = [];
-            snap.forEach(docSnap => {
-                const data = docSnap.data();
-                if (data && data.name) {
-                    rawResults.push(data);
-                }
-            });
-            return mapToFullRecipeArray(rawResults);
-        } catch (error) { 
-            return [] as FullRecipe[]; 
-        }
-    }, []);
-
-    const handleRecipeSearch = async (term: string) => {
-        setIsSearchingAcervo(true); 
-        try {
-            const results: FullRecipe[] = await searchGlobalRecipes(term);
-            setRecipeSearchResults(results);
-            setCurrentSearchTerm(term);
-            closeModal('recipeAssistant'); 
-            openModal('recipeSelection'); 
-        } finally { setIsSearchingAcervo(false); }
-    };
-
     const sanitizeJsonString = (str: string) => {
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
@@ -834,6 +764,74 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setIsRecipeLoading(false); 
         }
     }, [apiKey, isOffline]); 
+
+    const showRecipe = (input: string | FullRecipe) => { 
+        let r = typeof input === 'string' ? getCachedRecipe(input) : input;
+        
+        if (r) {
+            // LÓGICA DE AUTOCURA: Se a receita está incompleta, dispara a geração via IA
+            const isBroken = !r.ingredients || r.ingredients.length === 0 || !r.instructions || r.instructions.length === 0;
+            
+            if (isBroken) {
+                showToast("Receita incompleta no acervo. O Chef está preparando ela agora...");
+                fetchRecipeDetails(r.name, undefined, false);
+                return;
+            }
+
+            if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
+            setSelectedRecipe(r);
+        } else { 
+            showToast("Receita não encontrada."); 
+        }
+    };
+
+    const closeRecipe = () => setSelectedRecipe(null);
+    const resetRecipeState = () => { setIsRecipeLoading(false); setRecipeError(null); };
+    
+    const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
+        setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
+        setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
+        
+        if (db) {
+            const docId = getRecipeDocId(recipeName);
+            updateDoc(doc(db, 'global_recipes', docId), {
+                imageUrl,
+                imageSource: source,
+                updatedAt: serverTimestamp()
+            }).catch(() => console.warn("Erro ao atualizar imagem no acervo."));
+        }
+    };
+
+    const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
+        if (!db || !queryStr || queryStr.length < 2) return [] as FullRecipe[];
+        try {
+            const keywords: string[] = generateKeywords(queryStr);
+            if (keywords.length === 0) return [] as FullRecipe[];
+            const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
+            const snap = await getDocs(q);
+            const rawResults: any[] = [];
+            snap.forEach(docSnap => {
+                const data = docSnap.data();
+                if (data && data.name) {
+                    rawResults.push(data);
+                }
+            });
+            return mapToFullRecipeArray(rawResults);
+        } catch (error) { 
+            return [] as FullRecipe[]; 
+        }
+    }, []);
+
+    const handleRecipeSearch = async (term: string) => {
+        setIsSearchingAcervo(true); 
+        try {
+            const results: FullRecipe[] = await searchGlobalRecipes(term);
+            setRecipeSearchResults(results);
+            setCurrentSearchTerm(term);
+            closeModal('recipeAssistant'); 
+            openModal('recipeSelection'); 
+        } finally { setIsSearchingAcervo(false); }
+    };
 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
