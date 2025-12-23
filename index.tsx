@@ -59,7 +59,7 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
     }, [isDragging, handleInteractionMove, handleInteractionEnd]);
 
     return (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 animate-fadeIn" ref={containerRef}>
+        <div className="absolute bottom-[calc(24px+env(safe-area-inset-bottom))] lg:bottom-24 left-1/2 -translate-x-1/2 z-30 animate-fadeIn" ref={containerRef}>
             <div className="relative h-16 w-64 rounded-full bg-surface-light dark:bg-surface-dark border border-primary/20 dark:border-primary/50 shadow-lg flex items-center p-2 overflow-hidden">
                 <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-12 w-24 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none" style={{ transform: `translateX(${sliderX}px)` }}>
                     <span className="font-bold">{total}</span>
@@ -73,7 +73,7 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
 };
 
 const AppContent: React.FC = () => {
-    const { user, login, authError } = useAuth();
+    const { user } = useAuth();
     const { items, formatCurrency, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, addItem, findDuplicate, importSharedList, addIngredientsBatch, saveReceivedListToHistory } = useShoppingList();
     const app = useApp();
   
@@ -553,7 +553,7 @@ const AppContent: React.FC = () => {
 
                 {!showHomeView && <SlideToFinish total={formattedTotal} onFinish={() => app.openModal('savePurchase')} />}
 
-                <footer className="fixed lg:hidden bottom-0 w-full z-[100] bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-t border-white/20 dark:border-white/10 shadow-lg transition-all duration-300">
+                <footer className="fixed lg:hidden bottom-0 w-full z-[100] bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl border-t border-white/20 dark:border-white/10 shadow-lg transition-all duration-300 pb-safe-bottom">
                     <div className="flex items-end justify-between px-2 h-16 w-full max-w-full">
                         <div className="flex-1 h-full"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full"><NavButton icon="favorite" label="Favoritos" onClick={() => app.openModal('favorites')} /></div>

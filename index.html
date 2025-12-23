@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
     <!-- Identidade Principal -->
     <title>ChecklistIA | Compras Simples e Inteligentes</title>
@@ -41,7 +40,7 @@
       }
     }
     </script>
-    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='white'/%3E%3Cpolyline points='17 8 10 16 6 12' fill='none' stroke='%232563EB' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="icon" type="image/x-icon" href="data:image/x-icon href='data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='white'/%3E%3Cpolyline points='17 8 10 16 6 12' fill='none' stroke='%232563EB' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
     <link rel="manifest" href="/manifest.json" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -117,6 +116,7 @@
         font-family: 'Work Sans', 'sans-serif';
         min-height: 100vh;
         min-height: 100dvh;
+        padding-bottom: env(safe-area-inset-bottom);
         
         /* Cor de fundo dinâmica baseada no tema */
         background-color: var(--color-bg);
@@ -199,6 +199,12 @@
         darkMode: 'class',
         theme: {
           extend: {
+            spacing: {
+              'safe-top': 'env(safe-area-inset-top)',
+              'safe-bottom': 'env(safe-area-inset-bottom)',
+              'safe-left': 'env(safe-area-inset-left)',
+              'safe-right': 'env(safe-area-inset-right)',
+            },
             colors: {
               primary: 'var(--color-primary)',
               'primary-hover': 'var(--color-primary-hover)',

@@ -14,10 +14,10 @@ interface RecipeModalProps {
 const CHEF_PLACEHOLDERS = [
     "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1583394293214-28ded15ee548?auto=format&fit=crop&w=800&q=80",
-    "https://images.Counter.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1654922207993-2952fec3276f?auto=format&fit=crop&w=800&q=80",
-    "https://images.Counter.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1512485800893-b08ec1ea59b1?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1556910103-1c02745a30bf?auto=format&fit=crop&w=800&q=80",
@@ -97,27 +97,50 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
       await fetchRecipeDetails(recipe.name, undefined, false);
   };
 
+  /**
+   * NOVA LÓGICA DE MATCH POR INVENTÁRIO (Súrgica)
+   * Agora buscamos ofertas que casam especificamente com o campo 'suggestedLeads' (ferramentas)
+   * Se o sugerido for "Batedeira" e você tiver uma oferta com tag "batedeira", o match é feito.
+   */
   const relatedOffers = useMemo(() => {
       if (!offers || offers.length === 0) return [];
+
+      const leads = (recipe.suggestedLeads || [])
+        .map(l => l.toLowerCase().trim())
+        .filter(l => l !== 'nenhum');
+
       const fullText = (recipe.name + ' ' + safeIngredients.map(i => i.simplifiedName).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
+
       return offers.filter(offer => {
+          const offerName = offer.name.toLowerCase();
+          const offerTags = (offer.tags || []).map(t => t.toLowerCase().trim());
+
+          // 1. Prioridade: Match por Lead Direto (Utensílio requisitado)
+          const matchesLead = leads.some(lead => {
+              // Verifica se o lead está nas tags da oferta ou no nome dela
+              return offerTags.includes(lead) || offerName.includes(lead);
+          });
+          if (matchesLead) return true;
+
+          // 2. Fallback: Match por Contexto de Ingredientes/Texto (Legado Refinado)
           const firstKeyword = offer.name.trim().split(' ')[0].toLowerCase();
-          let matches = false;
-          if (firstKeyword.length >= 4 && fullText.includes(firstKeyword)) matches = true;
-          if (!matches && offer.tags && offer.tags.length > 0) {
+          if (firstKeyword.length >= 4 && fullText.includes(firstKeyword)) return true;
+          
+          if (offer.tags && offer.tags.length > 0) {
               const tagMatch = offer.tags.some(tag => {
                   const cleanTag = tag.trim().toLowerCase();
                   return cleanTag.length > 2 && fullText.includes(cleanTag);
               });
-              if (tagMatch) matches = true;
+              if (tagMatch) return true;
           }
-          return matches;
+
+          return false;
       });
   }, [offers, recipe, safeIngredients, safeInstructions]);
 
   return (
-    <div className="fixed inset-0 flex h-full w-full flex-col justify-end items-stretch bg-black/60 z-[130] animate-fadeIn backdrop-blur-sm" onClick={onClose}>
-        <div className="flex flex-col items-stretch bg-[#F7F7F7] dark:bg-[#1a1a1a] rounded-t-2xl max-h-[95vh] animate-slideUp overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 flex h-[100dvh] w-full flex-col justify-end items-stretch bg-black/60 z-[130] animate-fadeIn backdrop-blur-sm" onClick={onClose}>
+        <div className="flex flex-col items-stretch bg-[#F7F7F7] dark:bg-[#1a1a1a] rounded-t-2xl max-h-[95dvh] animate-slideUp overflow-hidden relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex-shrink-0 absolute top-0 left-0 right-0 z-20 flex justify-center pt-3 pb-1 pointer-events-none">
                 <div className="h-1.5 w-12 rounded-full bg-white/50 backdrop-blur-md shadow-sm"></div>
             </div>
@@ -126,7 +149,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 <span className="material-symbols-outlined text-lg">close</span>
             </button>
 
-            <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide relative">
+            <div className="flex-1 overflow-y-auto pb-[calc(100px+env(safe-area-inset-bottom))] scrollbar-hide relative">
                 
                 <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] flex-shrink-0 overflow-hidden bg-gray-200 dark:bg-gray-800">
                     <div 
@@ -262,7 +285,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     <div className="pl-5 mt-6 animate-fadeIn">
                         <h3 className="text-gray-800 dark:text-gray-100 text-base font-bold leading-tight pb-2 font-display flex items-center gap-2">
                             <span className="material-symbols-outlined text-yellow-500">lightbulb</span>
-                            Utensílios Recomendados
+                            Achadinhos Recomendados
                         </h3>
                         <div className="flex overflow-x-auto gap-3 pb-4 pt-1 pr-5 scrollbar-hide snap-x">
                             {relatedOffers.map((offer) => (
@@ -343,7 +366,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 )}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 z-50">
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 z-50 pb-[calc(1rem+env(safe-area-inset-bottom))]">
                 <button 
                     onClick={handleAddRequest}
                     disabled={isAdding || isBroken || isRecipeLoading} 

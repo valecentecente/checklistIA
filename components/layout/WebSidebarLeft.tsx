@@ -50,6 +50,28 @@ export const WebSidebarLeft: React.FC = () => {
         }
     };
 
+    const handleShareApp = async () => {
+        const shareData = {
+            title: 'ChecklistIA',
+            text: 'Simplifique suas compras com o ChecklistIA!',
+            url: 'https://checklistia.com.br'
+        };
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                if ((err as any).name !== 'AbortError') app.showToast("Erro ao compartilhar.");
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareData.url);
+                app.showToast("Link do ChecklistIA copiado!");
+            } catch (e) {
+                app.showToast("Erro ao copiar link.");
+            }
+        }
+    };
+
     const menuItems = [
         { icon: 'home', label: 'Início', onClick: () => app.setHomeViewActive(true), active: app.isHomeViewActive },
         { icon: 'shopping_cart', label: 'Minha Lista', onClick: () => app.setHomeViewActive(false), active: !app.isHomeViewActive },
@@ -287,8 +309,8 @@ export const WebSidebarLeft: React.FC = () => {
                     </div>
                 )}
                 
-                {/* Social Icons */}
-                <div className="flex justify-center gap-3 px-2 mt-4">
+                {/* Social Icons & Share */}
+                <div className="flex justify-center gap-3 px-2 mt-4 items-center">
                     <a href="https://www.instagram.com/checklistiaof/" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-pink-500 transition-colors" title="Instagram">
                         <InstagramIcon className="w-5 h-5" />
                     </a>
@@ -304,6 +326,16 @@ export const WebSidebarLeft: React.FC = () => {
                     <a href="https://x.com/checklistia" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors" title="X (Twitter)">
                         <XIcon className="w-4 h-4" />
                     </a>
+                    
+                    <div className="w-px h-4 bg-white/10 mx-1"></div>
+                    
+                    <button 
+                        onClick={handleShareApp}
+                        className="text-gray-500 hover:text-blue-500 transition-colors flex items-center justify-center"
+                        title="Compartilhar ChecklistIA"
+                    >
+                        <span className="material-symbols-outlined !text-[20px]">share</span>
+                    </button>
                 </div>
 
                 <div className="mt-4 flex justify-between px-2 text-[10px] text-gray-600">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs, updateDoc } from 'firebase/firestore';
@@ -156,26 +157,69 @@ export const AdminContentFactoryModal: React.FC = () => {
         });
     };
 
+    const normalizeIngredients = (raw: any[]) => {
+        if (!Array.isArray(raw)) return [];
+        return raw.map(ing => {
+            if (typeof ing === 'string') {
+                return { simplifiedName: ing.split(',')[0].split('(')[0].trim(), detailedName: ing };
+            }
+            if (typeof ing === 'object' && ing !== null) {
+                return {
+                    simplifiedName: String(ing.simplifiedName || ing.name || 'Ingrediente'),
+                    detailedName: String(ing.detailedName || ing.description || ing.simplifiedName || 'Item detalhado')
+                };
+            }
+            return { simplifiedName: 'Ingrediente', detailedName: 'Item processado' };
+        });
+    };
+
     const createLeads = async (recipeName: string, suggestedLeads: string[]) => {
         if (!db || !suggestedLeads || suggestedLeads.length === 0) return;
         
+        const offersSnap = await getDocs(collection(db, 'offers'));
+        const inventoryItems: string[] = [];
+        
+        offersSnap.forEach(oDoc => {
+            const o = oDoc.data();
+            if (o.name) inventoryItems.push(o.name.toLowerCase().trim());
+            if (o.tags && Array.isArray(o.tags)) {
+                o.tags.forEach((t: string) => inventoryItems.push(t.toLowerCase().trim()));
+            }
+        });
+
+        const cleanRecipePart = recipeName.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]/g, '');
+
         for (const term of suggestedLeads) {
             try {
-                const leadId = `${recipeName.toLowerCase().replace(/\s+/g, '-')}-${term.toLowerCase().replace(/\s+/g, '-')}`.slice(0, 100);
-                const leadRef = doc(db, 'sales_opportunities', leadId);
-                const leadSnap = await getDoc(leadRef);
+                const termLower = term.toLowerCase().trim();
                 
-                if (!leadSnap.exists()) {
-                    await setDoc(leadRef, {
-                        term: term.toLowerCase(),
-                        recipeName: recipeName,
-                        status: 'pending',
-                        createdAt: serverTimestamp()
-                    });
-                    addLog(`[LEAD] Oportunidade: ${term}`, 'lead');
+                const alreadyHasInStock = inventoryItems.some(item => 
+                    item.includes(termLower) || termLower.includes(item)
+                );
+
+                if (alreadyHasInStock) {
+                    addLog(`[ESTOQUE] Pulando: "${term}"`, 'info');
+                    continue;
                 }
+
+                const cleanTermPart = termLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+                // ID ULTRA-SIMPLIFICADO E CURTO PARA EVITAR ERROS
+                const leadId = `LEAD-${cleanRecipePart.slice(0,12)}-${cleanTermPart.slice(0,15)}`;
+                
+                const leadRef = doc(db, 'sales_opportunities', leadId);
+                
+                await setDoc(leadRef, {
+                    term: termLower,
+                    recipeName: recipeName,
+                    status: 'pending',
+                    createdAt: serverTimestamp()
+                }, { merge: true });
+                
+                addLog(`[IA LEAD] Gravado: ${term}`, 'lead');
             } catch (e) {
-                console.warn("Erro ao criar lead:", e);
+                console.warn("Erro ao gravar lead:", e);
             }
         }
     };
@@ -186,36 +230,37 @@ export const AdminContentFactoryModal: React.FC = () => {
         setShouldStop(false);
         setLogs([]);
         setProgress(0);
-        addLog("--- INICIANDO VARREDURA DE LEADS (RETROATIVO) ---", 'separator');
+        addLog("--- INICIANDO SCANNER DE OPORTUNIDADES ---", 'separator');
 
         try {
             const querySnapshot = await getDocs(collection(db, 'global_recipes'));
             const allRecipes: any[] = [];
             querySnapshot.forEach(docSnap => {
                 const data = docSnap.data();
-                const hasLeads = data.suggestedLeads && data.suggestedLeads.length > 0 && data.suggestedLeads[0] !== 'nenhum';
-                if (data.name && !hasLeads) {
+                if (data.name) {
                     allRecipes.push({ id: docSnap.id, ...data });
                 }
             });
 
             if (allRecipes.length === 0) {
-                addLog("Nenhuma receita pendente de análise encontrada.", 'success');
+                addLog("Nenhuma receita encontrada.", 'warning');
                 setIsScanning(false);
                 return;
             }
 
-            addLog(`Encontradas ${allRecipes.length} receitas para analisar.`, 'info');
+            addLog(`Analisando acervo de ${allRecipes.length} receitas...`, 'info');
             const ai = new GoogleGenAI({ apiKey });
 
             let processed = 0;
             for (const recipe of allRecipes) {
                 if (shouldStop) break;
-                addLog(`Analisando (${processed + 1}/${allRecipes.length}): ${recipe.name}`, 'info');
+                addLog(`Analisando prato: ${recipe.name}`, 'info');
 
-                const scanPrompt = `Analise a receita '${recipe.name}' e seus ingredientes: ${JSON.stringify(recipe.ingredients || [])}. 
-                Identifique eletrodomésticos ou utensílios específicos necessários para o preparo (ex: batedeira, airfryer, liquidificador, forma de silicone, processador). 
-                Retorne APENAS um JSON com array 'suggestedLeads'. Formato: { "suggestedLeads": ["item1", "item2"] }`;
+                const scanPrompt = `Analise a receita '${recipe.name}'. 
+                Quais equipamentos, acessórios de cozinha ou eletros são necessários? 
+                Ex: batedeira, airfryer, forma de bolo, espátula, liquidificador.
+                Retorne APENAS um JSON com array 'suggestedLeads'. 
+                Formato: { "suggestedLeads": ["item1", "item2"] }`;
 
                 try {
                     const res = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -228,27 +273,23 @@ export const AdminContentFactoryModal: React.FC = () => {
                     const leads = data.suggestedLeads || [];
 
                     if (leads.length > 0) {
-                        await updateDoc(doc(db, 'global_recipes', recipe.id), {
-                            suggestedLeads: leads
-                        });
+                        await updateDoc(doc(db, 'global_recipes', recipe.id), { suggestedLeads: leads });
                         await createLeads(recipe.name, leads);
-                        addLog(`> Sincronizado: ${recipe.name} (${leads.length} itens)`, 'success');
+                        addLog(`> ${recipe.name}: ${leads.length} itens mapeados.`, 'success');
                     } else {
-                        await updateDoc(doc(db, 'global_recipes', recipe.id), {
-                            suggestedLeads: ["nenhum"] 
-                        });
+                        addLog(`> ${recipe.name}: Nenhum utensílio novo.`, 'info');
                     }
                     
                     processed++;
                     setProgress((processed / allRecipes.length) * 100);
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 2000));
                 } catch (err) {
                     addLog(`Erro ao analisar: ${recipe.name}`, 'error');
                 }
             }
 
-            addLog("--- VARREDURA FINALIZADA ---", 'separator');
-            showToast("IA Leads sincronizado!");
+            addLog("--- SCANNER FINALIZADO ---", 'separator');
+            showToast("IA Leads Atualizado!");
         } finally {
             setIsScanning(false);
         }
@@ -271,9 +312,9 @@ export const AdminContentFactoryModal: React.FC = () => {
             
             for (const currentCat of selectedCategories) {
                 if (shouldStop) break;
-                addLog(`CATEGORIA: ${currentCat} (Meta: ${quantity} novos)`, 'separator');
+                addLog(`CATEGORIA: ${currentCat}`, 'separator');
                 
-                const listPrompt = `Gere uma lista JSON com 100 nomes das receitas mais populares da categoria '${currentCat}' no Brasil. Retorne apenas o JSON array de strings.`;
+                const listPrompt = `Gere uma lista JSON com 100 nomes das receitas mais populares da categoria '${currentCat}'. Retorne apenas o JSON array de strings.`;
 
                 try {
                     const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -301,22 +342,18 @@ export const AdminContentFactoryModal: React.FC = () => {
                         try {
                             const checkSnap = await getDoc(doc(db!, 'global_recipes', docId));
                             if (checkSnap.exists()) {
-                                addLog(`> Pulo: "${name}" já existe no acervo.`, 'warning');
+                                addLog(`> Pulo: "${name}" já existe.`, 'warning');
                                 continue;
                             }
-                        } catch (checkErr) {
-                            console.warn("Falha na varredura:", name);
-                        }
+                        } catch (checkErr) {}
 
-                        addLog("---------------------------------------", 'separator');
                         addLog(`${successCount + 1}/${quantity} - Produzindo: ${name}`, 'info');
                         
                         try {
-                            const detailPrompt = `Gere a receita completa para '${name}' em JSON. 
-                            REGRAS: 
-                            1. Inclua obrigatoriamente 20 tags variadas.
-                            2. IDENTIFIQUE utensílios/eletros necessários no campo 'suggestedLeads' (ex: batedeira, airfryer).
-                            Formato: { 'name': '${name}', 'ingredients': [], 'instructions': [], 'imageQuery': '...', 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'tags': [], 'suggestedLeads': ['item1'] }`;
+                            const detailPrompt = `Gere a receita completa para '${name}' em JSON.
+                            O campo 'ingredients' deve ser um array de objetos {simplifiedName, detailedName}.
+                            No campo 'suggestedLeads', liste utensílios e equipamentos.
+                            Formato: { 'name': '${name}', 'ingredients': [], 'instructions': [], 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'tags': [], 'suggestedLeads': [] }`;
 
                             const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-3-flash-preview',
@@ -328,7 +365,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             
                             const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                                 model: 'gemini-2.5-flash-image',
-                                contents: { parts: [{ text: "Foto gourmet realística de " + (recipeData.imageQuery || name) }] },
+                                contents: { parts: [{ text: "Foto gourmet realística de " + name }] },
                                 config: { responseModalities: [Modality.IMAGE] }
                             }));
 
@@ -338,24 +375,27 @@ export const AdminContentFactoryModal: React.FC = () => {
                             }
 
                             if (db) {
-                                await setDoc(doc(db, 'global_recipes', docId), {
+                                const finalRecipe = {
                                     ...recipeData,
+                                    ingredients: normalizeIngredients(recipeData.ingredients),
                                     imageUrl,
                                     imageSource: 'genai',
                                     keywords: generateKeywords(name),
                                     createdAt: serverTimestamp()
-                                }, { merge: true });
+                                };
+
+                                await setDoc(doc(db, 'global_recipes', docId), finalRecipe, { merge: true });
                                 
                                 if (recipeData.suggestedLeads && recipeData.suggestedLeads.length > 0) {
                                     await createLeads(name, recipeData.suggestedLeads);
                                 }
                                 
                                 successCount++; 
-                                addLog(`> SUCESSO: ${name} adicionado.`, 'success');
+                                addLog(`> SUCESSO: ${name}`, 'success');
                                 setProgress(((selectedCategories.indexOf(currentCat) * quantity + successCount) / (selectedCategories.length * quantity)) * 100);
                             }
                             
-                            await new Promise(r => setTimeout(r, 10000));
+                            await new Promise(r => setTimeout(r, 12000));
                         } catch (err) {
                             addLog(`> ERRO no item: ${name}`, 'error');
                         }
@@ -391,8 +431,8 @@ export const AdminContentFactoryModal: React.FC = () => {
                             <label className="text-xs text-gray-400 uppercase font-black">Categorias ({selectedCategories.length})</label>
                             <div className="flex gap-2">
                                 <button onClick={handleRetroactiveScan} disabled={isGenerating || isScanning} className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-blue-500/30 flex items-center gap-1 transition-all">
-                                    <span className="material-symbols-outlined text-[12px]">sync_alt</span>
-                                    Sincronizar IA Leads
+                                    <span className="material-symbols-outlined text-[12px]">search_check</span>
+                                    Scanner de Leads (Acervo)
                                 </button>
                                 <button onClick={selectCritical} disabled={isGenerating || isScanning || isStatsLoading} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Auto-Selecionar Críticos</button>
                             </div>

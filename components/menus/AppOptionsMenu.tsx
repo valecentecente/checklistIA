@@ -31,6 +31,29 @@ export const AppOptionsMenu: React.FC = () => {
         app.openModal(modalName);   
     };
 
+    const handleShareApp = async () => {
+        const shareData = {
+            title: 'ChecklistIA',
+            text: 'Simplifique suas compras com o ChecklistIA!',
+            url: 'https://checklistia.com.br'
+        };
+        app.toggleAppOptionsMenu();
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                if ((err as any).name !== 'AbortError') app.showToast("Erro ao compartilhar.");
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareData.url);
+                app.showToast("Link copiado! Compartilhe com amigos.");
+            } catch (e) {
+                app.showToast("Erro ao copiar link.");
+            }
+        }
+    };
+
     // Lógica de Permissões: Se não houver objeto de permissões, mas for Admin, assume TRUE (Acesso Total)
     const p = user?.permissions;
     const hasPerm = (key: string) => {
@@ -169,6 +192,11 @@ export const AppOptionsMenu: React.FC = () => {
                         Instalar App (PWA)
                     </button>
 
+                    <button onClick={handleShareApp} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                        <span className="material-symbols-outlined w-5 h-5 mr-3 text-blue-600 dark:text-blue-400">share</span>
+                        Compartilhar App
+                    </button>
+
                     <button onClick={() => handleOptionClick('feedback')} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                         <span className="material-symbols-outlined w-5 h-5 mr-3 text-green-500">volunteer_activism</span>
                         Avaliar & Apoiar
@@ -182,12 +210,22 @@ export const AppOptionsMenu: React.FC = () => {
                     <div className="mt-2 mb-2">
                         <div className="h-px bg-border-light dark:bg-border-dark mx-3 mb-2"></div>
                         <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Siga-nos</p>
-                        <div className="flex justify-evenly px-2 pb-1">
+                        <div className="flex justify-evenly px-2 pb-1 items-center">
                             <a href="https://www.instagram.com/checklistiaof/" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-pink-600 transition-colors" title="Instagram"><InstagramIcon className="w-5 h-5" /></a>
                             <a href="https://www.facebook.com/checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-blue-600 transition-colors" title="Facebook"><FacebookIcon className="w-5 h-5" /></a>
                             <a href="https://www.tiktok.com/@checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white transition-colors" title="TikTok"><TikTokIcon className="w-5 h-5" /></a>
                             <a href="https://www.youtube.com/@checklistiaof" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-red-600 transition-colors" title="YouTube"><YouTubeIcon className="w-5 h-5" /></a>
                             <a href="https://x.com/checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white transition-colors" title="X"><XIcon className="w-4 h-4" /></a>
+                            
+                            <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                            
+                            <button 
+                                onClick={handleShareApp}
+                                className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-blue-600 transition-colors flex items-center justify-center"
+                                title="Compartilhar ChecklistIA"
+                            >
+                                <span className="material-symbols-outlined !text-[20px]">share</span>
+                            </button>
                         </div>
                     </div>
 
