@@ -277,24 +277,27 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     )}
                 </div>
 
-                {/* MODAL DE EDIÇÃO AVANÇADA (ACESSO TOTAL) */}
+                {/* MODAL DE EDIÇÃO AVANÇADA (CORREÇÃO: FIXED INSET-0) */}
                 {editingRecipe && (
-                    <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-                        <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[95vh]">
+                    <div className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
+                        <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[92vh]">
                             
-                            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-black/40">
+                            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-black/40">
                                 <div className="flex items-center gap-3">
-                                    <h3 className="font-black text-gray-800 dark:text-white uppercase italic tracking-tighter">Editor Mestre de Receita</h3>
+                                    <div className="h-10 w-10 bg-primary/20 text-primary rounded-full flex items-center justify-center shadow-inner">
+                                        <span className="material-symbols-outlined">edit_note</span>
+                                    </div>
+                                    <h3 className="font-black text-gray-800 dark:text-white uppercase italic tracking-tighter text-xl">Editor Mestre de Receita</h3>
                                 </div>
-                                <button onClick={handleCloseEdit} className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full"><span className="material-symbols-outlined">close</span></button>
+                                <button onClick={handleCloseEdit} className="p-2 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 rounded-full transition-all"><span className="material-symbols-outlined">close</span></button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 scrollbar-hide">
+                            <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-10 scrollbar-hide">
                                 
                                 {/* COLUNA ESQUERDA: IDENTIDADE & VENDAS */}
-                                <div className="space-y-6">
+                                <div className="space-y-8">
                                     {/* Imagem e Botão Trocar */}
-                                    <div className="relative group rounded-[2rem] overflow-hidden bg-gray-100 dark:bg-gray-800 aspect-video border-2 border-dashed border-gray-300 dark:border-gray-700">
+                                    <div className="relative group rounded-[2.5rem] overflow-hidden bg-gray-100 dark:bg-gray-800 aspect-video border-2 border-dashed border-gray-300 dark:border-gray-700 shadow-xl">
                                         {editingRecipe.imageUrl ? <img src={editingRecipe.imageUrl} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-6xl text-gray-300">image</span>}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
                                             <button onClick={handleRegenerateImage} disabled={isRegeneratingImage} className="px-6 py-2 bg-white text-black rounded-full text-xs font-black uppercase shadow-xl flex items-center gap-2 transition-all active:scale-95">
@@ -305,95 +308,95 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                     </div>
 
                                     <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Título da Receita</label>
-                                        <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-2xl h-14 px-4 font-black text-lg text-gray-800 dark:text-white" />
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-2 ml-1">Título da Receita</label>
+                                        <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-2xl h-14 px-6 font-black text-xl text-gray-800 dark:text-white focus:ring-2 focus:ring-primary shadow-sm" />
                                     </div>
 
                                     {/* SEÇÃO DE LEADS (UTENSÍLIOS / VENDAS) */}
-                                    <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-[2rem] border border-blue-100 dark:border-blue-900/30">
-                                        <label className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-3 flex items-center gap-2">
+                                    <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/30">
+                                        <label className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-[0.2em] block mb-4 flex items-center gap-2">
                                             <span className="material-symbols-outlined text-sm">shopping_bag</span>
                                             Match de Inventário (Leads)
                                         </label>
-                                        <div className="flex flex-wrap gap-2 mb-3">
+                                        <div className="flex flex-wrap gap-2 mb-4">
                                             {editLeads.map((lead, idx) => (
-                                                <span key={idx} className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase shadow-sm">
+                                                <span key={idx} className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">
                                                     {lead}
-                                                    <button onClick={() => setEditLeads(editLeads.filter(l => l !== lead))} className="opacity-60 hover:opacity-100"><span className="material-symbols-outlined text-sm">close</span></button>
+                                                    <button onClick={() => setEditLeads(editLeads.filter(l => l !== lead))} className="opacity-60 hover:opacity-100"><span className="material-symbols-outlined text-[14px]">close</span></button>
                                                 </span>
                                             ))}
                                         </div>
-                                        <input type="text" value={leadInput} onChange={(e) => setLeadInput(e.target.value)} onKeyDown={handleAddLead} placeholder="Adicionar utensílio/eletro..." className="w-full bg-white dark:bg-black/20 border-0 rounded-xl h-10 px-4 text-xs font-bold" />
+                                        <input type="text" value={leadInput} onChange={(e) => setLeadInput(e.target.value)} onKeyDown={handleAddLead} placeholder="Adicionar utensílio..." className="w-full bg-white dark:bg-black/20 border-0 rounded-2xl h-12 px-6 text-sm font-bold shadow-inner" />
                                     </div>
 
                                     <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Categorias & Tags</label>
-                                        <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-[2rem] min-h-[100px]">
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-3 ml-1">Categorias & Tags</label>
+                                        <div className="flex flex-wrap gap-2 p-4 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-[2.5rem] min-h-[120px] shadow-inner">
                                             {editTags.map((tag, idx) => (
-                                                <span key={idx} className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+                                                <span key={idx} className="flex items-center gap-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
                                                     {tag}
-                                                    <button onClick={() => setEditTags(editTags.filter(t => t !== tag))}><span className="material-symbols-outlined text-sm">close</span></button>
+                                                    <button onClick={() => setEditTags(editTags.filter(t => t !== tag))}><span className="material-symbols-outlined text-[14px]">close</span></button>
                                                 </span>
                                             ))}
-                                            <input type="text" value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={handleAddTag} placeholder="Nova tag..." className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold min-w-[80px]" />
+                                            <input type="text" value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={handleAddTag} placeholder="Nova tag..." className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold min-w-[100px]" />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* COLUNA DIREITA: COMPOSIÇÃO (UNIFICADO) */}
-                                <div className="space-y-6 bg-zinc-50 dark:bg-black/20 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex flex-col h-full">
+                                <div className="space-y-8 bg-zinc-50 dark:bg-black/20 p-8 rounded-[3rem] border border-gray-100 dark:border-gray-800 flex flex-col h-full shadow-lg">
                                     <div className="flex justify-between items-center mb-2">
                                         <div className="flex flex-col">
-                                            <h4 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] italic">Composição do Prato</h4>
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Ingredientes e Modo de Preparo</p>
+                                            <h4 className="text-[12px] font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] italic">Composição do Prato</h4>
+                                            <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">Acervo Global ChecklistIA</p>
                                         </div>
                                         <button 
                                             onClick={handleRegenerateText} 
                                             disabled={isRegeneratingText}
-                                            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-xl transition-all active:scale-95 disabled:opacity-50"
+                                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase shadow-2xl transition-all active:scale-95 disabled:opacity-50"
                                         >
-                                            <span className={`material-symbols-outlined text-[16px] ${isRegeneratingText ? 'animate-spin' : ''}`}>auto_fix_high</span>
+                                            <span className={`material-symbols-outlined text-[18px] ${isRegeneratingText ? 'animate-spin' : ''}`}>auto_fix_high</span>
                                             {isRegeneratingText ? 'Chef Escrevendo...' : 'IA: Re-gerar Texto'}
                                         </button>
                                     </div>
 
                                     {/* Sub-seção: Ingredientes */}
-                                    <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col gap-4">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="material-symbols-outlined text-sm">grocery</span>
+                                            <label className="text-[11px] font-black text-primary uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-[18px]">grocery</span>
                                                 Ingredientes ({editIngredients.length})
                                             </label>
-                                            <button onClick={handleAddIngredient} className="text-primary font-black text-[10px] uppercase flex items-center gap-1 hover:underline"><span className="material-symbols-outlined text-sm">add_circle</span> Novo</button>
+                                            <button onClick={handleAddIngredient} className="text-primary font-black text-[10px] uppercase flex items-center gap-1 hover:bg-primary/10 px-3 py-1.5 rounded-full transition-all"><span className="material-symbols-outlined text-sm">add_circle</span> Novo</button>
                                         </div>
-                                        <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                                        <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-3 scrollbar-hide">
                                             {editIngredients.map((ing, idx) => (
-                                                <div key={idx} className="flex gap-2 bg-white dark:bg-zinc-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 animate-fadeIn shadow-sm">
-                                                    <input value={ing.simplifiedName} onChange={e => handleIngredientChange(idx, 'simplifiedName', e.target.value)} placeholder="Curto" className="w-1/3 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-black h-8 px-2" />
-                                                    <input value={ing.detailedName} onChange={e => handleIngredientChange(idx, 'detailedName', e.target.value)} placeholder="Detalhes" className="flex-1 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-medium h-8 px-2" />
-                                                    <button onClick={() => handleRemoveIngredient(idx)} className="text-red-500 p-1 hover:scale-110 transition-transform"><span className="material-symbols-outlined text-sm">delete</span></button>
+                                                <div key={idx} className="flex gap-2.5 bg-white dark:bg-zinc-800 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 animate-fadeIn shadow-sm">
+                                                    <input value={ing.simplifiedName} onChange={e => handleIngredientChange(idx, 'simplifiedName', e.target.value)} placeholder="Curto" className="w-1/3 bg-gray-50 dark:bg-black/20 border-0 rounded-xl text-[11px] font-black h-10 px-3" />
+                                                    <input value={ing.detailedName} onChange={e => handleIngredientChange(idx, 'detailedName', e.target.value)} placeholder="Detalhes" className="flex-1 bg-gray-50 dark:bg-black/20 border-0 rounded-xl text-[11px] font-medium h-10 px-3" />
+                                                    <button onClick={() => handleRemoveIngredient(idx)} className="text-red-500 p-1 hover:scale-125 transition-transform"><span className="material-symbols-outlined text-lg">delete</span></button>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
 
-                                    <div className="h-px bg-gray-200 dark:bg-gray-800 mx-2"></div>
+                                    <div className="h-px bg-gray-200 dark:bg-gray-800 mx-4"></div>
 
                                     {/* Sub-seção: Modo de Preparo */}
-                                    <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col gap-4 flex-1">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="material-symbols-outlined text-sm">cooking</span>
+                                            <label className="text-[11px] font-black text-primary uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-[18px]">cooking</span>
                                                 Modo de Preparo ({editInstructions.length})
                                             </label>
-                                            <button onClick={handleAddInstruction} className="text-primary font-black text-[10px] uppercase flex items-center gap-1 hover:underline"><span className="material-symbols-outlined text-sm">add_circle</span> Passo</button>
+                                            <button onClick={handleAddInstruction} className="text-primary font-black text-[10px] uppercase flex items-center gap-1 hover:bg-primary/10 px-3 py-1.5 rounded-full transition-all"><span className="material-symbols-outlined text-sm">add_circle</span> Passo</button>
                                         </div>
-                                        <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
+                                        <div className="space-y-4 max-h-[350px] overflow-y-auto pr-3 scrollbar-hide">
                                             {editInstructions.map((inst, idx) => (
-                                                <div key={idx} className="flex gap-3 items-start animate-fadeIn group">
-                                                    <span className="w-6 h-6 shrink-0 bg-primary text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-sm">{idx + 1}</span>
-                                                    <textarea value={inst} onChange={e => handleInstructionChange(idx, e.target.value)} className="flex-1 bg-white dark:bg-zinc-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs p-3 min-h-[70px] resize-none font-medium shadow-sm focus:ring-1 focus:ring-primary/30" />
-                                                    <button onClick={() => handleRemoveInstruction(idx)} className="text-red-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity"><span className="material-symbols-outlined text-sm">close</span></button>
+                                                <div key={idx} className="flex gap-4 items-start animate-fadeIn group">
+                                                    <span className="w-7 h-7 shrink-0 bg-primary text-white rounded-full flex items-center justify-center text-[11px] font-black shadow-lg">{idx + 1}</span>
+                                                    <textarea value={inst} onChange={e => handleInstructionChange(idx, e.target.value)} className="flex-1 bg-white dark:bg-zinc-800 border border-gray-100 dark:border-gray-700 rounded-[1.5rem] text-sm p-4 min-h-[90px] resize-none font-medium shadow-md focus:ring-2 focus:ring-primary/40 transition-all" />
+                                                    <button onClick={() => handleRemoveInstruction(idx)} className="text-red-500 mt-3 opacity-0 group-hover:opacity-100 transition-opacity"><span className="material-symbols-outlined">close</span></button>
                                                 </div>
                                             ))}
                                         </div>
@@ -401,10 +404,10 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                 </div>
                             </div>
 
-                            <div className="p-6 bg-gray-50 dark:bg-black/40 border-t border-gray-100 dark:border-gray-800 flex gap-4 shrink-0">
-                                <button onClick={handleCloseEdit} className="flex-1 h-14 rounded-2xl bg-gray-200 dark:bg-white/5 text-gray-600 dark:text-gray-300 font-black uppercase text-xs tracking-widest active:scale-95 transition-all">Descartar</button>
-                                <button onClick={handleSaveRecipe} disabled={isSaving} className="flex-[2] h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black shadow-xl transition-all active:scale-95 disabled:opacity-50 uppercase text-sm tracking-widest flex items-center justify-center gap-2">
-                                    {isSaving ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">save</span>}
+                            <div className="p-8 bg-gray-50 dark:bg-black/40 border-t border-gray-100 dark:border-gray-800 flex gap-4 shrink-0">
+                                <button onClick={handleCloseEdit} className="flex-1 h-16 rounded-[2rem] bg-gray-200 dark:bg-white/5 text-gray-600 dark:text-gray-300 font-black uppercase text-xs tracking-widest active:scale-95 transition-all">Descartar Tudo</button>
+                                <button onClick={handleSaveRecipe} disabled={isSaving} className="flex-[2] h-16 rounded-[2rem] bg-green-600 hover:bg-green-700 text-white font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 uppercase text-sm tracking-widest flex items-center justify-center gap-3">
+                                    {isSaving ? <span className="material-symbols-outlined animate-spin text-2xl">sync</span> : <span className="material-symbols-outlined text-2xl">publish</span>}
                                     {isSaving ? 'Salvando...' : 'Confirmar & Publicar'}
                                 </button>
                             </div>
