@@ -98,9 +98,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   };
 
   /**
-   * NOVA LÓGICA DE MATCH POR INVENTÁRIO (Súrgica)
-   * Agora buscamos ofertas que casam especificamente com o campo 'suggestedLeads' (ferramentas)
-   * Se o sugerido for "Batedeira" e você tiver uma oferta com tag "batedeira", o match é feito.
+   * NOVA LÓGICA DE MATCH POR INVENTÁRIO (RANDÔMICA)
    */
   const relatedOffers = useMemo(() => {
       if (!offers || offers.length === 0) return [];
@@ -111,18 +109,18 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
       const fullText = (recipe.name + ' ' + safeIngredients.map(i => i.simplifiedName).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
 
-      return offers.filter(offer => {
+      // 1. Filtrar ofertas que fazem sentido
+      const filtered = offers.filter(offer => {
           const offerName = offer.name.toLowerCase();
           const offerTags = (offer.tags || []).map(t => t.toLowerCase().trim());
 
-          // 1. Prioridade: Match por Lead Direto (Utensílio requisitado)
+          // Match por Lead Direto (Utensílio)
           const matchesLead = leads.some(lead => {
-              // Verifica se o lead está nas tags da oferta ou no nome dela
               return offerTags.includes(lead) || offerName.includes(lead);
           });
           if (matchesLead) return true;
 
-          // 2. Fallback: Match por Contexto de Ingredientes/Texto (Legado Refinado)
+          // Fallback por Contexto
           const firstKeyword = offer.name.trim().split(' ')[0].toLowerCase();
           if (firstKeyword.length >= 4 && fullText.includes(firstKeyword)) return true;
           
@@ -136,6 +134,15 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
           return false;
       });
+
+      // 2. EMBARALHAR (Fisher-Yates Shuffle) para quebrar a ordem cronológica
+      const shuffled = [...filtered];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      return shuffled;
   }, [offers, recipe, safeIngredients, safeInstructions]);
 
   return (

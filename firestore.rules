@@ -7,16 +7,19 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    // Função Admin Blindada: E-mail do dono é checado PRIMEIRO.
+    // Isso garante acesso mesmo que o documento em /users/ não exista.
     function isAdmin() {
       return isSignedIn() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin_l1', 'admin_l2']
+        request.auth.token.email == 'itensnamao@gmail.com' ||
+        request.auth.token.email == 'admin@checklistia.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin_l1', 'admin_l2'])
       );
     }
 
     match /users/{userId} {
-      // O próprio usuário pode ler e escrever seus dados
       allow read, write: if request.auth.uid == userId;
-      // Administradores podem listar e ler dados de outros usuários para gestão de equipe
       allow read: if isAdmin();
       
       match /{allSubcollections=**} {

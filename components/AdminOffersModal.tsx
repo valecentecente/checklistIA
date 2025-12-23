@@ -53,7 +53,8 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                 setLeads(allLeads.filter(l => l.status === 'pending' || !l.status));
             },
             (error) => {
-                console.warn("[Admin Leads] Erro:", error.message);
+                // Erro esperado se as regras ainda não propagaram para o usuário
+                console.warn("[Admin Leads] Sem permissão no momento.");
             }
         );
 
@@ -61,19 +62,25 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     }, [isOpen]);
 
     const handleGenerateManualTest = async () => {
-        if (!db) return;
+        if (!db || !auth?.currentUser) {
+            showToast("Usuário não autenticado no Firebase.");
+            return;
+        }
+        
         try {
             const testRef = await addDoc(collection(db, 'sales_opportunities'), {
-                term: "TESTE " + Math.floor(Math.random() * 1000),
-                recipeName: "Diagnóstico Manual",
+                term: "TESTE DIAGNÓSTICO " + Math.floor(Math.random() * 999),
+                recipeName: "Sistema de Alerta",
                 status: 'pending',
-                createdAt: new Date().toISOString() // Usando string para evitar delay de timestamp
+                createdAt: new Date().toISOString()
             });
-            showToast("Lead criado com ID: " + testRef.id.slice(0,5));
+            showToast("SUCESSO: Lead criado!");
             if (navigator.vibrate) navigator.vibrate(50);
         } catch (e: any) {
-            showToast("Erro Firebase: " + (e.code || "Permissão negada"));
-            console.error("Falha no teste:", e);
+            const userEmail = auth.currentUser?.email || "desconhecido";
+            console.error("Falha detalhada:", e);
+            // Mensagem de erro informativa para o Ricardo
+            showToast(`Erro para: ${userEmail}. Publique as Rules no console.`);
         }
     };
 
@@ -180,9 +187,10 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                         <div className="flex flex-col gap-3">
                             <button 
                                 onClick={handleGenerateManualTest}
-                                className="w-full py-3 bg-blue-600/10 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase rounded-xl border border-dashed border-blue-400 animate-pulse"
+                                className="w-full py-4 bg-blue-600 text-white text-[12px] font-black uppercase rounded-xl shadow-lg animate-pulse active:scale-95 transition-all"
                             >
-                                [DEBUG] GERAR LEAD DE TESTE AGORA
+                                <span className="material-symbols-outlined align-middle mr-2">bolt</span>
+                                GERAR LEAD DE TESTE AGORA
                             </button>
                             
                             {leads.length === 0 ? (
