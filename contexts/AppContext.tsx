@@ -30,29 +30,63 @@ const getRecipeDocId = (name: string) => {
 };
 
 /**
- * LIMPEZA RADICAL: Extrai apenas o nome do produto.
- * Remove números, medidas, parênteses e preposições do início.
+ * LIMPEZA RADICAL: Deixa apenas o nome puro do produto.
+ * Ex: "Xícaras de farinha de rosca" -> "Farinha de rosca"
+ * Ex: "Chá de sal" -> "Sal"
+ * Ex: "Óleo para fritar" -> "Óleo"
  */
 const extractProductName = (text: string): string => {
     if (!text) return '';
     
-    // 1. Remove qualquer coisa dentro de parênteses no início ou meio (ex: "(sopa)")
-    let cleaned = text.replace(/\(.*?\)/g, '');
+    let cleaned = text.trim();
 
-    // 2. Regex para remover números, frações e unidades de medida no início
-    // Inclui abreviações e variações comuns
-    const filterRegex = /^([\d\s\.,\/\\\-]+|(g|kg|ml|l|un|unid|colher|colheres|xicara|xicaras|dente|dentes|caixa|caixas|lata|latas|vidro|vidros|pacote|pacotes|maço|macos|pitada|pitadas|fatia|fatias|unidades|copo|copos|es|c|cs|c\.s|c\.c|kg|q\.b|qb)\s*)+(de\s+|da\s+|do\s+)?/i;
-    
-    cleaned = cleaned.replace(filterRegex, '').trim();
-    
-    // 3. Se a string começar com "de ", "da " ou "do ", remove também
-    cleaned = cleaned.replace(/^(de|da|do)\s+/i, '').trim();
+    // 1. Remove parênteses e conteúdos extras
+    cleaned = cleaned.replace(/\(.*?\)/g, '');
 
-    // 4. Fallback: se sobrar nada ou algo muito curto, pega as últimas palavras ou a string original sem o primeiro pedaço
-    if (cleaned.length < 2) {
-        const parts = text.split(' ');
-        return parts.length > 1 ? parts.slice(1).join(' ') : text;
+    // 2. Remove números e frações no início (1/2, 500, etc)
+    cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
+
+    // 3. Lista de termos de medida e conectivos para DELETAR do início
+    const measures = [
+        'g', 'kg', 'ml', 'l', 'un', 'unid', 'unidade', 'unidades', 'colher', 'colheres', 'sopa', 'cha', 
+        'sobremesa', 'xicara', 'xicaras', 'dente', 'dentes', 'caixa', 'caixas', 'lata', 'latas', 'vidro', 
+        'vidros', 'pacote', 'pacotes', 'maco', 'macos', 'pitada', 'pitadas', 'fatia', 'fatias', 'copo', 
+        'copos', 'pote', 'potes', 'tablete', 'tabletes', 'envelope', 'envelopes', 'garrafa', 'garrafas',
+        'es', 'c', 'cs', 'cc', 'qb'
+    ];
+
+    // Loop para limpar camadas (ex: "2 colheres de sopa de...")
+    let loop = true;
+    while (loop) {
+        let prev = cleaned;
+        
+        // Remove medidas
+        const measureRegex = new RegExp(`^(${measures.join('|')})\\s*(s)?\\b`, 'i');
+        cleaned = cleaned.replace(measureRegex, '').trim();
+        
+        // Remove conectivos (de, da, do, para, com) que sobram no início
+        cleaned = cleaned.replace(/^(de|da|do|das|dos|para|com|em|a)\s+/i, '').trim();
+        
+        if (cleaned === prev) loop = false;
     }
+
+    // 4. Lista de sufixos de preparo/contexto para DELETAR do final
+    const suffixes = [
+        'picado', 'picada', 'em cubos', 'em rodelas', 'fatiado', 'fatiada', 'ralado', 'ralada', 
+        'cozido', 'cozida', 'grande', 'pequeno', 'pequena', 'medio', 'media', 'fresco', 'fresca', 
+        'seco', 'seca', 'limpo', 'limpa', 'a gosto', 'opcional', 'descascado', 'descascada', 
+        'extra virgem', 'para decorar', 'para fritar', 'para temperar', 'em calda', 'processado', 
+        'moído', 'moída', 'refogado', 'refogada', 'batido', 'batida', 'unidades'
+    ];
+
+    const suffixRegex = new RegExp(`\\s+(${suffixes.join('|')}).*$`, 'i');
+    cleaned = cleaned.replace(suffixRegex, '').trim();
+
+    // Limpeza final de conectivos órfãos
+    cleaned = cleaned.replace(/^(de|da|do|para)\s+/i, '').trim();
+    cleaned = cleaned.replace(/\s+(de|da|do|para)$/i, '').trim();
+
+    if (cleaned.length < 2) return text;
     
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
@@ -67,7 +101,6 @@ const normalizeIngredients = (ingredients: any[]) => {
             };
         }
         
-        // Se já vier da IA, forçamos a limpeza do simplifiedName para garantir
         const sName = ing.simplifiedName || ing.name || '';
         const dName = ing.detailedName || ing.description || ing.name || '';
         
@@ -748,17 +781,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const ai = new GoogleGenAI({ apiKey });
             
-            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita gourmet para: "${recipeName}".
+            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita gourmet completa para: "${recipeName}".
             REGRAS OBRIGATÓRIAS PARA O JSON:
-            1. No campo 'ingredients', liste itens detalhados.
-            2. No campo 'simplifiedName' do ingrediente, use APENAS o nome do produto, SEM números e SEM medidas. 
-               Ex: se for "2 ovos inteiros", simplificado deve ser apenas "Ovos".
-               Ex: se for "100g de queijo", simplificado deve ser apenas "Queijo".
+            1. No campo 'ingredients', liste itens detalhados (ex: "500g de farinha de rosca").
+            2. No campo 'simplifiedName' do ingrediente, use APENAS o nome ESSENCIAL.
+               - PROIBIDO incluir medidas como 'Xícara', 'Chá de', 'Colher', 'Gramos', 'Lata de', etc.
+               - PROIBIDO incluir verbos como 'para fritar', 'para decorar', 'picado'.
+               - Exemplos de conversão: 
+                 "1 xícara de farinha de rosca" -> simplifiedName deve ser "Farinha de rosca".
+                 "1 colher de chá de sal" -> simplifiedName deve ser "Sal".
+                 "Óleo para fritar" -> simplifiedName deve ser "Óleo".
             3. Identifique utensílios no campo 'suggestedLeads'.
             Retorne APENAS o JSON puro:
             {
                 "name": "${recipeName}",
-                "ingredients": [{"simplifiedName": "Manteiga", "detailedName": "2 colheres de manteiga sem sal"}],
+                "ingredients": [{"simplifiedName": "Farinha de rosca", "detailedName": "1 xícara de farinha de rosca"}],
                 "instructions": ["Passo 1...", "Passo 2..."],
                 "servings": "2 porções",
                 "prepTimeInMinutes": 30,

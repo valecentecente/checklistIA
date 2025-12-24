@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -185,11 +186,6 @@ export const AppOptionsMenu: React.FC = () => {
                     <button onClick={() => handleOptionClick('theme')} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                         <span className="material-symbols-outlined w-5 h-5 mr-3 text-purple-500">palette</span>
                         Aparência
-                    </button>
-
-                    <button onClick={() => { app.toggleAppOptionsMenu(); app.openModal('distribution'); }} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                        <span className="material-symbols-outlined w-5 h-5 mr-3 text-blue-500">install_mobile</span>
-                        Instalar App (PWA)
                     </button>
 
                     <button onClick={handleShareApp} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
