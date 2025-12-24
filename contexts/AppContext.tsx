@@ -364,20 +364,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
     }, []);
 
-    // CORREÇÃO PWA: Captura e armazenamento persistente do evento
+    // CORREÇÃO PWA: Captura e armazenamento persistente do evento com LOGS
     useEffect(() => {
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
 
         const handler = (e: any) => { 
             e.preventDefault(); 
             setInstallPromptEvent(e); 
-            console.log("[PWA] Evento beforeinstallprompt capturado!");
+            console.log("[PWA] Capturado beforeinstallprompt!");
             
             if (!isStandalone && !sessionStorage.getItem('pwa_prompt_shown')) {
                 setTimeout(() => {
                     setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
                     sessionStorage.setItem('pwa_prompt_shown', 'true');
-                }, 8000); // 8 segundos para não ser invasivo no susto
+                }, 8000); 
             }
         };
 
@@ -625,13 +625,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const handleInstall = async () => {
         if (!installPromptEvent) {
-            console.warn("[PWA] Prompt indisponível. Verifique HTTPS ou se já está instalado.");
+            console.warn("[PWA] Prompt indisponível no momento.");
             return false;
         }
         try {
             await installPromptEvent.prompt();
             const { outcome } = await installPromptEvent.userChoice;
-            console.log(`[PWA] Usuário ${outcome} a instalação.`);
+            console.log(`[PWA] Usuário respondeu: ${outcome}`);
             setInstallPromptEvent(null);
             setIsPWAInstallVisible(false);
             return outcome === 'accepted';

@@ -32,7 +32,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const [isAdding, setIsAdding] = useState(false);
   const imageUrl = recipe.imageUrl;
   
-  // Detecção de cache forçada para exibição do selo
+  // Verificação de origem para selo de créditos
   const isFromCache = recipe.imageSource === 'cache';
   
   const isSaved = isFavorite(recipe.name);
@@ -152,7 +152,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                                 className="absolute inset-0 bg-center bg-cover filter blur-[2px] scale-110 opacity-60"
                                 style={{backgroundImage: `url(${randomChefImage})`}}
                             ></div>
-                            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white gap-3 p-6 text-center">
+                            <div className="absolute inset-0 bg-black/5 flex flex-col items-center justify-center text-white gap-3 p-6 text-center">
                                 <div className="bg-white/20 p-4 rounded-full backdrop-blur-md animate-pulse">
                                     <span className="material-symbols-outlined text-5xl">restaurant_menu</span>
                                 </div>
@@ -164,12 +164,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                         </div>
                     )}
                      
-                     <div className="absolute top-4 left-4 z-[90] flex flex-col gap-2 items-start pointer-events-none">
-                         {/* SELO DE CRÉDITO DO ACERVO REFINADO */}
+                     <div className="absolute top-4 left-4 z-[110] flex flex-col gap-2 items-start pointer-events-none">
+                         {/* SELO DE CRÉDITO DO ACERVO REFINADO: Checklist (branco) IA (azul) */}
                          {imageUrl && isFromCache && !isRecipeLoading && (
-                             <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/70 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 shadow-xl">
-                                 <span className="material-symbols-outlined text-[18px] text-blue-400 leading-none">photo_camera</span>
-                                 <span className="text-[10px] font-black uppercase tracking-widest leading-none pt-[1px]">
+                             <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/80 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 shadow-xl">
+                                 <span className="material-symbols-outlined text-[20px] text-orange-400 leading-none">photo_camera</span>
+                                 <span className="text-[10px] font-black uppercase tracking-[0.1em] leading-none pt-[1px]">
                                     <span className="text-white">Checklist</span><span className="text-blue-500 ml-0.5">IA</span>
                                  </span>
                              </div>

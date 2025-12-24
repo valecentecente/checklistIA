@@ -39,7 +39,7 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
     const onInstallClick = async () => {
         console.log("[DistributionModal] Tentando instalar...", installPromptEvent);
         if (!installPromptEvent) {
-            alert("O sistema de instalação ainda não está pronto. Se estiver no Chrome, use o menu lateral (três pontos) > Instalar Aplicativo.");
+            // O sistema não conseguiu disparar o nativo, mostramos as instruções
             return;
         }
         const success = await handleInstall();
@@ -74,7 +74,7 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
                     </button>
                 </div>
 
-                <div className="p-6 max-h-[70vh] overflow-y-auto scrollbar-hide">
+                <div className="p-6 max-h-[75vh] overflow-y-auto scrollbar-hide">
                     {activeTab === 'pwa' ? (
                         isInstalled ? (
                             <div className="flex flex-col items-center text-center gap-6 animate-fadeIn">
@@ -118,22 +118,43 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
                                 <div className="h-16 w-16 bg-white rounded-2xl p-2 shadow-lg border border-gray-100 flex items-center justify-center">
                                     <img src="/icon.svg" alt="App" className="w-full h-full"/>
                                 </div>
+                                
                                 <div className="space-y-2">
-                                    <h3 className="font-black text-lg text-gray-800 dark:text-white">ChecklistIA no Android</h3>
-                                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                    <h3 className="font-black text-lg text-gray-800 dark:text-white">Instale no seu Android</h3>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
                                         {installPromptEvent 
-                                            ? "Instale o atalho para usar o app instantaneamente mesmo sem internet." 
-                                            : "Se o botão não ativar, use o menu do Chrome em 'Instalar Aplicativo'."}
+                                            ? "Pronto para adicionar! Clique no botão abaixo para criar o atalho." 
+                                            : "Não conseguimos iniciar o prompt automático. Siga o passo a passo manual:"}
                                     </p>
                                 </div>
+
+                                {!installPromptEvent ? (
+                                    <div className="flex flex-col gap-3 items-start text-left w-full">
+                                        <div className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-3 rounded-xl w-full border border-gray-100 dark:border-white/5">
+                                            <div className="h-6 w-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xs shrink-0">1</div>
+                                            <p className="text-xs font-bold text-gray-600 dark:text-gray-300">Toque nos <span className="font-black text-gray-900 dark:text-white">3 pontinhos (⋮)</span> no topo do Chrome.</p>
+                                        </div>
+                                        <div className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-3 rounded-xl w-full border border-gray-100 dark:border-white/5">
+                                            <div className="h-6 w-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xs shrink-0">2</div>
+                                            <p className="text-xs font-bold text-gray-600 dark:text-gray-300">Selecione <span className="font-black text-gray-900 dark:text-white">"Instalar Aplicativo"</span>.</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={onInstallClick} 
+                                        className="w-full py-5 rounded-2xl bg-primary text-white font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <span className="material-symbols-outlined">download_for_offline</span>
+                                        Adicionar Atalho
+                                    </button>
+                                )}
+
                                 <button 
-                                    onClick={onInstallClick} 
-                                    className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${installPromptEvent ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400 grayscale'}`}
+                                    onClick={onClose}
+                                    className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-primary transition-colors"
                                 >
-                                    <span className="material-symbols-outlined">download_for_offline</span>
-                                    {installPromptEvent ? "Adicionar Atalho" : "Instalar Manualmente"}
+                                    Já entendi, fechar
                                 </button>
-                                {!installPromptEvent && <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Dica: Menu do Chrome > Instalar App</p>}
                             </div>
                         )
                     ) : (
