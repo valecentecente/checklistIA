@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -59,13 +60,14 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
     }, [isDragging, handleInteractionMove, handleInteractionEnd]);
 
     return (
-        <div className="absolute bottom-[calc(24px+env(safe-area-inset-bottom))] lg:bottom-24 left-1/2 -translate-x-1/2 z-30 animate-fadeIn" ref={containerRef}>
-            <div className="relative h-16 w-64 rounded-full bg-surface-light dark:bg-surface-dark border border-primary/20 dark:border-primary/50 shadow-lg flex items-center p-2 overflow-hidden">
-                <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-12 w-24 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none" style={{ transform: `translateX(${sliderX}px)` }}>
-                    <span className="font-bold">{total}</span>
+        /* Posição alterada para TOP no mobile e mantida BOTTOM no desktop, com z-index reforçado */
+        <div className="fixed top-[140px] lg:top-auto lg:bottom-24 left-1/2 -translate-x-1/2 z-[120] animate-fadeIn" ref={containerRef}>
+            <div className="relative h-14 w-60 rounded-full bg-white/90 dark:bg-surface-dark border border-primary/30 dark:border-primary/50 shadow-2xl backdrop-blur-md flex items-center p-1.5 overflow-hidden">
+                <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-11 w-20 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none shadow-md" style={{ transform: `translateX(${sliderX}px)` }}>
+                    <span className="font-bold text-xs">{total}</span>
                 </div>
-                <div className="absolute w-full text-right pr-4 text-primary dark:text-orange-300 font-semibold text-sm animate-pulse" style={{ opacity: isDragging ? 0 : 1, transition: 'opacity 0.2s' }}>
-                    &gt;&gt;Finalizar
+                <div className="absolute w-full text-right pr-6 text-primary dark:text-orange-300 font-black text-[10px] uppercase tracking-widest animate-pulse" style={{ opacity: isDragging ? 0 : 1, transition: 'opacity 0.2s' }}>
+                    Finalizar >>
                 </div>
             </div>
         </div>
