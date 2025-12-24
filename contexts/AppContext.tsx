@@ -30,21 +30,30 @@ const getRecipeDocId = (name: string) => {
 };
 
 /**
- * Tenta extrair apenas o nome do produto de uma string de ingrediente.
- * Ex: "100g de queijo parmesão" -> "Queijo parmesão"
+ * LIMPEZA RADICAL: Extrai apenas o nome do produto.
+ * Remove números, medidas, parênteses e preposições do início.
  */
 const extractProductName = (text: string): string => {
-    // Regex para remover números, frações e unidades comuns no início da string
-    const quantityRegex = /^(\d+[\d.,/]*\s*(g|kg|ml|l|un|unid|colher|colheres|xícara|xícaras|dente|dentes|caixa|caixas|lata|latas|vidro|vidros|pacote|pacotes|maço|maços|pitada|pitadas|fatia|fatias|unidades|copo|copos)\s*(de\s+)?)/i;
+    if (!text) return '';
     
-    let cleaned = text.replace(quantityRegex, '').trim();
+    // 1. Remove qualquer coisa dentro de parênteses no início ou meio (ex: "(sopa)")
+    let cleaned = text.replace(/\(.*?\)/g, '');
+
+    // 2. Regex para remover números, frações e unidades de medida no início
+    // Inclui abreviações e variações comuns
+    const filterRegex = /^([\d\s\.,\/\\\-]+|(g|kg|ml|l|un|unid|colher|colheres|xicara|xicaras|dente|dentes|caixa|caixas|lata|latas|vidro|vidros|pacote|pacotes|maço|macos|pitada|pitadas|fatia|fatias|unidades|copo|copos|es|c|cs|c\.s|c\.c|kg|q\.b|qb)\s*)+(de\s+|da\s+|do\s+)?/i;
     
-    // Se a limpeza falhou (string muito curta), fallback para as primeiras 3 palavras
+    cleaned = cleaned.replace(filterRegex, '').trim();
+    
+    // 3. Se a string começar com "de ", "da " ou "do ", remove também
+    cleaned = cleaned.replace(/^(de|da|do)\s+/i, '').trim();
+
+    // 4. Fallback: se sobrar nada ou algo muito curto, pega as últimas palavras ou a string original sem o primeiro pedaço
     if (cleaned.length < 2) {
-        return text.split(' ').slice(0, 3).join(' ');
+        const parts = text.split(' ');
+        return parts.length > 1 ? parts.slice(1).join(' ') : text;
     }
     
-    // Capitaliza a primeira letra
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
 
@@ -58,15 +67,12 @@ const normalizeIngredients = (ingredients: any[]) => {
             };
         }
         
-        // Se já for um objeto vindo da IA, prioriza o nome simplificado se ele for válido
+        // Se já vier da IA, forçamos a limpeza do simplifiedName para garantir
         const sName = ing.simplifiedName || ing.name || '';
         const dName = ing.detailedName || ing.description || ing.name || '';
         
-        // Validação: Se a IA mandou algo como "100g" no simplifiedName, corrigimos
-        const isMessy = /^\d+/.test(sName) && sName.split(' ').length < 3;
-
         return {
-            simplifiedName: isMessy ? extractProductName(dName) : String(sName),
+            simplifiedName: extractProductName(sName || dName),
             detailedName: String(dName)
         };
     });
@@ -742,24 +748,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const ai = new GoogleGenAI({ apiKey });
             
-            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita completa, deliciosa e detalhada para: "${recipeName}".
-            REGRAS OBRIGATÓRIAS:
-            1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
-            2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
-            3. Identifique se o preparo exige equipamentos específicos (ex: batedeira, airfryer, forma, liquidificador, colher de pau, etc) para venda direcionada.
-            4. Retorne APENAS o JSON puro seguindo este formato:
+            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita gourmet para: "${recipeName}".
+            REGRAS OBRIGATÓRIAS PARA O JSON:
+            1. No campo 'ingredients', liste itens detalhados.
+            2. No campo 'simplifiedName' do ingrediente, use APENAS o nome do produto, SEM números e SEM medidas. 
+               Ex: se for "2 ovos inteiros", simplificado deve ser apenas "Ovos".
+               Ex: se for "100g de queijo", simplificado deve ser apenas "Queijo".
+            3. Identifique utensílios no campo 'suggestedLeads'.
+            Retorne APENAS o JSON puro:
             {
                 "name": "${recipeName}",
-                "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz agulhinha"}],
+                "ingredients": [{"simplifiedName": "Manteiga", "detailedName": "2 colheres de manteiga sem sal"}],
                 "instructions": ["Passo 1...", "Passo 2..."],
-                "imageQuery": "Foto close-up apetitosa de ${recipeName}, luz de estúdio",
                 "servings": "2 porções",
                 "prepTimeInMinutes": 30,
                 "difficulty": "Médio",
                 "cost": "Médio",
                 "isAlcoholic": false,
                 "tags": ["tag1", "tag2"],
-                "suggestedLeads": ["batedeira", "forma de bolo"]
+                "suggestedLeads": ["espátula", "liquidificador"]
             }`;
 
             const parts: any[] = [];

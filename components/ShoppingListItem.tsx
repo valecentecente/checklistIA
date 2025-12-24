@@ -46,9 +46,13 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
         <p className={textClasses}>
             {item.name}
         </p>
-         {/* Detalhes (Peso/Qtd/Contexto) visíveis em Mobile e Desktop */}
+         {/* 
+            DETALHES: 
+            Oculto em mobile (hidden) e visível apenas em desktop (lg:block).
+            Isso remove a bagunça de informações no celular conforme solicitado.
+         */}
          {showDetails && (
-             <p className={`text-xs mt-1 font-medium transition-colors ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-500 dark:text-gray-400'}`}>
+             <p className={`hidden lg:block text-xs mt-1 font-medium transition-colors ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-500 dark:text-gray-400'}`}>
                 {item.details}
              </p>
          )}
