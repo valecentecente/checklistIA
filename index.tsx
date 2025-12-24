@@ -60,12 +60,6 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
     }, [isDragging, handleInteractionMove, handleInteractionEnd]);
 
     return (
-        /* 
-           AJUSTE DE POSIÇÃO: 
-           - Mobile: bottom-20 (80px) para ficar logo acima do botão central (+) 
-           - Desktop (lg): mantém bottom-24 original
-           - z-index reforçado (120) para não sumir atrás da barra
-        */
         <div className="fixed bottom-20 lg:bottom-24 left-1/2 -translate-x-1/2 z-[120] animate-fadeIn" ref={containerRef}>
             <div className="relative h-14 w-60 rounded-full bg-white/95 dark:bg-surface-dark border border-primary/40 dark:border-primary/60 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-md flex items-center p-1.5 overflow-hidden">
                 <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-11 w-20 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none shadow-md" style={{ transform: `translateX(${sliderX}px)` }}>
@@ -87,7 +81,6 @@ const AppContent: React.FC = () => {
     const [sharedListData, setSharedListData] = useState<{ marketName: string; items: any[]; author?: any } | null>(null);
     const [isImportingShare, setIsImportingShare] = useState(false);
     const [currentShareId, setCurrentShareId] = useState<string | null>(null);
-    const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
     
     const [isEditingMarketName, setIsEditingMarketName] = useState(false);
     const [tempMarketName, setTempMarketName] = useState('');
@@ -113,6 +106,20 @@ const AppContent: React.FC = () => {
             window.removeEventListener('orientationchange', checkOrientation);
         };
     }, []);
+
+    // Lógica proativa para sugerir instalação no mobile browser (primeiro acesso)
+    useEffect(() => {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const hasSeenOffer = localStorage.getItem('hasSeenInstallOffer') === 'true';
+
+        if (isMobile && !isStandalone && !hasSeenOffer) {
+            setTimeout(() => {
+                app.openModal('distribution');
+                localStorage.setItem('hasSeenInstallOffer', 'true');
+            }, 3500); 
+        }
+    }, [app]);
 
     useEffect(() => {
         const handleRestoreMarket = (e: any) => {
@@ -141,7 +148,7 @@ const AppContent: React.FC = () => {
         }
     };
 
-    const closeDistributionModal = () => setIsDistributionModalOpen(false);
+    const closeDistributionModal = () => app.closeModal('distribution');
 
     useEffect(() => {
         const checkShareUrl = () => {
@@ -505,7 +512,6 @@ const AppContent: React.FC = () => {
                             )}
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
-                            {/* INDICADOR DE CONECTIVIDADE NUVEM */}
                             {app.isOffline ? (
                                 <div className="h-9 w-9 flex items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 animate-pulse" title="Modo Offline Ativo (Cache)">
                                     <span className="material-symbols-outlined text-xl">cloud_off</span>
@@ -516,11 +522,7 @@ const AppContent: React.FC = () => {
                                 </div>
                             )}
 
-                            <button 
-                                onClick={handleBudgetClick} 
-                                className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${piggyStyle}`}
-                                title="Definir Orçamento"
-                            >
+                            <button onClick={handleBudgetClick} className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${piggyStyle}`} title="Definir Orçamento">
                                 <span className={`material-symbols-outlined text-xl ${app.budget !== null ? 'font-variation-FILL-1' : ''}`} style={ app.budget !== null ? { fontVariationSettings: "'FILL' 1" } : {} }>savings</span>
                             </button>
 
@@ -549,11 +551,7 @@ const AppContent: React.FC = () => {
                 </main>
 
                 {!showHomeView && (
-                    <button 
-                        onClick={() => app.openModal('addItem')} 
-                        className="hidden lg:flex lg:absolute lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2 z-40 h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-2xl shadow-primary/40 ring-4 ring-white/10 transition-all hover:scale-110 active:scale-95 animate-fadeIn"
-                        title="Adicionar Item"
-                    >
+                    <button onClick={() => app.openModal('addItem')} className="hidden lg:flex lg:absolute lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2 z-40 h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-2xl shadow-primary/40 ring-4 ring-white/10 transition-all hover:scale-110 active:scale-95 animate-fadeIn" title="Adicionar Item">
                         <span className="material-symbols-outlined !text-4xl">add</span>
                     </button>
                 )}
@@ -574,7 +572,7 @@ const AppContent: React.FC = () => {
                     </div>
                 </footer>
 
-                <AppModals sharedListData={sharedListData} isImportingShare={isImportingShare} isDistributionModalOpen={isDistributionModalOpen} closeDistributionModal={closeDistributionModal} handleShare={handleShare} handleAddItem={handleAddItem} editingItem={editingItem} handleSavePurchase={handleSavePurchase} handleFinishWithoutSaving={handleFinishWithoutSaving} handleRepeatPurchase={handleRepeatPurchase} handleAddHistoricItem={handleAddHistoricItem} handleImportSharedList={handleImportSharedList} handleStartShopping={handleStartShopping} handleShareAndStart={handleShareAndStart} handleAddToCurrentList={handleAddToCurrentList} handleStartNewListForRecipe={handleStartNewListForRecipe} />
+                <AppModals sharedListData={sharedListData} isImportingShare={isImportingShare} isDistributionModalOpen={app.isDistributionModalOpen} closeDistributionModal={closeDistributionModal} handleShare={handleShare} handleAddItem={handleAddItem} editingItem={editingItem} handleSavePurchase={handleSavePurchase} handleFinishWithoutSaving={handleFinishWithoutSaving} handleRepeatPurchase={handleRepeatPurchase} handleAddHistoricItem={handleAddHistoricItem} handleImportSharedList={handleImportSharedList} handleStartShopping={handleStartShopping} handleShareAndStart={handleShareAndStart} handleAddToCurrentList={handleAddToCurrentList} handleStartNewListForRecipe={handleStartNewListForRecipe} />
             </div>
             <WebSidebarRight />
         </div>

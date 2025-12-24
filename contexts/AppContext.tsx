@@ -30,65 +30,68 @@ const getRecipeDocId = (name: string) => {
 };
 
 /**
- * LIMPEZA RADICAL: Deixa apenas o nome puro do produto.
- * Ex: "Xícaras de farinha de rosca" -> "Farinha de rosca"
- * Ex: "Chá de sal" -> "Sal"
- * Ex: "Óleo para fritar" -> "Óleo"
+ * LIMPEZA RADICAL E INTELIGENTE: Extrai apenas o núcleo do produto.
+ * Lida com acentuação e termos complexos.
  */
 const extractProductName = (text: string): string => {
     if (!text) return '';
     
+    // Normalização inicial: remove espaços extras e mantém case original para processar
     let cleaned = text.trim();
 
-    // 1. Remove parênteses e conteúdos extras
+    // 1. Remove qualquer coisa dentro de parênteses
     cleaned = cleaned.replace(/\(.*?\)/g, '');
 
-    // 2. Remove números e frações no início (1/2, 500, etc)
+    // 2. Remove números e frações no início
     cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
 
-    // 3. Lista de termos de medida e conectivos para DELETAR do início
+    // 3. Lista exaustiva de unidades e medidas (com e sem acento) para remoção do INÍCIO
     const measures = [
-        'g', 'kg', 'ml', 'l', 'un', 'unid', 'unidade', 'unidades', 'colher', 'colheres', 'sopa', 'cha', 
-        'sobremesa', 'xicara', 'xicaras', 'dente', 'dentes', 'caixa', 'caixas', 'lata', 'latas', 'vidro', 
-        'vidros', 'pacote', 'pacotes', 'maco', 'macos', 'pitada', 'pitadas', 'fatia', 'fatias', 'copo', 
-        'copos', 'pote', 'potes', 'tablete', 'tabletes', 'envelope', 'envelopes', 'garrafa', 'garrafas',
-        'es', 'c', 'cs', 'cc', 'qb'
+        'g', 'kg', 'ml', 'l', 'un', 'unid', 'unidade', 'unidades', 'colher', 'colheres', 'sopa', 
+        'cha', 'chá', 'sobremesa', 'xicara', 'xícara', 'xicaras', 'xícaras', 'dente', 'dentes', 
+        'caixa', 'caixas', 'lata', 'latas', 'vidro', 'vidros', 'pacote', 'pacotes', 'maco', 'maço', 
+        'macos', 'maços', 'pitada', 'pitadas', 'fatia', 'fatias', 'copo', 'copos', 'pote', 'potes', 
+        'tablete', 'tabletes', 'envelope', 'envelopes', 'garrafa', 'garrafas'
     ];
 
-    // Loop para limpar camadas (ex: "2 colheres de sopa de...")
+    const connectives = ['de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'em', 'para'];
+
     let loop = true;
     while (loop) {
         let prev = cleaned;
         
-        // Remove medidas
-        const measureRegex = new RegExp(`^(${measures.join('|')})\\s*(s)?\\b`, 'i');
+        // Regex para medida isolada no início da frase
+        const measureRegex = new RegExp(`^(${measures.join('|')})\\b`, 'i');
         cleaned = cleaned.replace(measureRegex, '').trim();
         
-        // Remove conectivos (de, da, do, para, com) que sobram no início
-        cleaned = cleaned.replace(/^(de|da|do|das|dos|para|com|em|a)\s+/i, '').trim();
+        // Regex para conectivos soltos no início após a remoção da medida
+        const connectiveRegex = new RegExp(`^(${connectives.join('|')})\\s+`, 'i');
+        cleaned = cleaned.replace(connectiveRegex, '').trim();
         
         if (cleaned === prev) loop = false;
     }
 
-    // 4. Lista de sufixos de preparo/contexto para DELETAR do final
+    // 4. Limpeza de Sufixos de Preparo, Finalidade e Estado (Remover do FIM)
     const suffixes = [
         'picado', 'picada', 'em cubos', 'em rodelas', 'fatiado', 'fatiada', 'ralado', 'ralada', 
-        'cozido', 'cozida', 'grande', 'pequeno', 'pequena', 'medio', 'media', 'fresco', 'fresca', 
-        'seco', 'seca', 'limpo', 'limpa', 'a gosto', 'opcional', 'descascado', 'descascada', 
-        'extra virgem', 'para decorar', 'para fritar', 'para temperar', 'em calda', 'processado', 
-        'moído', 'moída', 'refogado', 'refogada', 'batido', 'batida', 'unidades'
+        'cozido', 'cozida', 'grande', 'pequeno', 'pequena', 'medio', 'media', 'médio', 'média', 
+        'fresco', 'fresca', 'seco', 'seca', 'limpo', 'limpa', 'a gosto', 'opcional', 'descascado', 
+        'descascada', 'extra virgem', 'para decorar', 'para fritar', 'em calda', 'processado', 
+        'moído', 'moída', 'refogado', 'refogada'
     ];
-
+    
+    // Remove o termo e tudo o que vier depois dele
     const suffixRegex = new RegExp(`\\s+(${suffixes.join('|')}).*$`, 'i');
     cleaned = cleaned.replace(suffixRegex, '').trim();
 
-    // Limpeza final de conectivos órfãos
-    cleaned = cleaned.replace(/^(de|da|do|para)\s+/i, '').trim();
-    cleaned = cleaned.replace(/\s+(de|da|do|para)$/i, '').trim();
+    // Limpeza final de conectivos órfãos que sobram no final
+    const endConnectiveRegex = new RegExp(`\\s+(${connectives.join('|')})$`, 'i');
+    cleaned = cleaned.replace(endConnectiveRegex, '').trim();
 
     if (cleaned.length < 2) return text;
     
-    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    // Capitaliza apenas a primeira letra para manter o padrão visual limpo
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
 };
 
 const normalizeIngredients = (ingredients: any[]) => {
@@ -436,6 +439,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setInstallPromptEvent(e); 
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
             if (!isStandalone) {
+                // Apenas exibe o modal de distribuição se o evento beforeinstallprompt for disparado
                 setTimeout(() => {
                     setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
                 }, 2000);
