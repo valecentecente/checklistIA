@@ -29,18 +29,45 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
+/**
+ * Tenta extrair apenas o nome do produto de uma string de ingrediente.
+ * Ex: "100g de queijo parmesão" -> "Queijo parmesão"
+ */
+const extractProductName = (text: string): string => {
+    // Regex para remover números, frações e unidades comuns no início da string
+    const quantityRegex = /^(\d+[\d.,/]*\s*(g|kg|ml|l|un|unid|colher|colheres|xícara|xícaras|dente|dentes|caixa|caixas|lata|latas|vidro|vidros|pacote|pacotes|maço|maços|pitada|pitadas|fatia|fatias|unidades|copo|copos)\s*(de\s+)?)/i;
+    
+    let cleaned = text.replace(quantityRegex, '').trim();
+    
+    // Se a limpeza falhou (string muito curta), fallback para as primeiras 3 palavras
+    if (cleaned.length < 2) {
+        return text.split(' ').slice(0, 3).join(' ');
+    }
+    
+    // Capitaliza a primeira letra
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
 const normalizeIngredients = (ingredients: any[]) => {
     if (!Array.isArray(ingredients)) return [];
     return ingredients.map(ing => {
         if (typeof ing === 'string') {
             return {
-                simplifiedName: ing.split(' ').slice(0, 2).join(' '),
+                simplifiedName: extractProductName(ing),
                 detailedName: ing
             };
         }
+        
+        // Se já for um objeto vindo da IA, prioriza o nome simplificado se ele for válido
+        const sName = ing.simplifiedName || ing.name || '';
+        const dName = ing.detailedName || ing.description || ing.name || '';
+        
+        // Validação: Se a IA mandou algo como "100g" no simplifiedName, corrigimos
+        const isMessy = /^\d+/.test(sName) && sName.split(' ').length < 3;
+
         return {
-            simplifiedName: String(ing.simplifiedName || ing.name || ''),
-            detailedName: String(ing.detailedName || ing.description || ing.name || '')
+            simplifiedName: isMessy ? extractProductName(dName) : String(sName),
+            detailedName: String(dName)
         };
     });
 };
@@ -57,7 +84,7 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
         difficulty: (r.difficulty === 'Fácil' || r.difficulty === 'Médio' || r.difficulty === 'Difícil' ? r.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
         cost: (r.cost === 'Baixo' || r.cost === 'Médio' || r.cost === 'Alto' ? r.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
         imageUrl: r.imageUrl,
-        imageSource: 'cache', // FORÇADO: Tudo o que vem do acervo via mapeamento é cache
+        imageSource: r.imageSource || 'cache',
         description: r.description,
         keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [] as string[],
         tags: Array.isArray(r.tags) ? r.tags.map(String) : [] as string[],
@@ -364,32 +391,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
     }, []);
 
-    // CORREÇÃO PWA: Captura e armazenamento persistente do evento com LOGS
     useEffect(() => {
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-
-        const handler = (e: any) => { 
+        const handler = (e: Event) => { 
             e.preventDefault(); 
             setInstallPromptEvent(e); 
-            console.log("[PWA] Capturado beforeinstallprompt!");
-            
-            if (!isStandalone && !sessionStorage.getItem('pwa_prompt_shown')) {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+            if (!isStandalone) {
                 setTimeout(() => {
                     setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
-                    sessionStorage.setItem('pwa_prompt_shown', 'true');
-                }, 8000); 
+                }, 2000);
             }
         };
-
         window.addEventListener('beforeinstallprompt', handler);
-        
-        if (!isStandalone && /iPad|iPhone|iPod/.test(navigator.userAgent) && !sessionStorage.getItem('pwa_prompt_shown')) {
-             setTimeout(() => {
-                setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
-                sessionStorage.setItem('pwa_prompt_shown', 'true');
-            }, 8000);
-        }
-
         return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
 
@@ -624,23 +637,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const setTheme = (newTheme: Theme) => setThemeState(newTheme);
 
     const handleInstall = async () => {
-        if (!installPromptEvent) {
-            console.warn("[PWA] Prompt indisponível no momento.");
-            return false;
-        }
-        try {
-            await installPromptEvent.prompt();
-            const { outcome } = await installPromptEvent.userChoice;
-            console.log(`[PWA] Usuário respondeu: ${outcome}`);
-            setInstallPromptEvent(null);
-            setIsPWAInstallVisible(false);
-            return outcome === 'accepted';
-        } catch (e) {
-            console.error("[PWA] Erro ao disparar prompt:", e);
-            return false;
-        }
+        if (!installPromptEvent) return false;
+        installPromptEvent.prompt();
+        const { outcome } = await installPromptEvent.userChoice;
+        setInstallPromptEvent(null);
+        setIsPWAInstallVisible(false);
+        return outcome === 'accepted';
     };
-
     const handleDismissInstall = () => { setIsPWAInstallVisible(false); };
     const showPWAInstallPromptIfAvailable = () => { if (installPromptEvent) setIsPWAInstallVisible(true); };
 
@@ -657,10 +660,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         for (const cache of allCaches) {
             if (Array.isArray(cache)) {
                 const found = (cache as FullRecipe[]).find(r => r.name.toLowerCase() === target);
-                if (found) return { ...found, imageSource: 'cache' };
+                if (found) return found;
             } else {
                 const foundKey = Object.keys(cache).find(k => k.toLowerCase() === target);
-                if (foundKey) return { ...((cache as Record<string, FullRecipe>)[foundKey]), imageSource: 'cache' };
+                if (foundKey) return (cache as Record<string, FullRecipe>)[foundKey];
             }
         }
         return undefined;
@@ -668,15 +671,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const getRandomCachedRecipe = useCallback((): FullRecipe | null => {
         if (globalRecipeCache.length === 0) return null;
-        const r = globalRecipeCache[Math.floor(Math.random() * globalRecipeCache.length)];
-        return { ...r, imageSource: 'cache' };
+        return globalRecipeCache[Math.floor(Math.random() * globalRecipeCache.length)];
     }, [globalRecipeCache]);
 
     const showRecipe = (input: string | FullRecipe) => { 
         let r = typeof input === 'string' ? getCachedRecipe(input) : input;
         if (r && Array.isArray(r.ingredients) && r.ingredients.length > 0) {
-            // Garante o selo se veio do cache
-            if (!r.imageSource && r.imageUrl) r.imageSource = 'cache';
             if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
             setSelectedRecipe(r);
         } else { showToast("Receita em manutenção."); }
@@ -710,7 +710,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             snap.forEach(docSnap => {
                 const data = docSnap.data();
                 if (data && data.name) {
-                    rawResults.push({ ...data, imageSource: 'cache' });
+                    rawResults.push(data);
                 }
             });
             return mapToFullRecipeArray(rawResults);
@@ -787,7 +787,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 difficulty: (details.difficulty === 'Fácil' || details.difficulty === 'Médio' || details.difficulty === 'Difícil' ? details.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
                 cost: (details.cost === 'Baixo' || details.cost === 'Médio' || details.cost === 'Alto' ? details.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
                 imageUrl: details.imageUrl,
-                imageSource: 'genai', // Gerado na hora
+                imageSource: details.imageSource || 'cache',
                 description: details.description,
                 keywords: generateKeywords(finalName),
                 tags: Array.isArray(details.tags) ? details.tags.map(String) : [] as string[],
