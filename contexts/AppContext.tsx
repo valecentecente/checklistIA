@@ -29,13 +29,12 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
-// Função de normalização para evitar que ingredientes sumam se a IA mudar o formato
 const normalizeIngredients = (ingredients: any[]) => {
     if (!Array.isArray(ingredients)) return [];
     return ingredients.map(ing => {
         if (typeof ing === 'string') {
             return {
-                simplifiedName: ing.split(' ').slice(0, 2).join(' '), // Pega as primeiras 2 palavras como nome
+                simplifiedName: ing.split(' ').slice(0, 2).join(' '),
                 detailedName: ing
             };
         }
@@ -58,7 +57,7 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
         difficulty: (r.difficulty === 'Fácil' || r.difficulty === 'Médio' || r.difficulty === 'Difícil' ? r.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
         cost: (r.cost === 'Baixo' || r.cost === 'Médio' || r.cost === 'Alto' ? r.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
         imageUrl: r.imageUrl,
-        imageSource: r.imageSource || 'cache',
+        imageSource: 'cache', // FORÇADO: Tudo o que vem do acervo via mapeamento é cache
         description: r.description,
         keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [] as string[],
         tags: Array.isArray(r.tags) ? r.tags.map(String) : [] as string[],
@@ -365,21 +364,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
     }, []);
 
-    // CORREÇÃO PWA: Captura robusta do evento de instalação
+    // CORREÇÃO PWA: Captura e armazenamento persistente do evento
     useEffect(() => {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+
         const handler = (e: any) => { 
             e.preventDefault(); 
             setInstallPromptEvent(e); 
-            // Opcional: mostrar prompt contextual após algum tempo de uso
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-            if (!isStandalone && !localStorage.getItem('pwa_distribution_shown')) {
+            console.log("[PWA] Evento beforeinstallprompt capturado!");
+            
+            if (!isStandalone && !sessionStorage.getItem('pwa_prompt_shown')) {
                 setTimeout(() => {
                     setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
-                    localStorage.setItem('pwa_distribution_shown', 'true');
-                }, 15000); // 15 segundos para não ser intrusivo
+                    sessionStorage.setItem('pwa_prompt_shown', 'true');
+                }, 8000); // 8 segundos para não ser invasivo no susto
             }
         };
+
         window.addEventListener('beforeinstallprompt', handler);
+        
+        if (!isStandalone && /iPad|iPhone|iPod/.test(navigator.userAgent) && !sessionStorage.getItem('pwa_prompt_shown')) {
+             setTimeout(() => {
+                setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
+                sessionStorage.setItem('pwa_prompt_shown', 'true');
+            }, 8000);
+        }
+
         return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
 
@@ -613,24 +623,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const setTheme = (newTheme: Theme) => setThemeState(newTheme);
 
-    // CORREÇÃO PWA: handleInstall agora realmente dispara o prompt do navegador
     const handleInstall = async () => {
         if (!installPromptEvent) {
-            // Se não houver evento e for iOS, a UI do DistributionModal cuida do tutorial.
-            // No Android/Chrome, isso significa que o evento ainda não disparou ou o app já está instalado.
+            console.warn("[PWA] Prompt indisponível. Verifique HTTPS ou se já está instalado.");
             return false;
         }
         try {
-            installPromptEvent.prompt();
+            await installPromptEvent.prompt();
             const { outcome } = await installPromptEvent.userChoice;
+            console.log(`[PWA] Usuário ${outcome} a instalação.`);
             setInstallPromptEvent(null);
             setIsPWAInstallVisible(false);
             return outcome === 'accepted';
         } catch (e) {
-            console.warn("Falha ao disparar instalação:", e);
+            console.error("[PWA] Erro ao disparar prompt:", e);
             return false;
         }
     };
+
     const handleDismissInstall = () => { setIsPWAInstallVisible(false); };
     const showPWAInstallPromptIfAvailable = () => { if (installPromptEvent) setIsPWAInstallVisible(true); };
 
@@ -647,10 +657,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         for (const cache of allCaches) {
             if (Array.isArray(cache)) {
                 const found = (cache as FullRecipe[]).find(r => r.name.toLowerCase() === target);
-                if (found) return found;
+                if (found) return { ...found, imageSource: 'cache' };
             } else {
                 const foundKey = Object.keys(cache).find(k => k.toLowerCase() === target);
-                if (foundKey) return (cache as Record<string, FullRecipe>)[foundKey];
+                if (foundKey) return { ...((cache as Record<string, FullRecipe>)[foundKey]), imageSource: 'cache' };
             }
         }
         return undefined;
@@ -658,12 +668,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const getRandomCachedRecipe = useCallback((): FullRecipe | null => {
         if (globalRecipeCache.length === 0) return null;
-        return globalRecipeCache[Math.floor(Math.random() * globalRecipeCache.length)];
+        const r = globalRecipeCache[Math.floor(Math.random() * globalRecipeCache.length)];
+        return { ...r, imageSource: 'cache' };
     }, [globalRecipeCache]);
 
     const showRecipe = (input: string | FullRecipe) => { 
         let r = typeof input === 'string' ? getCachedRecipe(input) : input;
         if (r && Array.isArray(r.ingredients) && r.ingredients.length > 0) {
+            // Garante o selo se veio do cache
+            if (!r.imageSource && r.imageUrl) r.imageSource = 'cache';
             if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
             setSelectedRecipe(r);
         } else { showToast("Receita em manutenção."); }
@@ -697,7 +710,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             snap.forEach(docSnap => {
                 const data = docSnap.data();
                 if (data && data.name) {
-                    rawResults.push(data);
+                    rawResults.push({ ...data, imageSource: 'cache' });
                 }
             });
             return mapToFullRecipeArray(rawResults);
@@ -774,7 +787,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 difficulty: (details.difficulty === 'Fácil' || details.difficulty === 'Médio' || details.difficulty === 'Difícil' ? details.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
                 cost: (details.cost === 'Baixo' || details.cost === 'Médio' || details.cost === 'Alto' ? details.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
                 imageUrl: details.imageUrl,
-                imageSource: details.imageSource || 'cache',
+                imageSource: 'genai', // Gerado na hora
                 description: details.description,
                 keywords: generateKeywords(finalName),
                 tags: Array.isArray(details.tags) ? details.tags.map(String) : [] as string[],

@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { PWAInstallContent } from './PWAInstallPrompt'; 
 import { useApp } from '../contexts/AppContext';
 
 interface DistributionModalProps {
@@ -22,11 +21,11 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
         if (isOpen) {
             document.body.style.overflow = 'hidden';
             setActiveTab('pwa');
-            // Detecção robusta de iOS
+            // Detecção refinada de iOS
             const iosMatch = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
             setIsIOS(iosMatch);
             
-            // Verificação se já está rodando como app
+            // Verificação de modo standalone
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
             setIsInstalled(isStandalone);
         } else {
@@ -37,7 +36,12 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
 
     if (!isOpen) return null;
 
-    const handleInstallClick = async () => {
+    const onInstallClick = async () => {
+        console.log("[DistributionModal] Tentando instalar...", installPromptEvent);
+        if (!installPromptEvent) {
+            alert("O sistema de instalação ainda não está pronto. Se estiver no Chrome, use o menu lateral (três pontos) > Instalar Aplicativo.");
+            return;
+        }
         const success = await handleInstall();
         if (success) {
             onClose();
@@ -45,7 +49,7 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
     };
 
     return (
-        <div className="fixed inset-0 z-[130] bg-black/60 flex items-center justify-center p-4 animate-fadeIn backdrop-blur-sm" onClick={onClose}>
+        <div className="fixed inset-0 z-[220] bg-black/60 flex items-center justify-center p-4 animate-fadeIn backdrop-blur-sm" onClick={onClose}>
             <div className="relative w-full max-w-sm flex-col overflow-hidden rounded-[2rem] bg-background-light dark:bg-surface-dark shadow-2xl animate-slideUp" onClick={(e) => e.stopPropagation()}>
                 
                 <div className="p-5 pb-2 flex items-center justify-between">
@@ -60,7 +64,7 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
                         onClick={() => setActiveTab('pwa')}
                         className={`pb-3 px-2 font-bold text-xs uppercase tracking-widest transition-colors ${activeTab === 'pwa' ? 'text-primary border-b-2 border-primary' : 'text-gray-400'}`}
                     >
-                        {isInstalled ? 'App Ativo' : (isIOS ? 'Como Instalar' : 'Atalho App')}
+                        {isInstalled ? 'App Ativo' : (isIOS ? 'Como Instalar' : 'Instalar')}
                     </button>
                     <button 
                         onClick={() => setActiveTab('share')}
@@ -80,7 +84,7 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
                                 <div className="space-y-2">
                                     <h3 className="font-black text-lg text-gray-800 dark:text-white">App Instalado!</h3>
                                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 leading-relaxed">
-                                        Você já está usando a versão de aplicativo. <br/>Aproveite a velocidade máxima e modo offline.
+                                        Você já está usando a versão oficial. <br/>Modo offline e performance máxima ativos.
                                     </p>
                                 </div>
                                 <button onClick={onClose} className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest active:scale-95 transition-all">
@@ -88,19 +92,16 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
                                 </button>
                             </div>
                         ) : isIOS ? (
-                            /* TUTORIAL ESPECÍFICO IPHONE */
                             <div className="flex flex-col items-center text-center gap-6 animate-fadeIn">
-                                <div className="h-16 w-16 bg-white rounded-2xl p-3 shadow-lg border border-gray-100">
+                                <div className="h-16 w-16 bg-white rounded-2xl p-3 shadow-lg border border-gray-100 flex items-center justify-center">
                                     <img src="/icon.svg" alt="App" className="w-full h-full"/>
                                 </div>
-                                
                                 <div className="space-y-4">
-                                    <h3 className="font-black text-lg text-gray-800 dark:text-white leading-tight">Instale no seu iPhone</h3>
-                                    
+                                    <h3 className="font-black text-lg text-gray-800 dark:text-white leading-tight">Adicione ao seu iPhone</h3>
                                     <div className="flex flex-col gap-4 items-start text-left">
                                         <div className="flex items-center gap-4 bg-gray-50 dark:bg-white/5 p-3 rounded-2xl w-full">
                                             <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-sm shrink-0">1</div>
-                                            <p className="text-xs font-bold text-gray-600 dark:text-gray-300">Toque no ícone de <span className="text-blue-500 flex inline-flex items-center">compartilhar <span className="material-symbols-outlined text-lg ml-1">ios_share</span></span> na barra do Safari.</p>
+                                            <p className="text-xs font-bold text-gray-600 dark:text-gray-300">Toque no ícone de <span className="text-blue-500 flex inline-flex items-center">compartilhar <span className="material-symbols-outlined text-lg ml-1">ios_share</span></span> no Safari.</p>
                                         </div>
                                         <div className="flex items-center gap-4 bg-gray-50 dark:bg-white/5 p-3 rounded-2xl w-full">
                                             <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-sm shrink-0">2</div>
@@ -108,35 +109,31 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
                                         </div>
                                     </div>
                                 </div>
-
                                 <button onClick={onClose} className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">
                                     Entendi, vou fazer!
                                 </button>
                             </div>
                         ) : (
-                            /* FLUXO ANDROID / CHROME */
                             <div className="flex flex-col items-center text-center gap-6 animate-fadeIn">
-                                <div className="h-16 w-16 bg-white rounded-2xl p-2 shadow-lg border border-gray-100">
+                                <div className="h-16 w-16 bg-white rounded-2xl p-2 shadow-lg border border-gray-100 flex items-center justify-center">
                                     <img src="/icon.svg" alt="App" className="w-full h-full"/>
                                 </div>
-                                
                                 <div className="space-y-2">
-                                    <h3 className="font-black text-lg text-gray-800 dark:text-white">App ChecklistIA</h3>
+                                    <h3 className="font-black text-lg text-gray-800 dark:text-white">ChecklistIA no Android</h3>
                                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                         {installPromptEvent 
-                                            ? "Adicione o atalho para acesso instantâneo e uso sem internet." 
-                                            : "O sistema de instalação está preparando. Se o botão não ativar, use o menu do navegador em 'Instalar App'."}
+                                            ? "Instale o atalho para usar o app instantaneamente mesmo sem internet." 
+                                            : "Se o botão não ativar, use o menu do Chrome em 'Instalar Aplicativo'."}
                                     </p>
                                 </div>
-
                                 <button 
-                                    onClick={handleInstallClick} 
-                                    disabled={!installPromptEvent}
-                                    className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${installPromptEvent ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed grayscale'}`}
+                                    onClick={onInstallClick} 
+                                    className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${installPromptEvent ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400 grayscale'}`}
                                 >
                                     <span className="material-symbols-outlined">download_for_offline</span>
-                                    {installPromptEvent ? "Adicionar Atalho" : "Aguardando..."}
+                                    {installPromptEvent ? "Adicionar Atalho" : "Instalar Manualmente"}
                                 </button>
+                                {!installPromptEvent && <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Dica: Menu do Chrome > Instalar App</p>}
                             </div>
                         )
                     ) : (
@@ -147,7 +144,7 @@ export const DistributionModal: React.FC<DistributionModalProps> = ({ isOpen, on
                              <div className="space-y-2">
                                 <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase italic tracking-tighter">Espalhe a novidade!</h2>
                                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                                    Mande o link do ChecklistIA para seus amigos. <br/>É grátis, simples e inteligente.
+                                    Compartilhe o ChecklistIA com seus amigos. <br/>É grátis e ajuda muito na hora da compra.
                                 </p>
                              </div>
                              <button 

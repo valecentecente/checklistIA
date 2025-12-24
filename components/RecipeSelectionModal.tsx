@@ -5,7 +5,6 @@ import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useAuth } from '../contexts/AuthContext';
 import type { FullRecipe } from '../types';
 
-// EQUIPE CHECKLIST IA - Fotos de Staff
 const STAFF_MEMBERS = [
     { id: 1, url: 'https://i.imgur.com/oaDEmhp.png' },
     { id: 2, url: 'https://i.imgur.com/yo2ArRP.png' },
@@ -101,8 +100,6 @@ export const RecipeSelectionModal: React.FC = () => {
 
     return (
         <div className="fixed inset-0 z-[200] bg-black flex flex-col justify-center items-center animate-fadeIn">
-            
-            {/* Header Minimalista */}
             <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-50">
                 <div className="bg-black/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                     <h2 className="text-white text-sm font-black uppercase tracking-tighter italic">
@@ -117,9 +114,7 @@ export const RecipeSelectionModal: React.FC = () => {
                 </button>
             </div>
 
-            {/* Carousel Container */}
             <div className="relative w-full flex items-center group/carousel h-[85vh]">
-                
                 <button 
                     onClick={() => handleScroll('left')}
                     className="hidden lg:flex absolute left-4 z-50 w-14 h-14 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md border border-white/10 transition-all opacity-0 group-hover/carousel:opacity-100"
@@ -131,10 +126,9 @@ export const RecipeSelectionModal: React.FC = () => {
                     ref={scrollContainerRef}
                     className="w-full flex overflow-x-auto snap-x snap-mandatory gap-6 px-8 pb-10 scrollbar-hide items-center h-full"
                 >
-                    
-                    {/* Cards do Acervo (se houver) */}
                     {recipeSearchResults.map((recipe, idx) => {
                         const isFav = isFavorite(recipe.name);
+                        const isFromCache = recipe.imageSource === 'cache';
                         return (
                             <div 
                                 key={idx} 
@@ -145,6 +139,15 @@ export const RecipeSelectionModal: React.FC = () => {
                                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90"></div>
                                 
                                 <div className="absolute top-0 left-0 w-full p-10 pt-16">
+                                    {/* CRÉDITOS DO ACERVO NO CARD DE SELEÇÃO */}
+                                    {isFromCache && (
+                                        <div className="mb-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 w-fit animate-fadeIn">
+                                            <span className="material-symbols-outlined text-[14px] text-orange-400">photo_camera</span>
+                                            <span className="text-[8px] font-black uppercase tracking-widest leading-none pt-[1px]">
+                                                <span className="text-white">Checklist</span><span className="text-blue-500">IA</span>
+                                            </span>
+                                        </div>
+                                    )}
                                     <h3 className="font-display text-[32px] sm:text-[38px] font-black text-white leading-[0.95] uppercase italic tracking-[-0.05em] line-clamp-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transform -rotate-1 origin-left">
                                         {recipe.name}
                                     </h3>
@@ -161,21 +164,11 @@ export const RecipeSelectionModal: React.FC = () => {
                                     </div>
                                     
                                     <div className="flex gap-3 shrink-0 z-30">
-                                        <button 
-                                            onClick={(e) => handleShare(e, recipe)}
-                                            className="w-12 h-12 rounded-[1.2rem] flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 bg-black/40 text-white hover:bg-black/60"
-                                        >
+                                        <button onClick={(e) => handleShare(e, recipe)} className="w-12 h-12 rounded-[1.2rem] flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 bg-black/40 text-white hover:bg-black/60">
                                             <span className="material-symbols-outlined text-xl">share</span>
                                         </button>
-                                        <button 
-                                            onClick={(e) => handleToggleFavorite(e, recipe)}
-                                            className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 ${
-                                                isFav ? 'bg-red-500 text-white' : 'bg-black/40 text-white hover:bg-black/60'
-                                            }`}
-                                        >
-                                            <span className={`material-symbols-outlined text-xl ${isFav ? 'font-variation-FILL-1' : ''}`} style={ isFav ? { fontVariationSettings: "'FILL' 1" } : {} }>
-                                                favorite
-                                            </span>
+                                        <button onClick={(e) => handleToggleFavorite(e, recipe)} className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center transition-all shadow-xl backdrop-blur-md border border-white/20 ${isFav ? 'bg-red-500 text-white' : 'bg-black/40 text-white hover:bg-black/60'}`}>
+                                            <span className={`material-symbols-outlined text-xl ${isFav ? 'font-variation-FILL-1' : ''}`} style={ isFav ? { fontVariationSettings: "'FILL' 1" } : {} }>favorite</span>
                                         </button>
                                     </div>
                                 </div>
@@ -183,61 +176,27 @@ export const RecipeSelectionModal: React.FC = () => {
                         );
                     })}
 
-                    {/* CARD DA GARÇONETE IA - REFINADO */}
-                    <div 
-                        className="snap-center shrink-0 w-[85vw] sm:w-[360px] h-[75vh] relative rounded-[3rem] overflow-hidden shadow-2xl bg-[#0a0a0a] border border-white/10 flex flex-col"
-                    >
-                        <div 
-                            className="absolute inset-0 bg-cover bg-center animate-slowZoom"
-                            style={{ backgroundImage: `url("${staffMember.url}")` }}
-                        ></div>
-
-                        {/* Gradiente inferior para legibilidade da área de input e texto */}
+                    <div className="snap-center shrink-0 w-[85vw] sm:w-[360px] h-[75vh] relative rounded-[3rem] overflow-hidden shadow-2xl bg-[#0a0a0a] border border-white/10 flex flex-col">
+                        <div className="absolute inset-0 bg-cover bg-center animate-slowZoom" style={{ backgroundImage: `url("${staffMember.url}")` }}></div>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent"></div>
-
-                        {/* CONTEÚDO POSICIONADO NA BASE - Rostos e Crachás ficam livres no topo/centro */}
                         <div className="absolute inset-x-0 bottom-0 p-8 pb-12 flex flex-col gap-4">
-                            
-                            {/* Input Slim com Botão Lupa */}
                             <div className="relative w-full group">
                                 <div className="w-full bg-white/10 backdrop-blur-2xl rounded-2xl p-1.5 border border-white/20 shadow-2xl flex items-center gap-2">
-                                    <input 
-                                        type="text"
-                                        value={customOrder}
-                                        onChange={(e) => setCustomOrder(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleGenerateNew()}
-                                        placeholder="O que você quer cozinhar?"
-                                        className="flex-1 bg-transparent border-0 text-white placeholder:text-white/30 focus:ring-0 text-base font-bold h-10 px-3"
-                                    />
-                                    <button 
-                                        onClick={handleGenerateNew}
-                                        disabled={!customOrder.trim()}
-                                        className="h-10 w-10 bg-primary hover:bg-primary-hover text-white rounded-xl shadow-lg transition-all active:scale-90 flex items-center justify-center disabled:opacity-30 disabled:grayscale"
-                                        title="Começar Busca"
-                                    >
+                                    <input type="text" value={customOrder} onChange={(e) => setCustomOrder(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleGenerateNew()} placeholder="O que você quer cozinhar?" className="flex-1 bg-transparent border-0 text-white placeholder:text-white/30 focus:ring-0 text-base font-bold h-10 px-3" />
+                                    <button onClick={handleGenerateNew} disabled={!customOrder.trim()} className="h-10 w-10 bg-primary hover:bg-primary-hover text-white rounded-xl shadow-lg transition-all active:scale-90 flex items-center justify-center disabled:opacity-30 disabled:grayscale">
                                         <span className="material-symbols-outlined !text-2xl">search</span>
                                     </button>
                                 </div>
                             </div>
-
-                            {/* Textos de Apoio Movidos para baixo do campo */}
                             <div className="text-center space-y-1">
-                                <h3 className="font-display text-2xl font-black text-blue-400 uppercase italic tracking-tighter drop-shadow-md">
-                                    Não achou o que queria?
-                                </h3>
-                                <p className="text-[10px] text-white/50 font-bold uppercase tracking-[0.2em] leading-tight">
-                                    Peça agora para nossa IA <br/> preparar sua receita na hora
-                                </p>
+                                <h3 className="font-display text-2xl font-black text-blue-400 uppercase italic tracking-tighter drop-shadow-md">Não achou o que queria?</h3>
+                                <p className="text-[10px] text-white/50 font-bold uppercase tracking-[0.2em] leading-tight">Peça agora para nossa IA <br/> preparar sua receita na hora</p>
                             </div>
                         </div>
-
-                        {/* Indicador de Status Discreto na Lateral */}
                         <div className="absolute top-10 left-10 opacity-30">
                              <span className="text-[8px] font-black text-white uppercase tracking-[0.4em] [writing-mode:vertical-lr] rotate-180">STAFF IA</span>
                         </div>
                     </div>
-
-                    <div className="snap-center shrink-0 w-8"></div>
                 </div>
 
                 <button 
@@ -247,24 +206,10 @@ export const RecipeSelectionModal: React.FC = () => {
                     <span className="material-symbols-outlined text-3xl">chevron_right</span>
                 </button>
             </div>
-
-            {/* Pagination Style dots */}
             <div className="flex gap-2 mb-8">
                 <div className={`h-1.5 rounded-full transition-all ${hasResults ? 'w-2 bg-white/20' : 'w-8 bg-primary'}`}></div>
                 <div className={`h-1.5 rounded-full transition-all ${!hasResults ? 'w-2 bg-white/20' : 'w-8 bg-primary'}`}></div>
             </div>
-
-            <style>{`
-                @keyframes slowZoom {
-                    from { transform: scale(1); }
-                    to { transform: scale(1.08); }
-                }
-                .animate-slowZoom {
-                    animation: slowZoom 30s infinite alternate ease-in-out;
-                }
-                .scrollbar-hide::-webkit-scrollbar { display: none; }
-                .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-            `}</style>
         </div>
     );
 };

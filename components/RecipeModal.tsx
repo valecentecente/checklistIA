@@ -31,6 +31,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   
   const [isAdding, setIsAdding] = useState(false);
   const imageUrl = recipe.imageUrl;
+  
+  // Detecção de cache forçada para exibição do selo
   const isFromCache = recipe.imageSource === 'cache';
   
   const isSaved = isFavorite(recipe.name);
@@ -97,33 +99,17 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
       await fetchRecipeDetails(recipe.name, undefined, false);
   };
 
-  /**
-   * NOVA LÓGICA DE MATCH POR INVENTÁRIO (RANDÔMICA)
-   */
   const relatedOffers = useMemo(() => {
       if (!offers || offers.length === 0) return [];
-
-      const leads = (recipe.suggestedLeads || [])
-        .map(l => l.toLowerCase().trim())
-        .filter(l => l !== 'nenhum');
-
+      const leads = (recipe.suggestedLeads || []).map(l => l.toLowerCase().trim()).filter(l => l !== 'nenhum');
       const fullText = (recipe.name + ' ' + safeIngredients.map(i => i.simplifiedName).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
-
-      // 1. Filtrar ofertas que fazem sentido
       const filtered = offers.filter(offer => {
           const offerName = offer.name.toLowerCase();
           const offerTags = (offer.tags || []).map(t => t.toLowerCase().trim());
-
-          // Match por Lead Direto (Utensílio)
-          const matchesLead = leads.some(lead => {
-              return offerTags.includes(lead) || offerName.includes(lead);
-          });
+          const matchesLead = leads.some(lead => offerTags.includes(lead) || offerName.includes(lead));
           if (matchesLead) return true;
-
-          // Fallback por Contexto
           const firstKeyword = offer.name.trim().split(' ')[0].toLowerCase();
           if (firstKeyword.length >= 4 && fullText.includes(firstKeyword)) return true;
-          
           if (offer.tags && offer.tags.length > 0) {
               const tagMatch = offer.tags.some(tag => {
                   const cleanTag = tag.trim().toLowerCase();
@@ -131,28 +117,24 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
               });
               if (tagMatch) return true;
           }
-
           return false;
       });
-
-      // 2. EMBARALHAR (Fisher-Yates Shuffle) para quebrar a ordem cronológica
       const shuffled = [...filtered];
       for (let i = shuffled.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
-
       return shuffled;
   }, [offers, recipe, safeIngredients, safeInstructions]);
 
   return (
     <div className="fixed inset-0 flex h-[100dvh] w-full flex-col justify-end items-stretch bg-black/60 z-[130] animate-fadeIn backdrop-blur-sm" onClick={onClose}>
         <div className="flex flex-col items-stretch bg-[#F7F7F7] dark:bg-[#1a1a1a] rounded-t-2xl max-h-[95dvh] animate-slideUp overflow-hidden relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex-shrink-0 absolute top-0 left-0 right-0 z-20 flex justify-center pt-3 pb-1 pointer-events-none">
+            <div className="flex-shrink-0 absolute top-0 left-0 right-0 z-[100] flex justify-center pt-3 pb-1 pointer-events-none">
                 <div className="h-1.5 w-12 rounded-full bg-white/50 backdrop-blur-md shadow-sm"></div>
             </div>
 
-            <button onClick={onClose} className="absolute top-4 right-4 z-30 flex items-center justify-center h-8 w-8 bg-black/30 rounded-full text-white backdrop-blur-md hover:bg-black/50 transition-colors">
+            <button onClick={onClose} className="absolute top-4 right-4 z-[100] flex items-center justify-center h-8 w-8 bg-black/30 rounded-full text-white backdrop-blur-md hover:bg-black/50 transition-colors">
                 <span className="material-symbols-outlined text-lg">close</span>
             </button>
 
@@ -165,7 +147,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     ></div>
 
                     {(!imageUrl || isRecipeLoading) && (
-                        <div className="absolute inset-0">
+                        <div className="absolute inset-0 z-10">
                             <div 
                                 className="absolute inset-0 bg-center bg-cover filter blur-[2px] scale-110 opacity-60"
                                 style={{backgroundImage: `url(${randomChefImage})`}}
@@ -182,12 +164,13 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                         </div>
                     )}
                      
-                     <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 items-start pointer-events-none">
+                     <div className="absolute top-4 left-4 z-[90] flex flex-col gap-2 items-start pointer-events-none">
+                         {/* SELO DE CRÉDITO DO ACERVO REFINADO */}
                          {imageUrl && isFromCache && !isRecipeLoading && (
-                             <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10 shadow-sm">
-                                 <span className="material-symbols-outlined text-[16px] text-orange-400 leading-none">photo_camera</span>
-                                 <span className="text-[10px] font-bold text-white uppercase tracking-wider leading-none pt-[1px]">
-                                    Acervo Checklist<span className="text-blue-400">IA</span>
+                             <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/70 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 shadow-xl">
+                                 <span className="material-symbols-outlined text-[18px] text-blue-400 leading-none">photo_camera</span>
+                                 <span className="text-[10px] font-black uppercase tracking-widest leading-none pt-[1px]">
+                                    <span className="text-white">Checklist</span><span className="text-blue-500 ml-0.5">IA</span>
                                  </span>
                              </div>
                          )}
@@ -201,7 +184,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                          )}
                      </div>
                      
-                     <div className="absolute bottom-6 right-4 z-20">
+                     <div className="absolute bottom-6 right-4 z-[90]">
                          <button 
                              onClick={handleToggleFavorite}
                              className={`flex items-center justify-center h-12 w-12 rounded-full shadow-lg transition-transform active:scale-95 ${
@@ -217,10 +200,10 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                          </button>
                      </div>
                      
-                     <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F7F7F7] dark:from-[#1a1a1a] to-transparent pointer-events-none"></div>
+                     <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F7F7F7] dark:from-[#1a1a1a] to-transparent pointer-events-none z-10"></div>
                 </div>
 
-                <div className="relative px-5 -mt-8">
+                <div className="relative px-5 -mt-8 z-20">
                      <h1 className="text-text-main dark:text-gray-50 tracking-tight text-[28px] font-bold leading-none font-display capitalize drop-shadow-sm pr-12">{recipe.name}</h1>
                 </div>
                 
@@ -348,7 +331,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                                     className="flex items-center gap-2 text-primary text-sm font-black hover:scale-105 transition-transform disabled:opacity-50"
                                 >
                                     {isRecipeLoading ? (
-                                        <span className="material-symbols-outlined animate-spin">sync</span>
+                                        <span className="material-symbols-outlined animate-spin text-lg">sync</span>
                                     ) : (
                                         <span className="material-symbols-outlined">auto_renew</span>
                                     )}
@@ -360,7 +343,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 </div>
                 
                 {isRecipeLoading && (
-                    <div className="absolute inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 flex flex-col items-center justify-center animate-fadeIn">
+                    <div className="absolute inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-md z-[200] flex flex-col items-center justify-center animate-fadeIn">
                         <div className="relative">
                             <div className="w-20 h-20 border-4 border-primary/20 rounded-full"></div>
                             <div className="absolute top-0 left-0 w-20 h-20 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -373,7 +356,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 )}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 z-50 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 z-[110] pb-[calc(1rem+env(safe-area-inset-bottom))]">
                 <button 
                     onClick={handleAddRequest}
                     disabled={isAdding || isBroken || isRecipeLoading} 
