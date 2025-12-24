@@ -29,19 +29,20 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
-const normalizeIngredients = (rawIngredients: any[]) => {
-    if (!Array.isArray(rawIngredients)) return [];
-    return rawIngredients.map(ing => {
+// Função de normalização para evitar que ingredientes sumam se a IA mudar o formato
+const normalizeIngredients = (ingredients: any[]) => {
+    if (!Array.isArray(ingredients)) return [];
+    return ingredients.map(ing => {
         if (typeof ing === 'string') {
-            return { simplifiedName: ing.split(',')[0].split('(')[0].trim(), detailedName: ing };
-        }
-        if (typeof ing === 'object' && ing !== null) {
             return {
-                simplifiedName: String(ing.simplifiedName || ing.name || 'Item'),
-                detailedName: String(ing.detailedName || ing.description || ing.simplifiedName || 'Item detalhado')
+                simplifiedName: ing.split(' ').slice(0, 2).join(' '), // Pega as primeiras 2 palavras como nome
+                detailedName: ing
             };
         }
-        return { simplifiedName: 'Ingrediente', detailedName: 'Ingrediente não processado' };
+        return {
+            simplifiedName: String(ing.simplifiedName || ing.name || ''),
+            detailedName: String(ing.detailedName || ing.description || ing.name || '')
+        };
     });
 };
 
@@ -282,44 +283,15 @@ const ignorePermissionError = (err: any) => {
     return false;
 };
 
-/**
- * LÓGICA DE BUSCA FLEXÍVEL (SENSÍVEL A PLURAL E VARIAÇÕES)
- */
 export const generateKeywords = (text: string): string[] => {
     if (!text) return [] as string[];
-    const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero', 'com', 'como', 'fazer'];
-    
-    const words = text
+    const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero'];
+    return text
         .toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-        .replace(/[^a-z0-9\s]/g, ' ') 
+        .replace(/[^a-z0-9\s]/g, '') 
         .split(/\s+/) 
-        .filter(word => word.length > 2 && !stopWords.includes(word));
-
-    const result = new Set<string>();
-
-    words.forEach(word => {
-        result.add(word);
-        if (word.endsWith('s')) {
-            result.add(word.slice(0, -1));
-        } else {
-            result.add(word + 's');
-        }
-        if (word.endsWith('es')) {
-            const stem = word.slice(0, -2);
-            if (stem.length > 2) result.add(stem);
-        }
-        if (word.endsWith('ns')) {
-            result.add(word.slice(0, -2) + 'm');
-        } else if (word.endsWith('m')) {
-            result.add(word.slice(0, -1) + 'ns');
-        }
-        if (word.endsWith('eis')) {
-            result.add(word.slice(0, -3) + 'el');
-        }
-    });
-
-    return Array.from(result); 
+        .filter(word => word.length > 2 && !stopWords.includes(word)); 
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -393,15 +365,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
     }, []);
 
+    // CORREÇÃO PWA: Captura robusta do evento de instalação
     useEffect(() => {
-        const handler = (e: Event) => { 
+        const handler = (e: any) => { 
             e.preventDefault(); 
             setInstallPromptEvent(e); 
+            // Opcional: mostrar prompt contextual após algum tempo de uso
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-            if (!isStandalone) {
+            if (!isStandalone && !localStorage.getItem('pwa_distribution_shown')) {
                 setTimeout(() => {
                     setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
-                }, 2000);
+                    localStorage.setItem('pwa_distribution_shown', 'true');
+                }, 15000); // 15 segundos para não ser intrusivo
             }
         };
         window.addEventListener('beforeinstallprompt', handler);
@@ -638,13 +613,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const setTheme = (newTheme: Theme) => setThemeState(newTheme);
 
+    // CORREÇÃO PWA: handleInstall agora realmente dispara o prompt do navegador
     const handleInstall = async () => {
-        if (!installPromptEvent) return false;
-        installPromptEvent.prompt();
-        const { outcome } = await installPromptEvent.userChoice;
-        setInstallPromptEvent(null);
-        setIsPWAInstallVisible(false);
-        return outcome === 'accepted';
+        if (!installPromptEvent) {
+            // Se não houver evento e for iOS, a UI do DistributionModal cuida do tutorial.
+            // No Android/Chrome, isso significa que o evento ainda não disparou ou o app já está instalado.
+            return false;
+        }
+        try {
+            installPromptEvent.prompt();
+            const { outcome } = await installPromptEvent.userChoice;
+            setInstallPromptEvent(null);
+            setIsPWAInstallVisible(false);
+            return outcome === 'accepted';
+        } catch (e) {
+            console.warn("Falha ao disparar instalação:", e);
+            return false;
+        }
     };
     const handleDismissInstall = () => { setIsPWAInstallVisible(false); };
     const showPWAInstallPromptIfAvailable = () => { if (installPromptEvent) setIsPWAInstallVisible(true); };
@@ -675,6 +660,62 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (globalRecipeCache.length === 0) return null;
         return globalRecipeCache[Math.floor(Math.random() * globalRecipeCache.length)];
     }, [globalRecipeCache]);
+
+    const showRecipe = (input: string | FullRecipe) => { 
+        let r = typeof input === 'string' ? getCachedRecipe(input) : input;
+        if (r && Array.isArray(r.ingredients) && r.ingredients.length > 0) {
+            if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
+            setSelectedRecipe(r);
+        } else { showToast("Receita em manutenção."); }
+    };
+
+    const closeRecipe = () => setSelectedRecipe(null);
+    const resetRecipeState = () => { setIsRecipeLoading(false); setRecipeError(null); };
+    
+    const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
+        setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
+        setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
+        
+        if (db) {
+            const docId = getRecipeDocId(recipeName);
+            updateDoc(doc(db, 'global_recipes', docId), {
+                imageUrl,
+                imageSource: source,
+                updatedAt: serverTimestamp()
+            }).catch(() => console.warn("Erro ao atualizar imagem no acervo."));
+        }
+    };
+
+    const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
+        if (!db || !queryStr || queryStr.length < 2) return [] as FullRecipe[];
+        try {
+            const keywords: string[] = generateKeywords(queryStr);
+            if (keywords.length === 0) return [] as FullRecipe[];
+            const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
+            const snap = await getDocs(q);
+            const rawResults: any[] = [];
+            snap.forEach(docSnap => {
+                const data = docSnap.data();
+                if (data && data.name) {
+                    rawResults.push(data);
+                }
+            });
+            return mapToFullRecipeArray(rawResults);
+        } catch (error) { 
+            return [] as FullRecipe[]; 
+        }
+    }, []);
+
+    const handleRecipeSearch = async (term: string) => {
+        setIsSearchingAcervo(true); 
+        try {
+            const results: FullRecipe[] = await searchGlobalRecipes(term);
+            setRecipeSearchResults(results);
+            setCurrentSearchTerm(term);
+            closeModal('recipeAssistant'); 
+            openModal('recipeSelection'); 
+        } finally { setIsSearchingAcervo(false); }
+    };
 
     const sanitizeJsonString = (str: string) => {
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
@@ -725,10 +766,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const fullData: FullRecipe = { 
                 name: finalName,
-                ingredients: Array.isArray(details.ingredients) ? details.ingredients.map((i: any) => ({
-                    simplifiedName: String(i.simplifiedName || ''),
-                    detailedName: String(i.detailedName || '')
-                })) : [] as { simplifiedName: string; detailedName: string; }[],
+                ingredients: normalizeIngredients(details.ingredients),
                 instructions: Array.isArray(details.instructions) ? details.instructions.map(String) : [] as string[],
                 imageQuery: details.imageQuery || finalName,
                 servings: details.servings || '2 porções',
@@ -764,74 +802,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setIsRecipeLoading(false); 
         }
     }, [apiKey, isOffline]); 
-
-    const showRecipe = (input: string | FullRecipe) => { 
-        let r = typeof input === 'string' ? getCachedRecipe(input) : input;
-        
-        if (r) {
-            // LÓGICA DE AUTOCURA: Se a receita está incompleta, dispara a geração via IA
-            const isBroken = !r.ingredients || r.ingredients.length === 0 || !r.instructions || r.instructions.length === 0;
-            
-            if (isBroken) {
-                showToast("Receita incompleta no acervo. O Chef está preparando ela agora...");
-                fetchRecipeDetails(r.name, undefined, false);
-                return;
-            }
-
-            if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
-            setSelectedRecipe(r);
-        } else { 
-            showToast("Receita não encontrada."); 
-        }
-    };
-
-    const closeRecipe = () => setSelectedRecipe(null);
-    const resetRecipeState = () => { setIsRecipeLoading(false); setRecipeError(null); };
-    
-    const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
-        setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
-        setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
-        
-        if (db) {
-            const docId = getRecipeDocId(recipeName);
-            updateDoc(doc(db, 'global_recipes', docId), {
-                imageUrl,
-                imageSource: source,
-                updatedAt: serverTimestamp()
-            }).catch(() => console.warn("Erro ao atualizar imagem no acervo."));
-        }
-    };
-
-    const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
-        if (!db || !queryStr || queryStr.length < 2) return [] as FullRecipe[];
-        try {
-            const keywords: string[] = generateKeywords(queryStr);
-            if (keywords.length === 0) return [] as FullRecipe[];
-            const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
-            const snap = await getDocs(q);
-            const rawResults: any[] = [];
-            snap.forEach(docSnap => {
-                const data = docSnap.data();
-                if (data && data.name) {
-                    rawResults.push(data);
-                }
-            });
-            return mapToFullRecipeArray(rawResults);
-        } catch (error) { 
-            return [] as FullRecipe[]; 
-        }
-    }, []);
-
-    const handleRecipeSearch = async (term: string) => {
-        setIsSearchingAcervo(true); 
-        try {
-            const results: FullRecipe[] = await searchGlobalRecipes(term);
-            setRecipeSearchResults(results);
-            setCurrentSearchTerm(term);
-            closeModal('recipeAssistant'); 
-            openModal('recipeSelection'); 
-        } finally { setIsSearchingAcervo(false); }
-    };
 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
