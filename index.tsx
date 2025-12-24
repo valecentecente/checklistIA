@@ -60,9 +60,14 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
     }, [isDragging, handleInteractionMove, handleInteractionEnd]);
 
     return (
-        /* Posição alterada para TOP no mobile e mantida BOTTOM no desktop, com z-index reforçado */
-        <div className="fixed top-[140px] lg:top-auto lg:bottom-24 left-1/2 -translate-x-1/2 z-[120] animate-fadeIn" ref={containerRef}>
-            <div className="relative h-14 w-60 rounded-full bg-white/90 dark:bg-surface-dark border border-primary/30 dark:border-primary/50 shadow-2xl backdrop-blur-md flex items-center p-1.5 overflow-hidden">
+        /* 
+           AJUSTE DE POSIÇÃO: 
+           - Mobile: bottom-20 (80px) para ficar logo acima do botão central (+) 
+           - Desktop (lg): mantém bottom-24 original
+           - z-index reforçado (120) para não sumir atrás da barra
+        */
+        <div className="fixed bottom-20 lg:bottom-24 left-1/2 -translate-x-1/2 z-[120] animate-fadeIn" ref={containerRef}>
+            <div className="relative h-14 w-60 rounded-full bg-white/95 dark:bg-surface-dark border border-primary/40 dark:border-primary/60 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-md flex items-center p-1.5 overflow-hidden">
                 <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-11 w-20 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none shadow-md" style={{ transform: `translateX(${sliderX}px)` }}>
                     <span className="font-bold text-xs">{total}</span>
                 </div>
