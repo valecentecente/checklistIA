@@ -40,7 +40,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     const categories = useMemo(() => {
         const baseCategories = [
             { id: 'top10', label: "Em Alta", key: "top10" },
-            { id: 'icecream', label: "Sorvetes", key: "sorvetes" },
+            { id: 'Sorvete', label: "Sorvetes", key: "sorvetes" },
             { id: 'fast', label: "Rápidas", key: "fast" },
             { id: 'cheap', label: "Econômicas", key: "cheap" },
             { id: 'healthy', label: "Saudáveis", key: "healthy" },
