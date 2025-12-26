@@ -1,8 +1,9 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity } from '../types';
+import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
 
@@ -29,80 +30,54 @@ const getRecipeDocId = (name: string) => {
 };
 
 /**
- * LIMPEZA RADICAL E INTELIGENTE: Extrai apenas o núcleo do produto.
+ * Normalização Blindada de Ingredientes
+ * Aceita strings, objetos parciais ou completos.
  */
-const extractProductName = (text: string): string => {
-    if (!text) return '';
-    let cleaned = text.trim();
-    cleaned = cleaned.replace(/\(.*?\)/g, '');
-    cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
-
-    const measures = [
-        'g', 'kg', 'ml', 'l', 'un', 'unid', 'unidade', 'unidades', 'colher', 'colheres', 'sopa', 
-        'cha', 'chá', 'sobremesa', 'xicara', 'xícara', 'xicaras', 'xícaras', 'dente', 'dentes', 
-        'caixa', 'caixas', 'lata', 'latas', 'vidro', 'vidros', 'pacote', 'pacotes', 'maco', 'maço', 
-        'macos', 'maços', 'pitada', 'pitadas', 'fatia', 'fatias', 'copo', 'copos', 'pote', 'potes', 
-        'tablete', 'tabletes', 'envelope', 'envelopes', 'garrafa', 'garrafas'
-    ];
-
-    const connectives = ['de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'em', 'para'];
-
-    let loop = true;
-    while (loop) {
-        let prev = cleaned;
-        const measureRegex = new RegExp(`^(${measures.join('|')})\\b`, 'i');
-        cleaned = cleaned.replace(measureRegex, '').trim();
-        const connectiveRegex = new RegExp(`^(${connectives.join('|')})\\s+`, 'i');
-        cleaned = cleaned.replace(connectiveRegex, '').trim();
-        if (cleaned === prev) loop = false;
-    }
-
-    const suffixes = [
-        'picado', 'picada', 'em cubos', 'em rodelas', 'fatiado', 'fatiada', 'ralado', 'ralada', 
-        'cozido', 'cozida', 'grande', 'pequeno', 'pequena', 'medio', 'media', 'médio', 'média', 
-        'fresco', 'fresca', 'seco', 'seca', 'limpo', 'limpa', 'a gosto', 'opcional', 'descascado', 
-        'descascada', 'extra virgem', 'para decorar', 'para fritar', 'em calda', 'processado', 
-        'moído', 'moída', 'refogado', 'refogada'
-    ];
-    
-    const suffixRegex = new RegExp(`\\s+(${suffixes.join('|')}).*$`, 'i');
-    cleaned = cleaned.replace(suffixRegex, '').trim();
-
-    const endConnectiveRegex = new RegExp(`\\s+(${connectives.join('|')})$`, 'i');
-    cleaned = cleaned.replace(endConnectiveRegex, '').trim();
-
-    if (cleaned.length < 2) return text;
-    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
-};
-
-/**
- * NORMALIZAÇÃO BLINDADA: Converte qualquer formato de ingrediente para o objeto padrão.
- */
-const normalizeIngredients = (ingredients: any[]) => {
+export const normalizeIngredients = (ingredients: any[]): { simplifiedName: string; detailedName: string }[] => {
     if (!Array.isArray(ingredients)) return [];
+    
+    const extractName = (text: string): string => {
+        if (!text) return '';
+        let cleaned = text.trim();
+        // Remove parênteses
+        cleaned = cleaned.replace(/\(.*?\)/g, '');
+        // Remove números e frações no início
+        cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
+        
+        const measures = ['gramas', 'kg', 'ml', 'litros', 'unidades', 'colher', 'xicara', 'cha', 'sopa', 'lata', 'pacote', 'pote', 'g', 'l', 'un'];
+        const connectives = ['de', 'da', 'do', 'com', 'sem', 'para'];
+        
+        let changed = true;
+        while(changed){
+            let prev = cleaned;
+            measures.forEach(m => { cleaned = cleaned.replace(new RegExp(`^${m}\\b`, 'i'), '').trim(); });
+            connectives.forEach(c => { cleaned = cleaned.replace(new RegExp(`^${c}\\s+`, 'i'), '').trim(); });
+            if(cleaned === prev) changed = false;
+        }
+        return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+    };
+
     return ingredients.map(ing => {
         if (!ing) return null;
         if (typeof ing === 'string') {
-            return {
-                simplifiedName: extractProductName(ing),
-                detailedName: ing
-            };
+            return { simplifiedName: extractName(ing), detailedName: ing };
         }
-        
-        const sName = ing.simplifiedName || ing.name || '';
-        const dName = ing.detailedName || ing.description || ing.name || '';
+        // Se já for o objeto esperado, mas estiver com campos vazios
+        const s = ing.simplifiedName || ing.name || '';
+        const d = ing.detailedName || ing.description || ing.name || '';
         
         return {
-            simplifiedName: extractProductName(sName || dName),
-            detailedName: String(dName)
+            simplifiedName: s ? s : extractName(d),
+            detailedName: String(d)
         };
-    }).filter(i => i !== null && i.detailedName.trim() !== '');
+    }).filter(i => i !== null && i.detailedName.trim() !== '') as { simplifiedName: string; detailedName: string }[];
 };
 
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [] as FullRecipe[];
     return data.map((r: any): FullRecipe => ({
         name: String(r.name || 'Receita'),
+        // CORREÇÃO CRÍTICA: Aplica normalizeIngredients no carregamento do Acervo
         ingredients: normalizeIngredients(r.ingredients),
         instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
         imageQuery: String(r.imageQuery || r.name || ''),
@@ -138,6 +113,7 @@ const INITIAL_MODAL_STATES = {
     isAdminReviewsModalOpen: false,
     isAdminScheduleModalOpen: false,
     isAdminUsersModalOpen: false,
+    isAdminCategoriesModalOpen: false,
     isManageTeamModalOpen: false,
     isTeamReportsModalOpen: false, 
     isArcadeModalOpen: false,
@@ -179,6 +155,7 @@ interface AppContextType {
     isAdminReviewsModalOpen: boolean;
     isAdminScheduleModalOpen: boolean; 
     isAdminUsersModalOpen: boolean;
+    isAdminCategoriesModalOpen: boolean;
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
     isArcadeModalOpen: boolean;
@@ -251,6 +228,8 @@ interface AppContextType {
 
     scheduleRules: ScheduleRule[];
     saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
+    homeCategories: HomeCategory[];
+    saveHomeCategories: (categories: HomeCategory[]) => Promise<void>;
 
     recipeSearchResults: FullRecipe[];
     currentSearchTerm: string;
@@ -340,13 +319,26 @@ const ignorePermissionError = (err: any) => {
 
 export const generateKeywords = (text: string): string[] => {
     if (!text) return [] as string[];
-    const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero'];
-    return text
+    const stopWords = ['de', 'da', 'do', 'dos', 'das', 'com', 'sem', 'em', 'para', 'ao', 'na', 'no', 'receita', 'molho', 'a', 'o', 'e', 'um', 'uma', 'quero', 'que'];
+    
+    const words = text
         .toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
         .replace(/[^a-z0-9\s]/g, '') 
         .split(/\s+/) 
-        .filter(word => word.length > 2 && !stopWords.includes(word)); 
+        .filter(word => word.length > 2 && !stopWords.includes(word));
+
+    const extraKeywords: string[] = [];
+    words.forEach(w => {
+        if (w.endsWith('s') && w.length > 3) {
+            extraKeywords.push(w.slice(0, -1));
+        }
+        if (w.endsWith('es') && w.length > 4) {
+            extraKeywords.push(w.slice(0, -2));
+        }
+    });
+
+    return Array.from(new Set([...words, ...extraKeywords]));
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -396,6 +388,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
     const [totalRecipeCount, setTotalRecipeCount] = useState(0);
     const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
+    const [homeCategories, setHomeCategories] = useState<HomeCategory[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
     const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>([]);
@@ -405,7 +398,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const apiKey = process.env.API_KEY as string;
     
-    // Adicionado ricardo029@gmail.com como proprietário para consistência com regras do Firebase
     const isOwner = user?.email?.toLowerCase() === 'admin@checklistia.com' || 
                     user?.email?.toLowerCase() === 'itensnamao@gmail.com' ||
                     user?.email?.toLowerCase() === 'ricardo029@gmail.com';
@@ -455,27 +447,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const pool = globalRecipeCache;
         if (pool.length === 0) return [] as FullRecipe[];
 
-        switch(categoryKey) {
-            case 'top10': 
-                return pool.slice(0, 15);
-            case 'fast': 
-                return pool.filter(r => r.prepTimeInMinutes && r.prepTimeInMinutes <= 30);
-            case 'healthy':
-                return pool.filter(r => r.tags?.some(t => ['fit', 'saudável', 'salada', 'nutritivo', 'vegano', 'fruta'].includes(t.toLowerCase())));
-            case 'cheap':
-                return pool.filter(r => r.cost === 'Baixo');
-            case 'dessert':
-                return pool.filter(r => r.tags?.some(t => ['sobremesa', 'doce', 'bolo', 'torta'].includes(t.toLowerCase())));
-            case 'new':
-                return pool.slice(0, 10);
-            case 'random':
-                return shuffleArray<FullRecipe>(pool).slice(0, 5);
-            case 'sorvetes':
-                return pool.filter(r => r.tags?.some(t => t.toLowerCase().includes('sorvete') || t.toLowerCase().includes('gelato')));
-            default:
-                return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
+        const dynamicCat = homeCategories.find(c => c.id === categoryKey);
+        
+        let searchTerms: string[] = dynamicCat 
+            ? dynamicCat.tags.map(t => t.toLowerCase()) 
+            : [categoryKey.toLowerCase()];
+
+        searchTerms = searchTerms.flatMap(t => {
+            if (t.endsWith('s') && t.length > 3) return [t, t.slice(0, -1)];
+            return [t];
+        });
+
+        const filterRecipes = (p: FullRecipe[]) => {
+            return p.filter(r => {
+                const nameLower = (r.name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const tagsLower = (r.tags || []).map(t => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+                
+                return searchTerms.some(term => {
+                    const cleanTerm = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    return nameLower.includes(cleanTerm) || tagsLower.some(tag => tag.includes(cleanTerm));
+                });
+            });
+        };
+
+        if (!dynamicCat) {
+            switch(categoryKey) {
+                case 'top10': return pool.slice(0, 15);
+                case 'fast': return pool.filter(r => r.prepTimeInMinutes && r.prepTimeInMinutes <= 30);
+                case 'healthy': return pool.filter(r => r.tags?.some(t => ['fit', 'saudável', 'salada', 'nutritivo', 'vegano', 'fruta'].includes(t.toLowerCase())));
+                case 'cheap': return pool.filter(r => r.cost === 'Baixo');
+                case 'dessert': return pool.filter(r => r.tags?.some(t => ['sobremesa', 'doce', 'bolo', 'torta'].includes(t.toLowerCase())));
+            }
         }
-    }, [globalRecipeCache]);
+
+        return filterRecipes(pool);
+    }, [globalRecipeCache, homeCategories]);
 
     useEffect(() => {
         if (!db) return;
@@ -577,10 +583,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return () => unsub();
     }, []);
 
+    useEffect(() => {
+        if (!db) return;
+        const unsub = onSnapshot(doc(db, 'settings', 'home_categories'), (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                setHomeCategories((data.categories || []).sort((a: any, b: any) => a.order - b.order));
+            }
+        }, (error) => {
+            if (!ignorePermissionError(error)) console.error(error);
+        });
+        return () => unsub();
+    }, []);
+
     const saveScheduleRules = async (rules: ScheduleRule[]) => {
         if (!db || !isAdmin) return;
         await setDoc(doc(db, 'settings', 'recipe_schedule'), { rules, updatedAt: serverTimestamp() });
         showToast("Grade de horários atualizada!");
+    };
+
+    const saveHomeCategories = async (categories: HomeCategory[]) => {
+        if (!db || !isAdmin) return;
+        return await setDoc(doc(db, 'settings', 'home_categories'), { categories, updatedAt: serverTimestamp() });
     };
 
     const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
@@ -624,6 +648,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
+        if (modal === 'adminCategories') modalKey = 'isAdminCategoriesModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -647,6 +672,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
+        if (modal === 'adminCategories') modalKey = 'isAdminCategoriesModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -739,16 +765,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const keywords: string[] = generateKeywords(queryStr);
             if (keywords.length === 0) return [] as FullRecipe[];
-            const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
+            
+            const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(40));
             const snap = await getDocs(q);
-            const rawResults: any[] = [];
+            const results: FullRecipe[] = [];
             snap.forEach(docSnap => {
                 const data = docSnap.data();
                 if (data && data.name) {
-                    rawResults.push(data);
+                    results.push(data as FullRecipe);
                 }
             });
-            return mapToFullRecipeArray(rawResults);
+
+            const queryNorm = queryStr.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            
+            const refined = results.sort((a, b) => {
+                const aName = a.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const bName = b.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                
+                if (aName.startsWith(queryNorm) && !bName.startsWith(queryNorm)) return -1;
+                if (bName.startsWith(queryNorm) && !aName.startsWith(queryNorm)) return 1;
+                
+                if (aName.includes(queryNorm) && !bName.includes(queryNorm)) return -1;
+                if (bName.includes(queryNorm) && !aName.includes(queryNorm)) return 1;
+
+                return 0;
+            });
+
+            return mapToFullRecipeArray(refined);
         } catch (error) { 
             return [] as FullRecipe[]; 
         }
@@ -946,7 +989,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline 
+        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline,
+        homeCategories, saveHomeCategories
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

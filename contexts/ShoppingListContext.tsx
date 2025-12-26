@@ -38,6 +38,7 @@ interface ShoppingListContextType {
     deleteRecipeGroup: (recipeName: string) => void;
     toggleItemPurchased: (id: string) => void;
     savePurchase: (marketName: string) => Promise<void>;
+    deleteHistoryRecord: (id: string) => Promise<void>;
     finishWithoutSaving: () => Promise<void>;
     addHistoricItem: (item: HistoricItem) => Promise<void>;
     repeatPurchase: (purchase: PurchaseRecord) => Promise<{ message: string }>;
@@ -108,7 +109,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             } as Offer));
             setOffers(loadedOffers);
         }, (error) => {
-            // Silencia erro de permissão para ofertas se for guest
             if (error.code !== 'permission-denied') {
                 console.warn("Erro ao carregar ofertas:", error.message);
             }
@@ -214,7 +214,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             });
             setArcadeStats(stats);
         }, (error) => {
-            // Correção: Adicionado handler de erro para evitar Uncaught FirebaseError
             if (error.code !== 'permission-denied') {
                 console.warn("[Arcade] Erro no listener de estatísticas:", error.message);
             }
@@ -241,9 +240,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const currentBest = arcadeStats[gameId];
         let isNewRecord = false;
 
-        // Regras de Recorde:
-        // Memory e Slide: Menos movimentos é melhor
-        // Speed: Mais pontos é melhor
         if (gameId === 'speed') {
             isNewRecord = !currentBest || score > currentBest;
         } else {
@@ -445,6 +441,21 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             setItems([]);
         }
     }, [user, items, isOnline, history]);
+
+    const deleteHistoryRecord = useCallback(async (id: string) => {
+        if (isOnline && user) {
+            try {
+                const listId = user.activeListId || user.uid;
+                await deleteDoc(doc(db, `users/${listId}/history`, id));
+            } catch (error) {
+                console.error("Erro ao deletar registro do histórico:", error);
+            }
+        } else {
+            const updatedHistory = history.filter(p => p.id !== id);
+            setHistory(updatedHistory);
+            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory));
+        }
+    }, [user, isOnline, history]);
 
     const finishWithoutSaving = useCallback(async () => {
         setItems([]);
@@ -713,7 +724,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     return (
         <ShoppingListContext.Provider value={{
-            items, history, receivedHistory, favorites, offers, savedOffers, arcadeStats, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs, updateArcadeStat
+            items, history, receivedHistory, favorites, offers, savedOffers, arcadeStats, formatCurrency, addItem, addIngredientsBatch, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased, savePurchase, deleteHistoryRecord, finishWithoutSaving, addHistoricItem, repeatPurchase, findDuplicate, importSharedList, saveReceivedListToHistory, getItemHistory, searchUser, shareListWithEmail, shareListWithPartner, markReceivedListAsRead, unreadReceivedCount, toggleFavorite, isFavorite, toggleOfferSaved, isOfferSaved, addReview, deleteReview, getProductReviews, logAdminAction, getTeamMembers, getMemberLogs, updateArcadeStat
         }}>
             {children}
         </ShoppingListContext.Provider>

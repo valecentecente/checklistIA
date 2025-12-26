@@ -1,10 +1,12 @@
 
 
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity } from '../types';
+// Fix: Added HomeCategory to imports to resolve line 6 error.
+import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
 
@@ -187,6 +189,9 @@ interface AppContextType {
 
     scheduleRules: ScheduleRule[];
     saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
+    // Fix: Added homeCategories to AppContextType to resolve saveHomeCategories error.
+    homeCategories: HomeCategory[];
+    saveHomeCategories: (categories: HomeCategory[]) => Promise<void>;
 
     recipeSearchResults: FullRecipe[];
     currentSearchTerm: string;
@@ -332,6 +337,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
     const [totalRecipeCount, setTotalRecipeCount] = useState(0);
     const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
+    // Fix: Added state for homeCategories.
+    const [homeCategories, setHomeCategories] = useState<HomeCategory[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
     const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>([]);
@@ -509,10 +516,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return () => unsub();
     }, []);
 
+    // Fix: Added missing onSnapshot for homeCategories to sync data from Firestore.
+    useEffect(() => {
+        if (!db) return;
+        const unsub = onSnapshot(doc(db, 'settings', 'home_categories'), (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                setHomeCategories((data.categories || []).sort((a: any, b: any) => a.order - b.order));
+            }
+        }, (error) => {
+            if (!ignorePermissionError(error)) console.error(error);
+        });
+        return () => unsub();
+    }, []);
+
     const saveScheduleRules = async (rules: ScheduleRule[]) => {
         if (!db || !isAdmin) return;
         await setDoc(doc(db, 'settings', 'recipe_schedule'), { rules, updatedAt: serverTimestamp() });
         showToast("Grade de horários atualizada!");
+    };
+
+    // Fix: Added missing implementation for saveHomeCategories.
+    const saveHomeCategories = async (categories: HomeCategory[]) => {
+        if (!db || !isAdmin) return;
+        return await setDoc(doc(db, 'settings', 'home_categories'), { categories, updatedAt: serverTimestamp() });
     };
 
     const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
@@ -883,7 +910,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline 
+        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline,
+        // Fix: Added homeCategories and saveHomeCategories to value object.
+        homeCategories, saveHomeCategories
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

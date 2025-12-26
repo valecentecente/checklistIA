@@ -203,3 +203,12 @@ export interface ActivityLog {
     details?: string;
     timestamp: any;
 }
+
+// Fix: Added HomeCategory interface to resolve import error in AppContext.
+export interface HomeCategory {
+    id: string;
+    label: string;
+    tags: string[];
+    order: number;
+    icon?: string;
+}

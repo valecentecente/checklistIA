@@ -31,10 +31,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   
   const [isAdding, setIsAdding] = useState(false);
   const imageUrl = recipe.imageUrl;
-  
-  // Verificação de origem para selo de créditos
   const isFromCache = recipe.imageSource === 'cache';
-  
   const isSaved = isFavorite(recipe.name);
   
   const isAdultContent = useMemo(() => {
@@ -54,8 +51,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   }, []);
 
   const hasActiveList = items.length > 0 || !!currentMarketName;
-  const safeIngredients = recipe.ingredients || [];
-  const safeInstructions = recipe.instructions || [];
+  const safeIngredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const safeInstructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
+  
   const isBroken = safeIngredients.length === 0 || safeInstructions.length === 0;
   
   const difficultyMap: Record<'Fácil' | 'Médio' | 'Difícil', string> = {
@@ -165,7 +163,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     )}
                      
                      <div className="absolute top-4 left-4 z-[110] flex flex-col gap-2 items-start pointer-events-none">
-                         {/* SELO DE CRÉDITO DO ACERVO REFINADO: Checklist (branco) IA (azul) */}
                          {imageUrl && isFromCache && !isRecipeLoading && (
                              <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/80 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 shadow-xl">
                                  <span className="material-symbols-outlined text-[20px] text-orange-400 leading-none">photo_camera</span>
@@ -245,15 +242,15 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                         <span className="material-symbols-outlined text-primary">grocery</span>
                         Ingredientes
                     </h3>
-                    <div className="flex flex-col gap-3 p-4 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 shadow-sm">
+                    <div className="flex flex-col gap-3 p-4 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 shadow-sm min-h-[100px]">
                         {safeIngredients.length > 0 ? safeIngredients.map((ingredient, idx) => (
-                            <div key={idx} className="flex items-start gap-3">
+                            <div key={idx} className="flex items-start gap-3 animate-fadeIn">
                                 <span className="material-symbols-outlined text-primary text-lg mt-0.5">check_circle</span>
                                 <span className="text-text-main dark:text-gray-200 text-sm leading-relaxed">{ingredient.detailedName}</span>
                             </div>
                         )) : (
                             <div className="flex flex-col items-center justify-center py-4 gap-2 text-center">
-                                <p className="text-sm text-gray-500 italic">Ingredientes indisponíveis para esta receita.</p>
+                                <p className="text-sm text-gray-500 italic">Ingredientes não mapeados.</p>
                                 <button 
                                     onClick={handleRegenerateDetails}
                                     disabled={isRecipeLoading}
@@ -264,7 +261,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                                     ) : (
                                         <span className="material-symbols-outlined text-lg">auto_fix_high</span>
                                     )}
-                                    {isRecipeLoading ? "Refazendo..." : "Completar com IA agora"}
+                                    {isRecipeLoading ? "Refazendo..." : "Completar com IA"}
                                 </button>
                             </div>
                         )}
@@ -316,7 +313,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                     </h3>
                     <div className="flex flex-col gap-5">
                         {safeInstructions.length > 0 ? safeInstructions.map((step, index) => (
-                            <div key={index} className="flex gap-4">
+                            <div key={index} className="flex gap-4 animate-fadeIn">
                                 <div className="flex items-center justify-center h-7 w-7 rounded-full bg-primary/10 text-primary border border-primary/20 flex-shrink-0 mt-0.5">
                                     <span className="font-bold text-xs">{index + 1}</span>
                                 </div>
@@ -324,7 +321,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                             </div>
                         )) : (
                             <div className="flex flex-col items-center justify-center py-6 gap-3 text-center bg-white dark:bg-white/5 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10">
-                                <p className="text-sm text-gray-500 italic">O modo de preparo não foi gerado corretamente.</p>
+                                <p className="text-sm text-gray-500 italic">O modo de preparo não foi mapeado.</p>
                                 <button 
                                     onClick={handleRegenerateDetails}
                                     disabled={isRecipeLoading}
@@ -335,7 +332,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                                     ) : (
                                         <span className="material-symbols-outlined">auto_renew</span>
                                     )}
-                                    {isRecipeLoading ? "Refazendo..." : "Tentar corrigir agora com IA"}
+                                    {isRecipeLoading ? "Refazendo..." : "Refazer com IA"}
                                 </button>
                             </div>
                         )}
@@ -349,9 +346,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                             <div className="absolute top-0 left-0 w-20 h-20 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                         </div>
                         <p className="mt-6 text-primary text-lg font-black animate-pulse tracking-tight italic">
-                            REESCREVENDO RECEITA...
+                            REESCREVENDO...
                         </p>
-                        <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-2">Aguarde a finalização</p>
+                        <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-2">Finalizando os detalhes</p>
                     </div>
                 )}
             </div>

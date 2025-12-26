@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import type { PurchaseRecord, HistoricItem, AuthorMetadata, ReceivedListRecord } from '../types';
 import { useShoppingList } from '../contexts/ShoppingListContext';
@@ -12,23 +13,44 @@ interface HistoryModalProps {
     formatCurrency: (value: number) => string;
 }
 
-const HistoryListItem: React.FC<{ purchase: PurchaseRecord; onClick: () => void; formatCurrency: (value: number) => string; }> = ({ purchase, onClick, formatCurrency }) => {
+const HistoryListItem: React.FC<{ 
+    purchase: PurchaseRecord; 
+    onClick: () => void; 
+    formatCurrency: (value: number) => string;
+    onDelete: (id: string) => void;
+}> = ({ purchase, onClick, formatCurrency, onDelete }) => {
     const purchaseDate = new Date(purchase.date);
     const formattedDate = purchaseDate.toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(' ', ' - ');
 
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (window.confirm(`Deseja apagar o registro da compra em "${purchase.marketName || 'Compra Geral'}" do seu histórico?`)) {
+            onDelete(purchase.id);
+        }
+    };
+
     return (
-        <button onClick={onClick} className="w-full text-left p-4 rounded-lg bg-surface-light dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border border-border-light dark:border-border-dark">
-            <div className="flex justify-between items-center">
+        <div className="w-full relative group">
+            <button onClick={onClick} className="w-full text-left p-4 rounded-lg bg-surface-light dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border border-border-light dark:border-border-dark flex justify-between items-center pr-12">
                 <div>
                     <p className="font-bold text-primary dark:text-orange-400">{purchase.marketName || "Compra Geral"}</p>
                     <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">{formattedDate}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right mr-2">
                     <p className="font-bold text-lg text-text-primary-light dark:text-text-primary-dark">{formatCurrency(purchase.total)}</p>
                     <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">{purchase.items.length} itens</p>
                 </div>
-            </div>
-        </button>
+            </button>
+            
+            {/* BOTÃO DE LIXEIRA - ADICIONADO CONFORME SETA NA FOTO */}
+            <button 
+                onClick={handleDelete}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-90"
+                title="Apagar do histórico"
+            >
+                <span className="material-symbols-outlined !text-xl">delete</span>
+            </button>
+        </div>
     );
 };
 
@@ -109,7 +131,7 @@ const SocialProfileModal: React.FC<{ author: AuthorMetadata; onClose: () => void
 };
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, history, onRepeatPurchase, onAddItem, formatCurrency }) => {
-    const { receivedHistory, shareListWithEmail, markReceivedListAsRead, searchUser } = useShoppingList();
+    const { receivedHistory, shareListWithEmail, markReceivedListAsRead, searchUser, deleteHistoryRecord } = useShoppingList();
     const { showToast, historyActiveTab, setHistoryActiveTab, setHomeViewActive } = useApp();
     const [activeTab, setActiveTab] = useState<'my' | 'received'>(historyActiveTab);
     const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRecord | null>(null);
@@ -148,7 +170,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
     }
     
     const handleReactivate = (purchase: PurchaseRecord) => {
-        // Fluxo Sem Interrupção: Mescla como uma nova seção (aba) na lista atual
         onRepeatPurchase(purchase);
         setHomeViewActive(false);
         onClose();
@@ -228,7 +249,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                 </button>
                             </header>
                             <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-black/20">
-                                {/* BOTÃO DE RETOMAR: Grande e azul para indicar que "não acabou" */}
                                 <button 
                                     onClick={() => handleReactivate(selectedPurchase)} 
                                     className="w-full flex items-center justify-center gap-3 h-14 mb-4 rounded-2xl bg-blue-600 text-white font-black shadow-lg hover:bg-blue-700 transition-all active:scale-95"
@@ -262,7 +282,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                 </div>
                             </div>
 
-                            {/* Share Overlay Modal */}
                             {isShareModalOpen && (
                                 <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fadeIn">
                                     <div className="bg-white dark:bg-surface-dark w-full max-w-xs rounded-2xl p-6 shadow-2xl animate-slideUp relative">
@@ -319,7 +338,15 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                 {activeTab === 'my' ? (
                                     history.length > 0 ? (
                                         <div className="flex flex-col gap-3">
-                                            {history.map(p => <HistoryListItem key={p.id} purchase={p} onClick={() => setSelectedPurchase(p)} formatCurrency={formatCurrency} />)}
+                                            {history.map(p => (
+                                                <HistoryListItem 
+                                                    key={p.id} 
+                                                    purchase={p} 
+                                                    onClick={() => setSelectedPurchase(p)} 
+                                                    formatCurrency={formatCurrency}
+                                                    onDelete={deleteHistoryRecord}
+                                                />
+                                            ))}
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-64 text-center">
