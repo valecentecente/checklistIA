@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -55,10 +56,11 @@ export const AppOptionsMenu: React.FC = () => {
         }
     };
 
+    // Lógica de Permissões: Se não houver objeto de permissões, mas for Admin, assume TRUE (Acesso Total)
     const p = user?.permissions;
     const hasPerm = (key: string) => {
         if (!app.isAdmin) return false;
-        if (!p) return true; 
+        if (!p) return true; // Fallback para Admin antigo ou proprietário
         return (p as any)[key] !== false;
     };
 
@@ -114,11 +116,6 @@ export const AppOptionsMenu: React.FC = () => {
 
                             {isAdminExpanded && (
                                 <div className="bg-yellow-50/50 dark:bg-yellow-900/10 border-t border-yellow-100 dark:border-yellow-800/30 animate-slideUp">
-                                    <button onClick={() => handleOptionClick('adminCategories')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors text-orange-700 dark:text-orange-300 pl-8 font-bold border-l-4 border-orange-500 bg-orange-50 dark:bg-orange-900/20">
-                                        <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">dashboard_customize</span>
-                                        Coleções Home
-                                    </button>
-
                                     {hasPerm('offers') && (
                                         <button onClick={() => handleOptionClick('admin')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors text-yellow-700 dark:text-yellow-300 pl-8 font-medium">
                                             <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">shopping_bag</span>
@@ -156,6 +153,7 @@ export const AppOptionsMenu: React.FC = () => {
                                     
                                     <div className="h-px bg-yellow-200/50 dark:bg-yellow-800/30 mx-4 my-1"></div>
                                     
+                                    {/* Fix: Added User Management button for Super Admins. */}
                                     {hasPerm('team') && (
                                         <button onClick={() => handleOptionClick('adminUsers')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-700 dark:text-blue-300 pl-8 font-medium">
                                             <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">group_manage</span>

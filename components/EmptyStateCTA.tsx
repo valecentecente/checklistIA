@@ -9,7 +9,7 @@ interface EmptyStateCTAProps {
 }
 
 export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssistant, onShowBudget }) => {
-    const { featuredRecipes, fetchThemeSuggestions, showRecipe, getCategoryRecipes, openModal, showToast, homeCategories } = useApp();
+    const { featuredRecipes, fetchThemeSuggestions, showRecipe, getCategoryRecipes, openModal, showToast } = useApp();
     const { user } = useAuth();
     const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
@@ -38,17 +38,20 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     };
 
     const categories = useMemo(() => {
-        // Se não houver categorias no banco, usa um fallback estático inicial
-        const sourceCats = homeCategories.length > 0 ? homeCategories : [
-            { id: 'top10', label: "Em Alta", tags: ['alta'] },
-            { id: 'icecream', label: "Sorvetes", tags: ['sorvete'] },
-            { id: 'fast', label: "Rápidas", tags: ['rápido'] },
+        const baseCategories = [
+            { id: 'top10', label: "Em Alta", key: "top10" },
+            { id: 'icecream', label: "Sorvetes", key: "sorvetes" },
+            { id: 'fast', label: "Rápidas", key: "fast" },
+            { id: 'cheap', label: "Econômicas", key: "cheap" },
+            { id: 'healthy', label: "Saudáveis", key: "healthy" },
+            { id: 'dessert', label: "Sobremesas", key: "dessert" },
+            { id: 'new', label: "Novidades", key: "new" },
         ];
 
         const usedImageUrls = new Set<string>(displayRecipes.map(r => r.imageUrl).filter(Boolean) as string[]);
 
-        return sourceCats.map(cat => {
-            const recipes = getCategoryRecipes(cat.id);
+        return baseCategories.map(cat => {
+            const recipes = getCategoryRecipes(cat.key);
             const count = recipes.length;
             
             let uniqueRecipe = recipes.find(r => 
@@ -71,15 +74,15 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             return { ...cat, count, coverImage, coverRecipe };
         }).filter(cat => cat.count > 0);
 
-    }, [getCategoryRecipes, displayRecipes, homeCategories]); 
+    }, [getCategoryRecipes, displayRecipes]); 
 
-    const handleCategoryClick = (id: string, label: string, priorityRecipeName?: string) => {
+    const handleCategoryClick = (key: string, priorityRecipeName?: string) => {
         if (!user) {
             showToast("Faça login para explorar as coleções!");
             openModal('auth');
             return;
         }
-        fetchThemeSuggestions(id, priorityRecipeName);
+        fetchThemeSuggestions(key, priorityRecipeName);
     };
 
     const handleAiClick = () => {
@@ -171,7 +174,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                         {categories.map((cat, idx) => (
                             <button
                                 key={idx}
-                                onClick={() => handleCategoryClick(cat.id, cat.label, cat.coverRecipe?.name)}
+                                onClick={() => handleCategoryClick(cat.key, cat.coverRecipe?.name)}
                                 className="relative flex-shrink-0 w-28 h-36 sm:w-32 sm:h-40 rounded-3xl overflow-hidden shadow-md snap-center group active:scale-95 transition-transform border border-black/5 dark:border-white/5"
                             >
                                 <div 

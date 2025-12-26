@@ -239,11 +239,6 @@ export const WebSidebarLeft: React.FC = () => {
 
                                     {isAdminExpanded && (
                                         <div className="flex flex-col gap-1 pl-2 mt-1 animate-slideUp">
-                                            <button onClick={() => app.openModal('adminCategories')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-orange-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-orange-500/50">
-                                                <span className="material-symbols-outlined text-base">dashboard_customize</span>
-                                                Coleções Home
-                                            </button>
-                                            
                                             {hasPerm('offers') && (
                                                 <button onClick={() => app.openModal('admin')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
                                                     <span className="material-symbols-outlined text-base">shopping_bag</span>
@@ -279,6 +274,7 @@ export const WebSidebarLeft: React.FC = () => {
                                                 </button>
                                             )}
                                             
+                                            {/* Fix: Added User Management button for Super Admins. */}
                                             {hasPerm('team') && (
                                                 <button onClick={() => app.openModal('adminUsers')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
                                                     <span className="material-symbols-outlined text-base">group_manage</span>
