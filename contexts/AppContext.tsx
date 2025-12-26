@@ -1,10 +1,9 @@
 
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity } from '../types';
+import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
 
@@ -30,82 +29,14 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
-/**
- * LIMPEZA RADICAL E INTELIGENTE: Extrai apenas o núcleo do produto.
- */
-const extractProductName = (text: string): string => {
-    if (!text) return '';
-    let cleaned = text.trim();
-    cleaned = cleaned.replace(/\(.*?\)/g, '');
-    cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
-
-    const measures = [
-        'g', 'kg', 'ml', 'l', 'un', 'unid', 'unidade', 'unidades', 'colher', 'colheres', 'sopa', 
-        'cha', 'chá', 'sobremesa', 'xicara', 'xícara', 'xicaras', 'xícaras', 'dente', 'dentes', 
-        'caixa', 'caixas', 'lata', 'latas', 'vidro', 'vidros', 'pacote', 'pacotes', 'maco', 'maço', 
-        'macos', 'maços', 'pitada', 'pitadas', 'fatia', 'fatias', 'copo', 'copos', 'pote', 'potes', 
-        'tablete', 'tabletes', 'envelope', 'envelopes', 'garrafa', 'garrafas'
-    ];
-
-    const connectives = ['de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'em', 'para'];
-
-    let loop = true;
-    while (loop) {
-        let prev = cleaned;
-        const measureRegex = new RegExp(`^(${measures.join('|')})\\b`, 'i');
-        cleaned = cleaned.replace(measureRegex, '').trim();
-        const connectiveRegex = new RegExp(`^(${connectives.join('|')})\\s+`, 'i');
-        cleaned = cleaned.replace(connectiveRegex, '').trim();
-        if (cleaned === prev) loop = false;
-    }
-
-    const suffixes = [
-        'picado', 'picada', 'em cubos', 'em rodelas', 'fatiado', 'fatiada', 'ralado', 'ralada', 
-        'cozido', 'cozida', 'grande', 'pequeno', 'pequena', 'medio', 'media', 'médio', 'média', 
-        'fresco', 'fresca', 'seco', 'seca', 'limpo', 'limpa', 'a gosto', 'opcional', 'descascado', 
-        'descascada', 'extra virgem', 'para decorar', 'para fritar', 'em calda', 'processado', 
-        'moído', 'moída', 'refogado', 'refogada'
-    ];
-    
-    const suffixRegex = new RegExp(`\\s+(${suffixes.join('|')}).*$`, 'i');
-    cleaned = cleaned.replace(suffixRegex, '').trim();
-
-    const endConnectiveRegex = new RegExp(`\\s+(${connectives.join('|')})$`, 'i');
-    cleaned = cleaned.replace(endConnectiveRegex, '').trim();
-
-    if (cleaned.length < 2) return text;
-    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
-};
-
-/**
- * NORMALIZAÇÃO BLINDADA: Converte qualquer formato de ingrediente para o objeto padrão.
- */
-const normalizeIngredients = (ingredients: any[]) => {
-    if (!Array.isArray(ingredients)) return [];
-    return ingredients.map(ing => {
-        if (!ing) return null;
-        if (typeof ing === 'string') {
-            return {
-                simplifiedName: extractProductName(ing),
-                detailedName: ing
-            };
-        }
-        
-        const sName = ing.simplifiedName || ing.name || '';
-        const dName = ing.detailedName || ing.description || ing.name || '';
-        
-        return {
-            simplifiedName: extractProductName(sName || dName),
-            detailedName: String(dName)
-        };
-    }).filter(i => i !== null && i.detailedName.trim() !== '');
-};
-
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [] as FullRecipe[];
     return data.map((r: any): FullRecipe => ({
         name: String(r.name || 'Receita'),
-        ingredients: normalizeIngredients(r.ingredients),
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
+            simplifiedName: String(i.simplifiedName || ''),
+            detailedName: String(i.detailedName || '')
+        })) : [] as { simplifiedName: string; detailedName: string; }[],
         instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
         imageQuery: String(r.imageQuery || r.name || ''),
         servings: String(r.servings || '2 porções'),
@@ -139,7 +70,6 @@ const INITIAL_MODAL_STATES = {
     isAdminRecipesModalOpen: false,
     isAdminReviewsModalOpen: false,
     isAdminScheduleModalOpen: false,
-    // Fix: Added missing state to resolve AdminUsersModal error.
     isAdminUsersModalOpen: false,
     isManageTeamModalOpen: false,
     isTeamReportsModalOpen: false, 
@@ -149,6 +79,7 @@ const INITIAL_MODAL_STATES = {
     isStartShoppingModalOpen: false,
     isShareListModalOpen: false,
     isThemeRecipesModalOpen: false,
+    isThemeModalOpen: false, // Added missing to sync
     isToolsModalOpen: false,
     isProductDetailsModalOpen: false,
     isUnitConverterModalOpen: false, 
@@ -181,7 +112,6 @@ interface AppContextType {
     isAdminRecipesModalOpen: boolean;
     isAdminReviewsModalOpen: boolean;
     isAdminScheduleModalOpen: boolean; 
-    // Fix: Added missing property to resolve AdminUsersModal error.
     isAdminUsersModalOpen: boolean;
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
@@ -255,6 +185,8 @@ interface AppContextType {
 
     scheduleRules: ScheduleRule[];
     saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
+    homeCategories: HomeCategory[];
+    saveHomeCategories: (categories: HomeCategory[]) => Promise<void>;
 
     recipeSearchResults: FullRecipe[];
     currentSearchTerm: string;
@@ -353,6 +285,41 @@ export const generateKeywords = (text: string): string[] => {
         .filter(word => word.length > 2 && !stopWords.includes(word)); 
 };
 
+// Fix: Added missing normalizeIngredients helper function to handle recipe data gourmet formatting
+export const normalizeIngredients = (ingredients: any[]) => {
+    if (!Array.isArray(ingredients)) return [];
+    
+    const extractName = (text: string): string => {
+        if (!text) return '';
+        let cleaned = text.trim();
+        cleaned = cleaned.replace(/\(.*?\)/g, '');
+        cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
+        const measures = ['g', 'kg', 'ml', 'l', 'un', 'colher', 'xicara', 'cha', 'sopa', 'lata', 'pacote', 'pote'];
+        const connectives = ['de', 'da', 'do', 'com', 'sem', 'para'];
+        let l = true;
+        while(l){
+            let p = cleaned;
+            measures.forEach(m => { cleaned = cleaned.replace(new RegExp(`^${m}\\b`, 'i'), '').trim(); });
+            connectives.forEach(c => { cleaned = cleaned.replace(new RegExp(`^${c}\\s+`, 'i'), '').trim(); });
+            if(cleaned === p) l = false;
+        }
+        return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+    };
+
+    return ingredients.map(ing => {
+        if (!ing) return null;
+        if (typeof ing === 'string') {
+            return { simplifiedName: extractName(ing), detailedName: ing };
+        }
+        const s = ing.simplifiedName || ing.name || '';
+        const d = ing.detailedName || ing.description || ing.name || '';
+        return {
+            simplifiedName: extractName(s || d),
+            detailedName: String(d)
+        };
+    }).filter(i => i !== null && i.detailedName.trim() !== '') as { simplifiedName: string; detailedName: string }[];
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, offers } = useShoppingList();
     const { user } = useAuth();
@@ -400,6 +367,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
     const [totalRecipeCount, setTotalRecipeCount] = useState(0);
     const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
+    const [homeCategories, setHomeCategories] = useState<HomeCategory[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
     const [globalRecipeCache, setGlobalRecipeCache] = useState<FullRecipe[]>([]);
@@ -409,7 +377,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const apiKey = process.env.API_KEY as string;
     
-    const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com';
+    const isOwner = user?.email?.toLowerCase() === 'admin@checklistia.com' || 
+                    user?.email?.toLowerCase() === 'itensnamao@gmail.com' ||
+                    user?.email?.toLowerCase() === 'ricardo029@gmail.com';
+    
     const isSuperAdmin = isOwner || user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
@@ -455,6 +426,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const pool = globalRecipeCache;
         if (pool.length === 0) return [] as FullRecipe[];
 
+        // Verifica se é uma categoria dinâmica do banco
+        const dynamicCat = homeCategories.find(c => c.id === categoryKey);
+        if (dynamicCat) {
+           const searchTags = dynamicCat.tags.map(t => t.toLowerCase());
+           return pool.filter(r => {
+               const recipeTags = (r.tags || []).map(rt => rt.toLowerCase());
+               return searchTags.some(st => recipeTags.includes(st) || r.name.toLowerCase().includes(st));
+           });
+        }
+
+        // Fallbacks para chaves legadas ou internas
         switch(categoryKey) {
             case 'top10': 
                 return pool.slice(0, 15);
@@ -475,7 +457,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             default:
                 return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
         }
-    }, [globalRecipeCache]);
+    }, [globalRecipeCache, homeCategories]);
 
     useEffect(() => {
         if (!db) return;
@@ -577,10 +559,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return () => unsub();
     }, []);
 
+    useEffect(() => {
+        if (!db) return;
+        const unsub = onSnapshot(doc(db, 'settings', 'home_categories'), (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                setHomeCategories((data.categories || []).sort((a: any, b: any) => a.order - b.order));
+            }
+        }, (error) => {
+            if (!ignorePermissionError(error)) console.error(error);
+        });
+        return () => unsub();
+    }, []);
+
     const saveScheduleRules = async (rules: ScheduleRule[]) => {
         if (!db || !isAdmin) return;
         await setDoc(doc(db, 'settings', 'recipe_schedule'), { rules, updatedAt: serverTimestamp() });
         showToast("Grade de horários atualizada!");
+    };
+
+    const saveHomeCategories = async (categories: HomeCategory[]) => {
+        if (!db || !isAdmin) return;
+        await setDoc(doc(db, 'settings', 'home_categories'), { categories, updatedAt: serverTimestamp() });
+        showToast("Categorias da home atualizadas!");
     };
 
     const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
@@ -623,8 +624,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
-        // Fix: Added modal key for AdminUsers.
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
+        if (modal === 'adminCategories') modalKey = 'isAdminCategoriesModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -647,8 +648,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
-        // Fix: Added modal key for AdminUsers.
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
+        if (modal === 'adminCategories') modalKey = 'isAdminCategoriesModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -781,11 +782,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             
             let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita completa, deliciosa e detalhada para: "${recipeName}".
             REGRAS OBRIGATÓRIAS:
-            1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes REAIS.
-            2. Cada ingrediente DEVE ser um objeto { "simplifiedName": "Nome Curto", "detailedName": "Qtd + Nome" }.
-            3. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
-            4. Identifique equipamentos específicos no campo 'suggestedLeads'.
-            5. Retorne APENAS o JSON puro seguindo este formato EXATO:
+            1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
+            2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
+            3. Identifique se o preparo exige equipamentos específicos (ex: batedeira, airfryer, forma, liquidificador, colher de pau, etc) para venda direcionada.
+            4. Retorne APENAS o JSON puro seguindo este formato:
             {
                 "name": "${recipeName}",
                 "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz agulhinha"}],
@@ -888,7 +888,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const item = itemsToCategorize.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
                     if (item) newCategoryMap[item.id] = ci.category;
                 });
-                // Fix: Removed redundant code causing out-of-scope variable access error.
+                
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
             } catch (error: any) { showToast("Muitas tentativas."); }
@@ -949,7 +949,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline 
+        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline,
+        homeCategories, saveHomeCategories
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

@@ -6,7 +6,7 @@ import { useApp } from '../../contexts/AppContext';
 import type { User } from '../../types';
 
 export const AdminUsersModal: React.FC = () => {
-    const { isAdminUsersModalOpen, closeModal, showToast } = useApp();
+    const { isAdminUsersModalOpen, closeModal, showToast, isAdmin } = useApp();
     const { user: currentUser, banUser, deleteUserProfile, updateUserRole } = useAuth();
     
     const [users, setUsers] = useState<User[]>([]);
@@ -15,7 +15,8 @@ export const AdminUsersModal: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!isAdminUsersModalOpen || !db) return;
+        // Só tenta buscar se o modal estiver aberto E o usuário já tiver sido identificado como Admin pelo AppContext/AuthContext
+        if (!isAdminUsersModalOpen || !db || !isAdmin) return;
 
         setIsLoading(true);
         setError(null);
@@ -39,14 +40,14 @@ export const AdminUsersModal: React.FC = () => {
             setIsLoading(false);
             
             if (err.code === 'permission-denied') {
-                setError("O servidor ainda não processou sua permissão Master. Tente fazer Logout e Login novamente para atualizar seu token de acesso.");
+                setError("Sua permissão de Admin ainda está sendo validada pelo Firebase. Tente sair e entrar novamente ou aguarde 5 segundos.");
             } else {
                 setError("Ocorreu um erro ao carregar a lista. Verifique sua conexão.");
             }
         });
 
         return () => unsubscribe();
-    }, [isAdminUsersModalOpen]);
+    }, [isAdminUsersModalOpen, isAdmin]);
 
     const filteredUsers = useMemo(() => {
         const term = searchTerm.toLowerCase().trim();

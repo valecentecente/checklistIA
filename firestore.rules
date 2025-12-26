@@ -7,11 +7,12 @@ service cloud.firestore {
     }
     
     // Admin check: Prioridade total para e-mails Master via Token (Blindagem Nível 1)
+    // Adicionado ricardo029@gmail.com com suporte a case-insensitive para maior segurança
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'itensnamao@gmail.com' ||
-        request.auth.token.email == 'admin@checklistia.com' ||
-        request.auth.token.email == 'ricardo029@gmail.com' ||
+        request.auth.token.email.matches('(?i)itensnamao@gmail.com') ||
+        request.auth.token.email.matches('(?i)admin@checklistia.com') ||
+        request.auth.token.email.matches('(?i)ricardo029@gmail.com') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin_l1', 'admin_l2'])
       );

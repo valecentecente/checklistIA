@@ -1,4 +1,12 @@
 
+export interface HomeCategory {
+  id: string;
+  label: string;
+  icon: string;
+  tags: string[];
+  order: number;
+  active: boolean;
+}
 
 export interface ArcadeStats {
   gameId: 'memory' | 'speed' | 'slide';
@@ -124,7 +132,6 @@ export interface User {
   dietaryPreferences?: string[]; 
   birthDate?: string; 
   role?: 'user' | 'admin_l1' | 'admin_l2';
-  // Fix: Added status property to User interface to resolve Property 'status' does not exist error.
   status?: 'active' | 'banned';
   permissions?: AdminPermissions;
 }
