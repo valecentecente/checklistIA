@@ -11,6 +11,7 @@ const CHEF_TIPS = [
     "Use nossa IA para organizar sua lista por corredores e ganhar tempo.",
     "Otimize seu orçamento definindo um teto de gastos no menu ferramentas.",
     "Receitas com 'Fit' na tag são ótimas para manter o foco na dieta.",
+    "Compare o preço por unidade de medida (quilo ou litro) para encontrar o melhor custo-benefício.",
     "Planeje suas refeições da semana para evitar o desperdício de alimentos."
 ];
 

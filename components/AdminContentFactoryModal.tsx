@@ -156,25 +156,45 @@ export const AdminContentFactoryModal: React.FC = () => {
         });
     };
 
-    const normalizeIngredients = (raw: any[]) => {
-        if (!Array.isArray(raw)) return [];
-        return raw.map(ing => {
+    /**
+     * NORMALIZAÇÃO BLINDADA PARA A FÁBRICA
+     */
+    const normalizeIngredientsFactory = (ingredients: any[]) => {
+        if (!Array.isArray(ingredients)) return [];
+        
+        const extractName = (text: string): string => {
+            if (!text) return '';
+            let cleaned = text.trim();
+            cleaned = cleaned.replace(/\(.*?\)/g, '');
+            cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
+            const measures = ['g', 'kg', 'ml', 'l', 'un', 'colher', 'xicara', 'cha', 'sopa', 'lata', 'pacote', 'pote'];
+            const connectives = ['de', 'da', 'do', 'com', 'sem', 'para'];
+            let l = true;
+            while(l){
+                let p = cleaned;
+                measures.forEach(m => { cleaned = cleaned.replace(new RegExp(`^${m}\\b`, 'i'), '').trim(); });
+                connectives.forEach(c => { cleaned = cleaned.replace(new RegExp(`^${c}\\s+`, 'i'), '').trim(); });
+                if(cleaned === p) l = false;
+            }
+            return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+        };
+
+        return ingredients.map(ing => {
+            if (!ing) return null;
             if (typeof ing === 'string') {
-                return { simplifiedName: ing.split(',')[0].split('(')[0].trim(), detailedName: ing };
+                return { simplifiedName: extractName(ing), detailedName: ing };
             }
-            if (typeof ing === 'object' && ing !== null) {
-                return {
-                    simplifiedName: String(ing.simplifiedName || ing.name || 'Ingrediente'),
-                    detailedName: String(ing.detailedName || ing.description || ing.simplifiedName || 'Item detalhado')
-                };
-            }
-            return { simplifiedName: 'Ingrediente', detailedName: 'Item processado' };
-        });
+            const s = ing.simplifiedName || ing.name || '';
+            const d = ing.detailedName || ing.description || ing.name || '';
+            return {
+                simplifiedName: extractName(s || d),
+                detailedName: String(d)
+            };
+        }).filter(i => i !== null && i.detailedName.trim() !== '');
     };
 
     const createLeads = async (recipeName: string, suggestedLeads: string[]) => {
         if (!db || !suggestedLeads || suggestedLeads.length === 0) return;
-        
         try {
             const offersSnap = await getDocs(collection(db, 'offers'));
             const inventoryItems: string[] = [];
@@ -227,12 +247,12 @@ export const AdminContentFactoryModal: React.FC = () => {
                 .replace(/[^a-z0-9-]/g, '') 
                 .slice(0, 80);
 
-            // 1. Gerar Receita
             addLog(`1/3 - Escrevendo receita gourmet...`, 'info');
-            const detailPrompt = `Gere a receita completa para '${manualRecipeName}' em JSON.
-            O campo 'ingredients' deve ser um array de objetos {simplifiedName, detailedName}.
-            Identifique TODOS os equipamentos e utensílios necessários no campo 'suggestedLeads'.
-            Adicione tags relevantes.
+            const detailPrompt = `Você é um chef especialista. Gere uma receita completa para '${manualRecipeName}' em JSON.
+            REGRAS OBRIGATÓRIAS:
+            1. O campo 'ingredients' DEVE conter no mínimo 6 itens.
+            2. Cada ingrediente DEVE ser um objeto { "simplifiedName": "Nome Curto", "detailedName": "Qtd + Nome" }.
+            3. Identifique utensílios necessários no campo 'suggestedLeads'.
             Formato: { 'name': '${manualRecipeName}', 'ingredients': [], 'instructions': [], 'prepTimeInMinutes': 30, 'difficulty': 'Médio', 'cost': 'Médio', 'tags': [], 'suggestedLeads': [] }`;
 
             const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -242,16 +262,15 @@ export const AdminContentFactoryModal: React.FC = () => {
             }));
 
             const recipeData = JSON.parse(detailRes.text || "{}");
-            
-            // VALIDAÇÃO CRÍTICA
-            if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
-                addLog(`ERRO: IA retornou receita vazia. Abortando.`, 'error');
+            const normalizedIngs = normalizeIngredientsFactory(recipeData.ingredients);
+
+            if (normalizedIngs.length < 3) {
+                addLog(`ERRO: IA retornou receita com poucos ou nenhum ingrediente. Abortando.`, 'error');
                 return;
             }
 
             setProgress(40);
 
-            // 2. Gerar Imagem
             addLog(`2/3 - Fotografando prato via IA...`, 'info');
             const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash-image',
@@ -265,12 +284,11 @@ export const AdminContentFactoryModal: React.FC = () => {
             }
             setProgress(80);
 
-            // 3. Salvar e Processar Leads
             addLog(`3/3 - Salvando no Acervo Global...`, 'info');
             if (db) {
                 const finalRecipe = {
                     ...recipeData,
-                    ingredients: normalizeIngredients(recipeData.ingredients),
+                    ingredients: normalizedIngs,
                     imageUrl,
                     imageSource: 'genai',
                     keywords: generateKeywords(manualRecipeName),
@@ -278,11 +296,9 @@ export const AdminContentFactoryModal: React.FC = () => {
                 };
 
                 await setDoc(doc(db, 'global_recipes', docId), finalRecipe, { merge: true });
-                
                 if (recipeData.suggestedLeads && recipeData.suggestedLeads.length > 0) {
                     await createLeads(manualRecipeName, recipeData.suggestedLeads);
                 }
-                
                 addLog(`SUCESSO TOTAL! "${manualRecipeName}" disponível no acervo.`, 'success');
                 setProgress(100);
                 setManualRecipeName('');
@@ -325,11 +341,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                 if (shouldStop) break;
                 addLog(`Analisando prato: ${recipe.name}`, 'info');
 
-                const scanPrompt = `Analise a receita '${recipe.name}'. 
-                Quais equipamentos, acessórios de cozinha ou eletros são necessários? 
-                Ex: batedeira, airfryer, forma de bolo, espátula, liquidificador.
-                Retorne APENAS um JSON com array 'suggestedLeads'. 
-                Formato: { "suggestedLeads": ["item1", "item2"] }`;
+                const scanPrompt = `Analise a receita '${recipe.name}'. Quais equipamentos são necessários? Retorne APENAS um JSON com array 'suggestedLeads'. Formato: { "suggestedLeads": ["item1", "item2"] }`;
 
                 try {
                     const res = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -416,9 +428,10 @@ export const AdminContentFactoryModal: React.FC = () => {
                         addLog(`${successCount + 1}/${quantity} - Produzindo: ${name}`, 'info');
                         
                         try {
-                            const detailPrompt = `Gere a receita completa para '${name}' em JSON.
-                            O campo 'ingredients' deve ser um array de objetos {simplifiedName, detailedName}.
-                            No campo 'suggestedLeads', liste utensílios e equipamentos.
+                            const detailPrompt = `Gere a receita gourmet para '${name}' em JSON. 
+                            REGRAS: 
+                            1. 'ingredients' DEVE conter objetos {simplifiedName, detailedName}.
+                            2. Mínimo 6 ingredientes.
                             Formato: { 'name': '${name}', 'ingredients': [], 'instructions': [], 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'tags': [], 'suggestedLeads': [] }`;
 
                             const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
@@ -428,10 +441,10 @@ export const AdminContentFactoryModal: React.FC = () => {
                             }));
 
                             const recipeData = JSON.parse(detailRes.text || "{}");
+                            const normalizedIngs = normalizeIngredientsFactory(recipeData.ingredients);
                             
-                            // VALIDAÇÃO RIGOROSA
-                            if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
-                                addLog(`> DESCARTADO: "${name}" retornou dados vazios.`, 'error');
+                            if (normalizedIngs.length < 3) {
+                                addLog(`> DESCARTADO: "${name}" retornou dados incompletos.`, 'error');
                                 continue;
                             }
 
@@ -449,7 +462,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             if (db) {
                                 const finalRecipe = {
                                     ...recipeData,
-                                    ingredients: normalizeIngredients(recipeData.ingredients),
+                                    ingredients: normalizedIngs,
                                     imageUrl,
                                     imageSource: 'genai',
                                     keywords: generateKeywords(name),

@@ -31,21 +31,13 @@ const getRecipeDocId = (name: string) => {
 
 /**
  * LIMPEZA RADICAL E INTELIGENTE: Extrai apenas o núcleo do produto.
- * Lida com acentuação e termos complexos.
  */
 const extractProductName = (text: string): string => {
     if (!text) return '';
-    
-    // Normalização inicial: remove espaços extras e mantém case original para processar
     let cleaned = text.trim();
-
-    // 1. Remove qualquer coisa dentro de parênteses
     cleaned = cleaned.replace(/\(.*?\)/g, '');
-
-    // 2. Remove números e frações no início
     cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
 
-    // 3. Lista exaustiva de unidades e medidas (com e sem acento) para remoção do INÍCIO
     const measures = [
         'g', 'kg', 'ml', 'l', 'un', 'unid', 'unidade', 'unidades', 'colher', 'colheres', 'sopa', 
         'cha', 'chá', 'sobremesa', 'xicara', 'xícara', 'xicaras', 'xícaras', 'dente', 'dentes', 
@@ -59,19 +51,13 @@ const extractProductName = (text: string): string => {
     let loop = true;
     while (loop) {
         let prev = cleaned;
-        
-        // Regex para medida isolada no início da frase
         const measureRegex = new RegExp(`^(${measures.join('|')})\\b`, 'i');
         cleaned = cleaned.replace(measureRegex, '').trim();
-        
-        // Regex para conectivos soltos no início após a remoção da medida
         const connectiveRegex = new RegExp(`^(${connectives.join('|')})\\s+`, 'i');
         cleaned = cleaned.replace(connectiveRegex, '').trim();
-        
         if (cleaned === prev) loop = false;
     }
 
-    // 4. Limpeza de Sufixos de Preparo, Finalidade e Estado (Remover do FIM)
     const suffixes = [
         'picado', 'picada', 'em cubos', 'em rodelas', 'fatiado', 'fatiada', 'ralado', 'ralada', 
         'cozido', 'cozida', 'grande', 'pequeno', 'pequena', 'medio', 'media', 'médio', 'média', 
@@ -80,23 +66,23 @@ const extractProductName = (text: string): string => {
         'moído', 'moída', 'refogado', 'refogada'
     ];
     
-    // Remove o termo e tudo o que vier depois dele
     const suffixRegex = new RegExp(`\\s+(${suffixes.join('|')}).*$`, 'i');
     cleaned = cleaned.replace(suffixRegex, '').trim();
 
-    // Limpeza final de conectivos órfãos que sobram no final
     const endConnectiveRegex = new RegExp(`\\s+(${connectives.join('|')})$`, 'i');
     cleaned = cleaned.replace(endConnectiveRegex, '').trim();
 
     if (cleaned.length < 2) return text;
-    
-    // Capitaliza apenas a primeira letra para manter o padrão visual limpo
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
 };
 
+/**
+ * NORMALIZAÇÃO BLINDADA: Converte qualquer formato de ingrediente para o objeto padrão.
+ */
 const normalizeIngredients = (ingredients: any[]) => {
     if (!Array.isArray(ingredients)) return [];
     return ingredients.map(ing => {
+        if (!ing) return null;
         if (typeof ing === 'string') {
             return {
                 simplifiedName: extractProductName(ing),
@@ -111,7 +97,7 @@ const normalizeIngredients = (ingredients: any[]) => {
             simplifiedName: extractProductName(sName || dName),
             detailedName: String(dName)
         };
-    });
+    }).filter(i => i !== null && i.detailedName.trim() !== '');
 };
 
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
@@ -439,7 +425,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setInstallPromptEvent(e); 
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
             if (!isStandalone) {
-                // Apenas exibe o modal de distribuição se o evento beforeinstallprompt for disparado
                 setTimeout(() => {
                     setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
                 }, 2000);
@@ -785,29 +770,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             const ai = new GoogleGenAI({ apiKey });
             
-            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita gourmet completa para: "${recipeName}".
-            REGRAS OBRIGATÓRIAS PARA O JSON:
-            1. No campo 'ingredients', liste itens detalhados (ex: "500g de farinha de rosca").
-            2. No campo 'simplifiedName' do ingrediente, use APENAS o nome ESSENCIAL.
-               - PROIBIDO incluir medidas como 'Xícara', 'Chá de', 'Colher', 'Gramos', 'Lata de', etc.
-               - PROIBIDO incluir verbos como 'para fritar', 'para decorar', 'picado'.
-               - Exemplos de conversão: 
-                 "1 xícara de farinha de rosca" -> simplifiedName deve ser "Farinha de rosca".
-                 "1 colher de chá de sal" -> simplifiedName deve ser "Sal".
-                 "Óleo para fritar" -> simplifiedName deve ser "Óleo".
-            3. Identifique utensílios no campo 'suggestedLeads'.
-            Retorne APENAS o JSON puro:
+            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita completa, deliciosa e detalhada para: "${recipeName}".
+            REGRAS OBRIGATÓRIAS:
+            1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes REAIS.
+            2. Cada ingrediente DEVE ser um objeto { "simplifiedName": "Nome Curto", "detailedName": "Qtd + Nome" }.
+            3. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
+            4. Identifique equipamentos específicos no campo 'suggestedLeads'.
+            5. Retorne APENAS o JSON puro seguindo este formato EXATO:
             {
                 "name": "${recipeName}",
-                "ingredients": [{"simplifiedName": "Farinha de rosca", "detailedName": "1 xícara de farinha de rosca"}],
+                "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz agulhinha"}],
                 "instructions": ["Passo 1...", "Passo 2..."],
+                "imageQuery": "Foto close-up apetitosa de ${recipeName}, luz de estúdio",
                 "servings": "2 porções",
                 "prepTimeInMinutes": 30,
                 "difficulty": "Médio",
                 "cost": "Médio",
                 "isAlcoholic": false,
                 "tags": ["tag1", "tag2"],
-                "suggestedLeads": ["espátula", "liquidificador"]
+                "suggestedLeads": ["batedeira", "forma de bolo"]
             }`;
 
             const parts: any[] = [];

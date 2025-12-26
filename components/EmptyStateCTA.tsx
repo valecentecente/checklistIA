@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -107,11 +108,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     };
 
     const getHeroTitle = () => {
-        const month = new Date().getMonth();
-        if (month === 11) return "Especial de Natal";
         const hour = new Date().getHours();
         if (hour < 11) return "Bom dia! Café da Manhã";
         if (hour < 15) return "Hora do Almoço";
+        if (hour < 19) return "Lanche da Tarde";
         return "Sugestões para Você";
     };
 

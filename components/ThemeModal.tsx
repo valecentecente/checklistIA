@@ -32,20 +32,6 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ isOpen, onClose }) => {
             icon: 'dark_mode',
             color: 'bg-slate-700 text-slate-200',
             border: 'border-slate-600'
-        },
-        {
-            id: 'christmas',
-            name: 'Natal',
-            icon: 'forest',
-            color: 'bg-red-100 text-red-700',
-            border: 'border-red-200'
-        },
-        {
-            id: 'newyear',
-            name: 'Ano Novo',
-            icon: 'celebration',
-            color: 'bg-yellow-100 text-yellow-700',
-            border: 'border-yellow-200'
         }
     ];
 
@@ -76,12 +62,6 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ isOpen, onClose }) => {
                             <span className="font-semibold text-text-primary-light dark:text-text-primary-dark flex-1 text-left">
                                 {t.name}
                             </span>
-                            {t.id === 'christmas' && (
-                                <span className="text-xl animate-bounce mr-2">🎅</span>
-                            )}
-                            {t.id === 'newyear' && (
-                                <span className="text-xl animate-pulse mr-2">🥂</span>
-                            )}
                             {theme === t.id && (
                                 <span className="material-symbols-outlined text-primary">check_circle</span>
                             )}
