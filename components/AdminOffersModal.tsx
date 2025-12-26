@@ -18,7 +18,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     const [offers, setOffers] = useState<Offer[]>([]);
     const [leads, setLeads] = useState<SalesOpportunity[]>([]);
     
-    // Estados de Busca e Ordenação
     const [searchTerm, setSearchTerm] = useState('');
     const [sortMode, setSortMode] = useState<'newest' | 'alphabetical'>('newest');
 
@@ -38,7 +37,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     useEffect(() => {
         if (!isOpen || !db || !auth?.currentUser) return;
 
-        // LISTENER DE OFERTAS
         const qOffers = query(collection(db, 'offers'), limit(300));
         const unsubscribeOffers = onSnapshot(qOffers, 
             (snapshot) => {
@@ -49,7 +47,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
             }
         );
 
-        // LISTENER DE LEADS
         const qLeads = query(collection(db, 'sales_opportunities'), limit(100));
         const unsubscribeLeads = onSnapshot(qLeads, 
             (snapshot) => {
@@ -64,11 +61,9 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         return () => { unsubscribeOffers(); unsubscribeLeads(); };
     }, [isOpen]);
 
-    // Lógica de Filtragem e Ordenação
     const processedOffers = useMemo(() => {
         let result = [...offers];
 
-        // 1. Filtro de Pesquisa
         if (searchTerm.trim()) {
             const lowTerm = searchTerm.toLowerCase();
             result = result.filter(o => 
@@ -78,12 +73,10 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
             );
         }
 
-        // 2. Ordenação
         result.sort((a, b) => {
             if (sortMode === 'alphabetical') {
                 return a.name.localeCompare(b.name);
             } else {
-                // newest
                 const dateA = a.createdAt?.seconds || 0;
                 const dateB = b.createdAt?.seconds || 0;
                 return dateB - dateA;
@@ -100,7 +93,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         }
         
         try {
-            const testRef = await addDoc(collection(db, 'sales_opportunities'), {
+            await addDoc(collection(db, 'sales_opportunities'), {
                 term: "TESTE DIAGNÓSTICO " + Math.floor(Math.random() * 999),
                 recipeName: "Sistema de Alerta",
                 status: 'pending',
@@ -173,7 +166,11 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t !== '');
+            // Refinamento: Garante que a vírgula funcione bem como separador
+            const tagsArray = tags.split(',')
+                .map(t => t.trim())
+                .filter(t => t !== '');
+
             const offerData = {
                 name, price, oldPrice: oldPrice || null, description: description || null,
                 image: images[0], images: images, link, category, store,
@@ -210,7 +207,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                     <button onClick={() => setActiveTab('add')} className={`flex-1 py-3 text-[10px] font-black uppercase transition-all ${activeTab === 'add' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>{editingId ? 'Editar' : 'Novo'}</button>
                 </div>
 
-                {/* AREA DE BUSCA E FILTRO (Aparece apenas na aba de Listagem) */}
                 {activeTab === 'list' && (
                     <div className="p-3 bg-gray-50 dark:bg-black/40 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-2 shrink-0 animate-fadeIn">
                         <div className="relative">
@@ -306,14 +302,13 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                             </div>
 
                             <div>
-                                <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Tags (separadas por vírgula)</label>
+                                <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Tags (use vírgula para separar)</label>
                                 <textarea 
                                     className="form-input w-full rounded-xl dark:bg-black/20 dark:text-white h-20 px-4 py-3 border-gray-200 dark:border-gray-700 mt-1 text-xs font-medium resize-none" 
                                     value={tags} 
                                     onChange={e => setTags(e.target.value)} 
                                     placeholder="Ex: batedeira, inox, bolo, confeitaria" 
                                 />
-                                <p className="text-[8px] text-gray-500 mt-1 ml-1 italic">Dica: Adicione o nome da receita relacionada para que o produto apareça nela.</p>
                             </div>
 
                             <div>
@@ -322,7 +317,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                                     className="form-input w-full rounded-xl dark:bg-black/20 dark:text-white h-24 px-4 py-3 border-gray-200 dark:border-gray-700 mt-1 text-xs font-medium resize-none" 
                                     value={description} 
                                     onChange={e => setDescription(e.target.value)} 
-                                    placeholder="Descreva o produto e por que ele é indispensável..." 
+                                    placeholder="Descreva o produto..." 
                                 />
                             </div>
 
@@ -356,7 +351,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                     )}
                 </div>
                 
-                {/* FOOTER STATS */}
                 <div className="p-3 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center px-6 shrink-0">
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
                         Exibindo {processedOffers.length} de {offers.length} produtos

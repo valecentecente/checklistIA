@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, limit, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
@@ -77,9 +76,15 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const handleAddTag = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && tagInput.trim()) {
             e.preventDefault();
-            const newTag = tagInput.trim().toLowerCase();
-            if (!editTags.includes(newTag)) {
-                setEditTags([...editTags, newTag]);
+            const input = tagInput.trim().toLowerCase();
+            
+            // Lógica de separação por vírgula
+            const newTagsFromInput = input.split(',')
+                .map(t => t.trim())
+                .filter(t => t !== '' && !editTags.includes(t));
+
+            if (newTagsFromInput.length > 0) {
+                setEditTags([...editTags, ...newTagsFromInput]);
             }
             setTagInput('');
         }
@@ -88,9 +93,15 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const handleAddLead = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && leadInput.trim()) {
             e.preventDefault();
-            const newLead = leadInput.trim().toLowerCase();
-            if (!editLeads.includes(newLead)) {
-                setEditLeads([...editLeads, newLead]);
+            const input = leadInput.trim().toLowerCase();
+
+            // Lógica de separação por vírgula para leads
+            const newLeadsFromInput = input.split(',')
+                .map(l => l.trim())
+                .filter(l => l !== '' && !editLeads.includes(l));
+
+            if (newLeadsFromInput.length > 0) {
+                setEditLeads([...editLeads, ...newLeadsFromInput]);
             }
             setLeadInput('');
         }
@@ -138,7 +149,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         });
     };
 
-    // FUNÇÃO "RE-CHEF": Regenera apenas o texto via IA
     const handleRegenerateText = async () => {
         if (!editingRecipe || isRegeneratingText) return;
         const apiKey = process.env.API_KEY as string;
@@ -181,7 +191,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         setIsSaving(true);
 
         try {
-            // Lógica de Busca Aprimorada: Mescla Título + Tags nas Keywords
             const baseKeywords = generateKeywords(editName);
             const tagKeywords = editTags.flatMap(t => generateKeywords(t));
             const finalKeywords = Array.from(new Set([...baseKeywords, ...tagKeywords]));
@@ -230,7 +239,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                 config: { responseModalities: [Modality.IMAGE] },
             }), 3);
             
-            // Fix: Iterating through parts to find the image part instead of assuming it is the first part
             let generatedUrl = null;
             for (const part of response.candidates[0].content.parts) {
                 if (part.inlineData) {
@@ -302,10 +310,10 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     )}
                 </div>
 
-                {/* MODAL DE EDIÇÃO AVANÇADA (ACESSO TOTAL) */}
+                {/* MODAL DE EDIÇÃO AVANÇADA */}
                 {editingRecipe && (
-                    <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-                        <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[95vh]">
+                    <div className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+                        <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
                             
                             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-black/40">
                                 <div className="flex items-center gap-3">
@@ -316,10 +324,8 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
 
                             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 scrollbar-hide">
                                 
-                                {/* COLUNA ESQUERDA: IDENTIDADE & VENDAS */}
                                 <div className="space-y-6">
-                                    {/* Imagem e Botão Trocar */}
-                                    <div className="relative group rounded-[2rem] overflow-hidden bg-gray-100 dark:bg-gray-800 aspect-video border-2 border-dashed border-gray-300 dark:border-gray-700">
+                                    <div className="relative group rounded-[2rem] overflow-hidden bg-gray-100 dark:bg-gray-800 aspect-video border-2 border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center">
                                         {editingRecipe.imageUrl ? <img src={editingRecipe.imageUrl} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-6xl text-gray-300">image</span>}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
                                             <button onClick={handleRegenerateImage} disabled={isRegeneratingImage} className="px-6 py-2 bg-white text-black rounded-full text-xs font-black uppercase shadow-xl flex items-center gap-2 transition-all active:scale-95">
@@ -334,7 +340,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                         <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-2xl h-14 px-4 font-black text-lg text-gray-800 dark:text-white" />
                                     </div>
 
-                                    {/* SEÇÃO DE LEADS (UTENSÍLIOS / VENDAS) */}
                                     <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-[2rem] border border-blue-100 dark:border-blue-900/30">
                                         <label className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-3 flex items-center gap-2">
                                             <span className="material-symbols-outlined text-sm">shopping_bag</span>
@@ -348,7 +353,14 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                                 </span>
                                             ))}
                                         </div>
-                                        <input type="text" value={leadInput} onChange={(e) => setLeadInput(e.target.value)} onKeyDown={handleAddLead} placeholder="Adicionar utensílio/eletro..." className="w-full bg-white dark:bg-black/20 border-0 rounded-xl h-10 px-4 text-xs font-bold" />
+                                        <input 
+                                            type="text" 
+                                            value={leadInput} 
+                                            onChange={e => setLeadInput(e.target.value)} 
+                                            onKeyDown={handleAddLead} 
+                                            placeholder="Adicionar utensílio/eletro... (use vírgula para separar)" 
+                                            className="w-full bg-white dark:bg-black/20 border-0 rounded-xl h-10 px-4 text-xs font-bold" 
+                                        />
                                     </div>
 
                                     <div>
@@ -360,12 +372,18 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                                     <button onClick={() => setEditTags(editTags.filter(t => t !== tag))}><span className="material-symbols-outlined text-sm">close</span></button>
                                                 </span>
                                             ))}
-                                            <input type="text" value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={handleAddTag} placeholder="Nova tag..." className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold min-w-[80px]" />
+                                            <input 
+                                                type="text" 
+                                                value={tagInput} 
+                                                onChange={(e) => setTagInput(e.target.value)} 
+                                                onKeyDown={handleAddTag} 
+                                                placeholder="Nova tag... (use vírgula para separar)" 
+                                                className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold min-w-[80px] dark:text-white" 
+                                            />
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* COLUNA DIREITA: COMPOSIÇÃO (UNIFICADO) */}
                                 <div className="space-y-6 bg-zinc-50 dark:bg-black/20 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex flex-col h-full">
                                     <div className="flex justify-between items-center mb-2">
                                         <div className="flex flex-col">
@@ -382,7 +400,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                         </button>
                                     </div>
 
-                                    {/* Sub-seção: Ingredientes */}
                                     <div className="flex flex-col gap-3">
                                         <div className="flex justify-between items-center">
                                             <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
@@ -394,8 +411,8 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                         <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
                                             {editIngredients.map((ing, idx) => (
                                                 <div key={idx} className="flex gap-2 bg-white dark:bg-zinc-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 animate-fadeIn shadow-sm">
-                                                    <input value={ing.simplifiedName} onChange={e => handleIngredientChange(idx, 'simplifiedName', e.target.value)} placeholder="Curto" className="w-1/3 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-black h-8 px-2" />
-                                                    <input value={ing.detailedName} onChange={e => handleIngredientChange(idx, 'detailedName', e.target.value)} placeholder="Detalhes" className="flex-1 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-medium h-8 px-2" />
+                                                    <input value={ing.simplifiedName} onChange={e => handleIngredientChange(idx, 'simplifiedName', e.target.value)} placeholder="Curto" className="w-1/3 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-black h-8 px-2 dark:text-white" />
+                                                    <input value={ing.detailedName} onChange={e => handleIngredientChange(idx, 'detailedName', e.target.value)} placeholder="Detalhes" className="flex-1 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-medium h-8 px-2 dark:text-white" />
                                                     <button onClick={() => handleRemoveIngredient(idx)} className="text-red-500 p-1 hover:scale-110 transition-transform"><span className="material-symbols-outlined text-sm">delete</span></button>
                                                 </div>
                                             ))}
@@ -404,7 +421,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
 
                                     <div className="h-px bg-gray-200 dark:bg-gray-800 mx-2"></div>
 
-                                    {/* Sub-seção: Modo de Preparo */}
                                     <div className="flex flex-col gap-3">
                                         <div className="flex justify-between items-center">
                                             <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
@@ -417,7 +433,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                             {editInstructions.map((inst, idx) => (
                                                 <div key={idx} className="flex gap-3 items-start animate-fadeIn group">
                                                     <span className="w-6 h-6 shrink-0 bg-primary text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-sm">{idx + 1}</span>
-                                                    <textarea value={inst} onChange={e => handleInstructionChange(idx, e.target.value)} className="flex-1 bg-white dark:bg-zinc-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs p-3 min-h-[70px] resize-none font-medium shadow-sm focus:ring-1 focus:ring-primary/30" />
+                                                    <textarea value={inst} onChange={e => handleInstructionChange(idx, e.target.value)} className="flex-1 bg-white dark:bg-zinc-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs p-3 min-h-[70px] resize-none font-medium shadow-sm focus:ring-1 focus:ring-primary/30 dark:text-white" />
                                                     <button onClick={() => handleRemoveInstruction(idx)} className="text-red-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity"><span className="material-symbols-outlined text-sm">close</span></button>
                                                 </div>
                                             ))}
