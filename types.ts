@@ -1,4 +1,5 @@
 
+
 export interface ArcadeStats {
   gameId: 'memory' | 'speed' | 'slide';
   bestScore: number;
@@ -123,6 +124,8 @@ export interface User {
   dietaryPreferences?: string[]; 
   birthDate?: string; 
   role?: 'user' | 'admin_l1' | 'admin_l2';
+  // Fix: Added status property to User interface to resolve Property 'status' does not exist error.
+  status?: 'active' | 'banned';
   permissions?: AdminPermissions;
 }
 

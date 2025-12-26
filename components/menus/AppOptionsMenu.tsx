@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -152,6 +153,14 @@ export const AppOptionsMenu: React.FC = () => {
                                     
                                     <div className="h-px bg-yellow-200/50 dark:bg-yellow-800/30 mx-4 my-1"></div>
                                     
+                                    {/* Fix: Added User Management button for Super Admins. */}
+                                    {hasPerm('team') && (
+                                        <button onClick={() => handleOptionClick('adminUsers')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-700 dark:text-blue-300 pl-8 font-medium">
+                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">group_manage</span>
+                                            Gestão Usuários
+                                        </button>
+                                    )}
+
                                     {hasPerm('team') && (
                                         <button onClick={() => handleOptionClick('manageTeam')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-700 dark:text-blue-300 pl-8 font-medium">
                                             <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">group</span>

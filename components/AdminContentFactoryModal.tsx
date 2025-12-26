@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs, updateDoc, addDoc } from 'firebase/firestore';
@@ -279,8 +280,12 @@ export const AdminContentFactoryModal: React.FC = () => {
             }));
 
             let imageUrl = null;
-            if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-                imageUrl = await compressImage("data:image/jpeg;base64," + imageRes.candidates[0].content.parts[0].inlineData.data);
+            // Fix: Iterating through parts to find the image part instead of assuming it is the first part
+            for (const part of imageRes.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    imageUrl = await compressImage("data:image/jpeg;base64," + part.inlineData.data);
+                    break;
+                }
             }
             setProgress(80);
 
@@ -455,8 +460,12 @@ export const AdminContentFactoryModal: React.FC = () => {
                             }));
 
                             let imageUrl = null;
-                            if (imageRes.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-                                imageUrl = await compressImage("data:image/jpeg;base64," + imageRes.candidates[0].content.parts[0].inlineData.data);
+                            // Fix: Iterating through parts to find the image part instead of assuming it is the first part
+                            for (const part of imageRes.candidates[0].content.parts) {
+                                if (part.inlineData) {
+                                    imageUrl = await compressImage("data:image/jpeg;base64," + part.inlineData.data);
+                                    break;
+                                }
                             }
 
                             if (db) {

@@ -1,3 +1,5 @@
+
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -69,6 +71,8 @@ const INITIAL_MODAL_STATES = {
     isAdminRecipesModalOpen: false,
     isAdminReviewsModalOpen: false,
     isAdminScheduleModalOpen: false,
+    // Fix: Added missing state to resolve AdminUsersModal error.
+    isAdminUsersModalOpen: false,
     isManageTeamModalOpen: false,
     isTeamReportsModalOpen: false, 
     isArcadeModalOpen: false,
@@ -109,6 +113,8 @@ interface AppContextType {
     isAdminRecipesModalOpen: boolean;
     isAdminReviewsModalOpen: boolean;
     isAdminScheduleModalOpen: boolean; 
+    // Fix: Added missing property to resolve AdminUsersModal error.
+    isAdminUsersModalOpen: boolean;
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
     isArcadeModalOpen: boolean;
@@ -549,6 +555,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        // Fix: Added modal key for AdminUsers.
+        if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -571,6 +579,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        // Fix: Added modal key for AdminUsers.
+        if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -812,6 +822,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const item = itemsToCategorize.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
                     if (item) newCategoryMap[item.id] = ci.category;
                 });
+                // Fix: Removed redundant code causing out-of-scope variable access error.
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
             } catch (error: any) { showToast("Muitas tentativas."); }

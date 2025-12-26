@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -44,6 +45,8 @@ import { ArcadeModal } from '../arcade/ArcadeModal';
 import { UnitConverterModal } from '../UnitConverterModal';
 import { AdminContentFactoryModal } from '../AdminContentFactoryModal';
 import { RecipeSelectionModal } from '../RecipeSelectionModal'; 
+// Fix: Imported AdminUsersModal.
+import { AdminUsersModal } from './AdminUsersModal';
 
 interface AppModalsProps {
     sharedListData: any;
@@ -123,6 +126,8 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <AdminReviewsModal isOpen={app.isAdminReviewsModalOpen} onClose={() => app.closeModal('adminReviews')} />
             <AdminScheduleModal /> 
             <AdminContentFactoryModal /> 
+            {/* Fix: Added AdminUsersModal. */}
+            <AdminUsersModal />
             <ManageTeamModal />
             <AdminInviteModal />
             <TeamReportsModal />

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
@@ -270,6 +271,14 @@ export const WebSidebarLeft: React.FC = () => {
                                                 <button onClick={() => app.openModal('adminReviews')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
                                                     <span className="material-symbols-outlined text-base">rate_review</span>
                                                     Avaliações
+                                                </button>
+                                            )}
+                                            
+                                            {/* Fix: Added User Management button for Super Admins. */}
+                                            {hasPerm('team') && (
+                                                <button onClick={() => app.openModal('adminUsers')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
+                                                    <span className="material-symbols-outlined text-base">group_manage</span>
+                                                    Usuários
                                                 </button>
                                             )}
 

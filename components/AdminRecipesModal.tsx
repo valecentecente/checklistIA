@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, limit, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
@@ -228,9 +229,17 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                 contents: { parts: [{ text: `Foto profissional de: ${editName}. Gastronomia, close-up, luz natural.` }] },
                 config: { responseModalities: [Modality.IMAGE] },
             }), 3);
-            const part = response.candidates?.[0]?.content?.parts?.[0];
-            if (part?.inlineData) {
-                const generatedUrl = `data:image/jpeg;base64,${part.inlineData.data}`;
+            
+            // Fix: Iterating through parts to find the image part instead of assuming it is the first part
+            let generatedUrl = null;
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    generatedUrl = `data:image/jpeg;base64,${part.inlineData.data}`;
+                    break;
+                }
+            }
+            
+            if (generatedUrl) {
                 await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { imageUrl: generatedUrl, imageSource: 'genai', updatedAt: serverTimestamp() });
                 setEditingRecipe(prev => prev ? {...prev, imageUrl: generatedUrl} : null);
                 showToast("Imagem atualizada!");

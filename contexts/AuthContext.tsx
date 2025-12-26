@@ -1,9 +1,8 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import * as firebaseAuth from 'firebase/auth';
-import { doc, setDoc, getDoc, writeBatch, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot, or, and } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '../firebase';
-import type { User, ShoppingItem, AdminInvite, AdminPermissions } from '../types';
+import { doc, setDoc, getDoc, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot, or, and } from 'firebase/firestore';
+import { auth, db } from '../firebase';
+import type { User, AdminInvite, AdminPermissions } from '../types';
 
 interface AuthContextType {
     user: User | null;
@@ -31,6 +30,11 @@ interface AuthContextType {
     cancelAdminInvite: (inviteId: string) => Promise<void>;
     respondToAdminInvite: (inviteId: string, accept: boolean) => Promise<void>;
     refreshUserProfile: () => Promise<void>; 
+    
+    // Novas Funções de Gestão de Usuários
+    banUser: (userId: string, status: 'active' | 'banned') => Promise<void>;
+    deleteUserProfile: (userId: string, email: string) => Promise<void>;
+    updateUserRole: (userId: string, role: 'user' | 'admin_l1' | 'admin_l2') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,7 +51,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const q = query(collection(db, 'users_public'), where('username', '==', username.toLowerCase()));
             const querySnapshot = await getDocs(q);
-            
             if (!querySnapshot.empty) {
                 if (user && user.email) {
                     const docData = querySnapshot.docs[0].data();
@@ -65,24 +68,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const generateUniqueUsername = async (baseName: string): Promise<string> => {
         let username = baseName.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (username.length < 3) username = username + Math.floor(Math.random() * 1000);
-        if (username.length > 15) username = username.substring(0, 15);
-
         let isUnique = await checkUsernameUniqueness(username);
         let attempts = 0;
-
         while (!isUnique && attempts < 5) {
-            const suffix = Math.floor(Math.random() * 10000).toString();
-            const availableSpace = 15 - suffix.length;
-            const newBase = username.substring(0, availableSpace);
-            username = newBase + suffix;
+            username = username + Math.floor(Math.random() * 10);
             isUnique = await checkUsernameUniqueness(username);
             attempts++;
         }
-        
-        if (!isUnique) {
-            username = 'user' + Date.now().toString().slice(-8);
-        }
-
         return username;
     };
 
@@ -90,25 +82,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!db || !currentUser.email) return;
         try {
             const publicUserRef = doc(db, 'users_public', currentUser.email.toLowerCase());
-            
             const dataToSync: any = {
                 uid: currentUser.uid,
                 displayName: currentUser.displayName || 'Usuário',
                 photoURL: photoURLOverride || currentUser.photoURL || null,
                 email: currentUser.email
             };
-
-            if (usernameOverride) {
-                dataToSync.username = usernameOverride.toLowerCase();
-            }
-
+            if (usernameOverride) dataToSync.username = usernameOverride.toLowerCase();
             await setDoc(publicUserRef, dataToSync, { merge: true });
         } catch (e) {
             console.error("Erro ao sincronizar diretório público:", e);
         }
     };
 
-    const processUserData = async (currentUser: any) => {
+    const processUserData = async (currentUser: firebaseAuth.User) => {
         let photoToUse = currentUser.photoURL;
         let usernameToUse = null;
         let historyToUse: string[] = [];
@@ -116,12 +103,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let preferencesToUse: string[] = []; 
         let birthDateToUse: string | undefined = undefined;
         let roleToUse: 'user' | 'admin_l1' | 'admin_l2' = 'user';
-        let permissionsToUse: AdminPermissions | undefined = undefined;
+        let statusToUse: 'active' | 'banned' = 'active';
+
+        const userEmail = currentUser.email?.toLowerCase();
+        const isOwnerEmail = userEmail === 'admin@checklistia.com' || userEmail === 'itensnamao@gmail.com' || userEmail === 'ricardo029@gmail.com';
+        
+        // Blindagem Local: Se for dono, o cargo é L1 indiferente do que venha do banco inicialmente
+        if (isOwnerEmail) roleToUse = 'admin_l1';
 
         if (db) {
             try {
                 const userDocRef = doc(db, 'users', currentUser.uid);
                 const userDocSnap = await getDoc(userDocRef);
+                
                 if (userDocSnap.exists()) {
                     const data = userDocSnap.data();
                     if (data.photoBase64) photoToUse = data.photoBase64;
@@ -130,11 +124,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (data.dietaryPreferences) preferencesToUse = data.dietaryPreferences;
                     if (data.birthDate) birthDateToUse = data.birthDate;
                     if (data.role) roleToUse = data.role;
-                    if (data.permissions) permissionsToUse = data.permissions;
+                    if (data.status) statusToUse = data.status;
+
+                    // Sincronização de Cargo Físico no Banco
+                    if (isOwnerEmail && data.role !== 'admin_l1') {
+                        await updateDoc(userDocRef, { role: 'admin_l1' });
+                        roleToUse = 'admin_l1';
+                    }
+                } else if (isOwnerEmail) {
+                    // Garante que o documento do Ricardo exista no banco com as permissões corretas
+                    await setDoc(userDocRef, {
+                        displayName: currentUser.displayName || 'Ricardo Admin',
+                        email: userEmail,
+                        role: 'admin_l1',
+                        status: 'active',
+                        createdAt: serverTimestamp()
+                    });
                 }
 
-                if (currentUser.email) {
-                    const publicUserRef = doc(db, 'users_public', currentUser.email.toLowerCase());
+                if (userEmail) {
+                    const publicUserRef = doc(db, 'users_public', userEmail);
                     const publicUserSnap = await getDoc(publicUserRef);
                     if (publicUserSnap.exists()) {
                         usernameToUse = publicUserSnap.data().username || null;
@@ -142,8 +151,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             } catch (e) {
                 console.error("Erro ao buscar dados do perfil:", e);
-                const localPhoto = localStorage.getItem(`user_photo_${currentUser.uid}`);
-                if (localPhoto) photoToUse = localPhoto;
             }
         }
 
@@ -158,8 +165,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             dietaryPreferences: preferencesToUse,
             birthDate: birthDateToUse,
             role: roleToUse,
-            permissions: permissionsToUse
-        };
+            status: statusToUse
+        } as User;
     };
 
     const refreshUserProfile = async () => {
@@ -173,12 +180,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsAuthLoading(false);
             return;
         }
-        // FIX: Using namespace import for onAuthStateChanged
         const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 const userData = await processUserData(currentUser);
+                if (userData.status === 'banned') {
+                    firebaseAuth.signOut(auth);
+                    setUser(null);
+                    setAuthError("Sua conta foi suspensa por violar nossos termos de uso.");
+                    setIsAuthLoading(false);
+                    return;
+                }
                 setUser(userData);
-                
                 if (userData.username) {
                     syncUserToPublicDirectory(currentUser, userData.photoURL || undefined, userData.username);
                 }
@@ -190,13 +202,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => unsubscribe();
     }, []);
 
-    // Listener de convites (por email ou username)
     useEffect(() => {
         if (!user || !db || !auth?.currentUser) return;
-
         const email = user.email?.toLowerCase();
         const username = user.username?.toLowerCase();
-
         if (!email && !username) return;
 
         const q = query(
@@ -227,22 +236,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const loginWithEmail = async (email: string, pass: string) => {
         setAuthError(null);
         setAuthErrorCode(null);
-        if (!auth) {
-             setAuthError("Configuração do Firebase ausente.");
-             return;
-        }
-
+        if (!auth) return;
         try {
-            // FIX: Using namespace import for signInWithEmailAndPassword
-            const result = await firebaseAuth.signInWithEmailAndPassword(auth, email, pass);
+            await firebaseAuth.signInWithEmailAndPassword(auth, email, pass);
             localStorage.setItem('remembered_email', email);
         } catch (error: any) {
             const errorCode = error.code || '';
             if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
                 setAuthErrorCode('INVALID_CREDENTIALS');
                 setAuthError("E-mail ou senha incorretos.");
-            } else if (errorCode === 'auth/too-many-requests') {
-                setAuthError("Muitas tentativas falhas. Tente novamente mais tarde.");
             } else {
                 setAuthError(`Erro ao entrar: ${error.message}`);
             }
@@ -252,58 +254,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const registerWithEmail = async (name: string, username: string, email: string, pass: string, birthDate: string) => {
         setAuthError(null);
         setAuthErrorCode(null);
-        if (!auth) {
-            setAuthError("Configuração do Firebase ausente.");
-            return;
-        }
-
-        const cleanUsername = username.toLowerCase();
-
+        if (!auth) return;
         try {
-            const isUnique = await checkUsernameUniqueness(cleanUsername);
+            const isUnique = await checkUsernameUniqueness(username.toLowerCase());
             if (!isUnique) {
-                setAuthError(`O usuário @${cleanUsername} já está em uso.`);
+                setAuthError(`O usuário @${username} já está em uso.`);
                 return;
             }
-
-            // FIX: Using namespace import for createUserWithEmailAndPassword
             const result = await firebaseAuth.createUserWithEmailAndPassword(auth, email, pass);
-            // FIX: Using namespace import for updateProfile
-            await firebaseAuth.updateProfile(result.user, {
-                displayName: name
-            });
-            localStorage.setItem('remembered_email', email);
-            
+            await firebaseAuth.updateProfile(result.user, { displayName: name });
             if (db) {
-                const userDocRef = doc(db, 'users', result.user.uid);
-                await setDoc(userDocRef, { 
+                const isOwner = email.toLowerCase() === 'admin@checklistia.com' || email.toLowerCase() === 'itensnamao@gmail.com' || email.toLowerCase() === 'ricardo029@gmail.com';
+                await setDoc(doc(db, 'users', result.user.uid), { 
+                    displayName: name,
+                    email: email,
                     birthDate: birthDate,
-                    role: 'user' 
+                    role: isOwner ? 'admin_l1' : 'user',
+                    status: 'active',
+                    createdAt: serverTimestamp()
                 }, { merge: true });
             }
-
-            await syncUserToPublicDirectory({ ...result.user, displayName: name }, undefined, cleanUsername);
-
-            const newUser: User = {
-                uid: result.user.uid,
-                displayName: name,
-                email: result.user.email,
-                photoURL: result.user.photoURL,
-                username: cleanUsername,
-                activeListId: result.user.uid,
-                dietaryPreferences: [],
-                birthDate: birthDate,
-                role: 'user'
-            };
-            setUser(newUser);
-
+            await syncUserToPublicDirectory({ ...result.user, displayName: name }, undefined, username);
+            await refreshUserProfile();
         } catch (error: any) {
-            const errorCode = error.code || '';
-            if (errorCode === 'auth/email-already-in-use') {
+            if (error.code === 'auth/email-already-in-use') {
                 setAuthErrorCode('EMAIL_IN_USE');
                 setAuthError("Este e-mail já está cadastrado.");
-            } else if (errorCode === 'auth/weak-password') {
-                setAuthError("A senha deve ter pelo menos 6 caracteres.");
             } else {
                 setAuthError(`Erro ao criar conta: ${error.message}`);
             }
@@ -312,209 +288,155 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const resetPassword = async (email: string) => {
         if (!auth) return;
-        try {
-            // FIX: Using namespace import for sendPasswordResetEmail
-            await firebaseAuth.sendPasswordResetEmail(auth, email);
-        } catch (error: any) {
-            throw new Error(error.message);
-        }
+        await firebaseAuth.sendPasswordResetEmail(auth, email);
     };
 
     const updateUsername = async (newUsername: string) => {
-        if (!auth || !auth.currentUser || !user || !db) throw new Error("Usuário não autenticado.");
-
+        if (!auth?.currentUser || !db) return;
         const cleanUsername = newUsername.trim().toLowerCase();
-        if (cleanUsername === user.username) return;
-
-        try {
-            const isUnique = await checkUsernameUniqueness(cleanUsername);
-            if (!isUnique) throw new Error(`O usuário @${cleanUsername} já está em uso.`);
-
-            await syncUserToPublicDirectory(auth.currentUser, undefined, cleanUsername);
-            
-            const history = user.usernameChangeHistory || [];
-            const newHistory = [...history, new Date().toISOString()];
-            const userDocRef = doc(db, 'users', auth.currentUser.uid);
-            await setDoc(userDocRef, { usernameChangeHistory: newHistory }, { merge: true });
-
-            setUser(prev => prev ? ({ ...prev, username: cleanUsername, usernameChangeHistory: newHistory }) : null);
-
-        } catch (error: any) {
-            throw new Error(error.message || "Falha ao atualizar nome de usuário.");
-        }
+        const isUnique = await checkUsernameUniqueness(cleanUsername);
+        if (!isUnique) throw new Error(`O usuário @${cleanUsername} já está em uso.`);
+        const history = user?.usernameChangeHistory || [];
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), { 
+            username: cleanUsername, 
+            usernameChangeHistory: [...history, new Date().toISOString()] 
+        });
+        await syncUserToPublicDirectory(auth.currentUser, undefined, cleanUsername);
+        await refreshUserProfile();
     };
 
     const updateDietaryPreferences = async (preferences: string[]) => {
-        if (!auth || !auth.currentUser || !db) throw new Error("Usuário não autenticado.");
-        try {
-            const userDocRef = doc(db, 'users', auth.currentUser.uid);
-            await setDoc(userDocRef, { dietaryPreferences: preferences }, { merge: true });
-            setUser(prev => prev ? ({ ...prev, dietaryPreferences: preferences }) : null);
-        } catch (error) {
-            throw new Error("Falha ao salvar preferências.");
-        }
+        if (!auth?.currentUser || !db) return;
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), { dietaryPreferences: preferences });
+        await refreshUserProfile();
     };
 
     const deleteAccount = async (password: string) => {
-        if (!auth || !auth.currentUser || !auth.currentUser.email || !db) throw new Error("Erro de autenticação.");
-        try {
-            // FIX: Using namespace import for EmailAuthProvider and reauthenticateWithCredential
-            const credential = firebaseAuth.EmailAuthProvider.credential(auth.currentUser.email, password);
-            await firebaseAuth.reauthenticateWithCredential(auth.currentUser, credential);
-            const uid = auth.currentUser.uid;
-            const email = auth.currentUser.email;
-            await deleteDoc(doc(db, 'users_public', email.toLowerCase()));
-            await deleteDoc(doc(db, 'users', uid));
-            // FIX: Using namespace import for deleteUser
-            await firebaseAuth.deleteUser(auth.currentUser);
-            setUser(null);
-        } catch (error: any) {
-            throw new Error(error.code === 'auth/wrong-password' ? "Senha incorreta." : error.message);
-        }
+        if (!auth?.currentUser || !auth.currentUser.email || !db) return;
+        const credential = firebaseAuth.EmailAuthProvider.credential(auth.currentUser.email, password);
+        await firebaseAuth.reauthenticateWithCredential(auth.currentUser, credential);
+        await deleteDoc(doc(db, 'users_public', auth.currentUser.email.toLowerCase()));
+        await deleteDoc(doc(db, 'users', auth.currentUser.uid));
+        await firebaseAuth.deleteUser(auth.currentUser);
     };
 
     const updateUserProfile = async (name: string, photoURL?: string, birthDate?: string) => {
-        if (!auth || !auth.currentUser) throw new Error("Usuário não autenticado.");
-        try {
-            // FIX: Using namespace import for updateProfile
-            await firebaseAuth.updateProfile(auth.currentUser, { displayName: name });
-            if (db) {
-                const userDocRef = doc(db, 'users', auth.currentUser.uid);
-                const updates: any = {};
-                if (photoURL) updates.photoBase64 = photoURL;
-                if (birthDate) updates.birthDate = birthDate;
-                if (Object.keys(updates).length > 0) await setDoc(userDocRef, updates, { merge: true });
-            }
-            await syncUserToPublicDirectory(auth.currentUser, photoURL, user?.username || undefined);
-            setUser(prev => prev ? ({ ...prev, displayName: name, photoURL: photoURL || prev.photoURL, birthDate: birthDate || prev.birthDate }) : null);
-        } catch (error: any) {
-            throw new Error(error.message);
-        }
+        if (!auth?.currentUser || !db) return;
+        await firebaseAuth.updateProfile(auth.currentUser, { displayName: name });
+        const updates: any = { displayName: name };
+        if (photoURL) updates.photoBase64 = photoURL;
+        if (birthDate) updates.birthDate = birthDate;
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), updates);
+        await syncUserToPublicDirectory(auth.currentUser, photoURL, user?.username || undefined);
+        await refreshUserProfile();
     };
 
     const removeProfilePhoto = async () => {
-        if (!auth || !auth.currentUser) throw new Error("Usuário não autenticado.");
-        try {
-            // FIX: Using namespace import for updateProfile
-            await firebaseAuth.updateProfile(auth.currentUser, { photoURL: "" });
-            if (db) await setDoc(doc(db, 'users', auth.currentUser.uid), { photoBase64: null }, { merge: true });
-            await syncUserToPublicDirectory(auth.currentUser, "", user?.username || undefined);
-            setUser(prev => prev ? ({ ...prev, photoURL: null }) : null);
-        } catch (error: any) {
-            throw new Error(error.message);
-        }
+        if (!auth?.currentUser || !db) return;
+        await firebaseAuth.updateProfile(auth.currentUser, { photoURL: "" });
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), { photoBase64: null });
+        await syncUserToPublicDirectory(auth.currentUser, "", user?.username || undefined);
+        await refreshUserProfile();
     };
 
     const updateUserPassword = async (currentPass: string, newPass: string) => {
-        if (!auth || !auth.currentUser || !auth.currentUser.email) throw new Error("Usuário não autenticado.");
-        try {
-            // FIX: Using namespace import for EmailAuthProvider and reauthenticateWithCredential
-            const credential = firebaseAuth.EmailAuthProvider.credential(auth.currentUser.email, currentPass);
-            await firebaseAuth.reauthenticateWithCredential(auth.currentUser, credential);
-            // FIX: Using namespace import for updatePassword
-            await firebaseAuth.updatePassword(auth.currentUser, newPass);
-        } catch (error: any) {
-            if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') throw new Error("A senha atual está incorreta.");
-            throw new Error(error.message);
-        }
+        if (!auth?.currentUser?.email) return;
+        const credential = firebaseAuth.EmailAuthProvider.credential(auth.currentUser.email, currentPass);
+        await firebaseAuth.reauthenticateWithCredential(auth.currentUser, credential);
+        await firebaseAuth.updatePassword(auth.currentUser, newPass);
     };
 
     const login = async () => {
-        setAuthError(null);
-        setAuthErrorCode(null);
-        if (!auth) return;
-        // FIX: Using namespace import for GoogleAuthProvider
+        if (!auth || !db) return;
         const provider = new firebaseAuth.GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            // FIX: Using namespace import for signInWithPopup
             const result = await firebaseAuth.signInWithPopup(auth, provider);
-            let finalUsername = undefined;
-            if (db && result.user.email) {
-                const publicUserRef = doc(db, 'users_public', result.user.email.toLowerCase());
-                const publicUserSnap = await getDoc(publicUserRef);
-                if (!publicUserSnap.exists()) {
-                    finalUsername = await generateUniqueUsername(result.user.email.split('@')[0]);
+            const userDocRef = doc(db, 'users', result.user.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            
+            const userEmail = result.user.email?.toLowerCase();
+            const isOwner = userEmail === 'admin@checklistia.com' || userEmail === 'itensnamao@gmail.com' || userEmail === 'ricardo029@gmail.com';
+
+            if (!userDocSnap.exists()) {
+                const username = await generateUniqueUsername(result.user.email!.split('@')[0]);
+                await setDoc(userDocRef, {
+                    displayName: result.user.displayName,
+                    email: userEmail,
+                    role: isOwner ? 'admin_l1' : 'user',
+                    status: 'active',
+                    createdAt: serverTimestamp()
+                }, { merge: true });
+                await syncUserToPublicDirectory(result.user, undefined, username);
+            } else if (isOwner) {
+                // Sincroniza cargo físico de dono existente
+                const data = userDocSnap.data();
+                if (data.role !== 'admin_l1') {
+                    await updateDoc(userDocRef, { role: 'admin_l1' });
                 }
             }
-            await syncUserToPublicDirectory(result.user, undefined, finalUsername);
+            await refreshUserProfile();
         } catch (error: any) {
-            const errorCode = error.code || '';
-            if (errorCode === 'auth/unauthorized-domain') {
-                 setAuthErrorCode('DOMAIN_ERROR');
-                 setAuthError(`Domínio não autorizado: ${window.location.hostname}`);
-            } else if (errorCode !== 'auth/popup-closed-by-user') {
-                setAuthError(`Erro ao entrar com Google: ${error.message}`);
-            }
+            setAuthError(error.message);
         }
     };
 
     const logout = async () => {
         if (!auth) return;
-        try { 
-            // FIX: Using namespace import for signOut
-            await firebaseAuth.signOut(auth); 
-            setUser(null); 
-        } catch (error) { setUser(null); }
+        await firebaseAuth.signOut(auth);
+        setUser(null);
     };
 
-    const clearAuthError = () => { setAuthError(null); setAuthErrorCode(null); }
+    const banUser = async (userId: string, status: 'active' | 'banned') => {
+        if (!db) return;
+        await updateDoc(doc(db, 'users', userId), { status });
+    };
+
+    const deleteUserProfile = async (userId: string, email: string) => {
+        if (!db) return;
+        if (email) await deleteDoc(doc(db, 'users_public', email.toLowerCase()));
+        await deleteDoc(doc(db, 'users', userId));
+    };
+
+    const updateUserRole = async (userId: string, role: 'user' | 'admin_l1' | 'admin_l2') => {
+        if (!db) return;
+        await updateDoc(doc(db, 'users', userId), { role });
+    };
 
     const sendAdminInvite = async (identifier: string, permissions: AdminPermissions) => {
         if (!db || !user) return { success: false, message: 'Erro interno.' };
-        try {
-            const cleanId = identifier.trim().toLowerCase();
-            const inviteRef = await addDoc(collection(db, 'admin_invites'), { 
-                fromUid: user.uid, 
-                fromName: user.displayName, 
-                toIdentifier: cleanId, 
-                permissions: permissions,
-                status: 'pending', 
-                createdAt: serverTimestamp() 
-            });
-            return { success: true, message: `Convite enviado para ${cleanId}` };
-        } catch (error) {
-            return { success: false, message: 'Falha ao enviar convite.' };
-        }
+        const cleanId = identifier.trim().toLowerCase();
+        await addDoc(collection(db, 'admin_invites'), { 
+            fromUid: user.uid, fromName: user.displayName, toIdentifier: cleanId, 
+            permissions, status: 'pending', createdAt: serverTimestamp() 
+        });
+        return { success: true, message: `Convite enviado para ${cleanId}` };
     };
 
     const cancelAdminInvite = async (inviteId: string) => {
         if (!db) return;
-        try {
-            await deleteDoc(doc(db, 'admin_invites', inviteId));
-        } catch (error) {
-            console.error("Erro ao cancelar convite:", error);
-        }
+        await deleteDoc(doc(db, 'admin_invites', inviteId));
     };
 
     const respondToAdminInvite = async (inviteId: string, accept: boolean) => {
         if (!db || !user) return;
-        try {
-            const inviteRef = doc(db, 'admin_invites', inviteId);
+        const inviteRef = doc(db, 'admin_invites', inviteId);
+        if (accept) {
             const inviteSnap = await getDoc(inviteRef);
             if (inviteSnap.exists()) {
-                const inviteData = inviteSnap.data() as AdminInvite;
-                if (accept) {
-                    // Regra: Se todas marcadas = L1 (Azul), senão L2 (Verde)
-                    const perms = inviteData.permissions;
-                    const allChecked = Object.values(perms).every(v => v === true);
-                    const newRole = allChecked ? 'admin_l1' : 'admin_l2';
-                    
-                    await updateDoc(doc(db, 'users', user.uid), { 
-                        role: newRole,
-                        permissions: perms
-                    });
-                }
-                await updateDoc(inviteRef, { status: accept ? 'accepted' : 'rejected' });
+                const data = inviteSnap.data();
+                await updateDoc(doc(db, 'users', user.uid), { 
+                    role: 'admin_l2', 
+                    permissions: data.permissions 
+                });
             }
-            setPendingAdminInvite(null); 
-        } catch (error) {
-            console.error(error);
         }
+        await updateDoc(inviteRef, { status: accept ? 'accepted' : 'rejected' });
+        await refreshUserProfile();
     };
 
     const value = { 
-        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, logout, setAuthError, clearAuthError, checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, cancelAdminInvite, respondToAdminInvite, refreshUserProfile 
+        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, logout, setAuthError, clearAuthError: () => setAuthError(null), checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, cancelAdminInvite, respondToAdminInvite, refreshUserProfile,
+        banUser, deleteUserProfile, updateUserRole
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
