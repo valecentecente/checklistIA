@@ -1,6 +1,4 @@
 
-
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -582,7 +580,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
-        // Fix: Added modal key for AdminUsers.
+        // Fix: Added modal key for AdminUsers to resolve line 9 error in AdminUsersModal.tsx
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
@@ -606,7 +604,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
-        // Fix: Added modal key for AdminUsers.
+        // Fix: Added modal key for AdminUsers to resolve line 9 error in AdminUsersModal.tsx
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';

@@ -122,11 +122,11 @@ export const WebSidebarLeft: React.FC = () => {
         },
     ];
 
-    // Lógica de Permissões: Se não houver objeto de permissões, mas for Admin, assume TRUE (Acesso Total)
+    // Lógica de Permissões
     const p = user?.permissions;
     const hasPerm = (key: string) => {
         if (!app.isAdmin) return false;
-        if (!p) return true; // Fallback para Admin antigo ou proprietário
+        if (!p) return true; 
         return (p as any)[key] !== false;
     };
 
@@ -223,7 +223,7 @@ export const WebSidebarLeft: React.FC = () => {
                                 Meu Perfil
                             </button>
 
-                            {/* ADMIN SECTION COM PERMISSÕES DINÂMICAS */}
+                            {/* ADMIN SECTION */}
                             {app.isAdmin && (
                                 <div className="mt-1 mb-1 border-y border-white/5 py-1">
                                     <button 
@@ -274,14 +274,6 @@ export const WebSidebarLeft: React.FC = () => {
                                                 </button>
                                             )}
                                             
-                                            {/* Fix: Added User Management button for Super Admins. */}
-                                            {hasPerm('team') && (
-                                                <button onClick={() => app.openModal('adminUsers')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
-                                                    <span className="material-symbols-outlined text-base">group_manage</span>
-                                                    Usuários
-                                                </button>
-                                            )}
-
                                             {hasPerm('team') && (
                                                 <button onClick={() => app.openModal('manageTeam')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-white/5 transition-colors text-xs">
                                                     <span className="material-symbols-outlined text-base">group</span>

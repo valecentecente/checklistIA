@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,7 +23,7 @@ import { OffersModal } from '../OffersModal';
 import { AdminOffersModal } from '../AdminOffersModal';
 import { AdminRecipesModal } from '../AdminRecipesModal';
 import { AdminReviewsModal } from '../AdminReviewsModal';
-import { AdminScheduleModal } from '../AdminScheduleModal'; // NOVO
+import { AdminScheduleModal } from '../AdminScheduleModal'; 
 import { SavePurchaseModal } from '../SavePurchaseModal';
 import { HistoryModal } from '../HistoryModal';
 import { AuthModal } from '../AuthModal';
@@ -45,8 +44,6 @@ import { ArcadeModal } from '../arcade/ArcadeModal';
 import { UnitConverterModal } from '../UnitConverterModal';
 import { AdminContentFactoryModal } from '../AdminContentFactoryModal';
 import { RecipeSelectionModal } from '../RecipeSelectionModal'; 
-// Fix: Imported AdminUsersModal.
-import { AdminUsersModal } from './AdminUsersModal';
 
 interface AppModalsProps {
     sharedListData: any;
@@ -86,7 +83,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
     handleStartNewListForRecipe
 }) => {
     const app = useApp();
-    // Removed non-existent loginDemo from useAuth destructuring
     const { user, login, authError } = useAuth();
     const { history, formatCurrency, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased } = useShoppingList();
 
@@ -126,8 +122,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <AdminReviewsModal isOpen={app.isAdminReviewsModalOpen} onClose={() => app.closeModal('adminReviews')} />
             <AdminScheduleModal /> 
             <AdminContentFactoryModal /> 
-            {/* Fix: Added AdminUsersModal. */}
-            <AdminUsersModal />
             <ManageTeamModal />
             <AdminInviteModal />
             <TeamReportsModal />
@@ -155,7 +149,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
                     if (!user) app.setPendingAction(null); 
                 }} 
                 onLogin={login} 
-                // Removed non-existent loginDemo prop
                 error={authError} 
             />
             <ProfileModal isOpen={app.isProfileModalOpen} onClose={() => app.closeModal('profile')} />

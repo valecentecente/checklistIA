@@ -1,10 +1,9 @@
 
-
 import React, { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 
-// Ícones de Redes Sociais
+// Social Icons Components (Inlined for simplicity in Sidebar)
 const InstagramIcon: React.FC<{className?: string}> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><rect x="4" y="4" width="16" height="16" rx="4"></rect><circle cx="12" cy="12" r="3"></circle><line x1="16.5" y1="7.5" x2="16.5" y2="7.501"></line></svg>
 );
@@ -56,11 +55,11 @@ export const AppOptionsMenu: React.FC = () => {
         }
     };
 
-    // Lógica de Permissões: Se não houver objeto de permissões, mas for Admin, assume TRUE (Acesso Total)
+    // Lógica de Permissões
     const p = user?.permissions;
     const hasPerm = (key: string) => {
         if (!app.isAdmin) return false;
-        if (!p) return true; // Fallback para Admin antigo ou proprietário
+        if (!p) return true; 
         return (p as any)[key] !== false;
     };
 
@@ -153,14 +152,6 @@ export const AppOptionsMenu: React.FC = () => {
                                     
                                     <div className="h-px bg-yellow-200/50 dark:bg-yellow-800/30 mx-4 my-1"></div>
                                     
-                                    {/* Fix: Added User Management button for Super Admins. */}
-                                    {hasPerm('team') && (
-                                        <button onClick={() => handleOptionClick('adminUsers')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-700 dark:text-blue-300 pl-8 font-medium">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">group_manage</span>
-                                            Gestão Usuários
-                                        </button>
-                                    )}
-
                                     {hasPerm('team') && (
                                         <button onClick={() => handleOptionClick('manageTeam')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-700 dark:text-blue-300 pl-8 font-medium">
                                             <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">group</span>

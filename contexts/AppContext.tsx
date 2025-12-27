@@ -104,8 +104,8 @@ const INITIAL_MODAL_STATES = {
     isAdminRecipesModalOpen: false,
     isAdminReviewsModalOpen: false,
     isAdminScheduleModalOpen: false,
+    // Fix: Added missing state to resolve AdminUsersModal error.
     isAdminUsersModalOpen: false,
-    isAdminCategoriesModalOpen: false,
     isManageTeamModalOpen: false,
     isTeamReportsModalOpen: false, 
     isArcadeModalOpen: false,
@@ -146,6 +146,7 @@ interface AppContextType {
     isAdminRecipesModalOpen: boolean;
     isAdminReviewsModalOpen: boolean;
     isAdminScheduleModalOpen: boolean; 
+    // Fix: Added missing property to resolve AdminUsersModal error.
     isAdminUsersModalOpen: boolean;
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
@@ -638,8 +639,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        // Fix: Added modal key for AdminUsers to resolve line 9 error in AdminUsersModal.tsx
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
-        if (modal === 'adminCategories') modalKey = 'isAdminCategoriesModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -663,6 +664,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        // Fix: Added modal key for AdminUsers to resolve line 9 error in AdminUsersModal.tsx
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
