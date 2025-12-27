@@ -111,12 +111,16 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
 
     const getHeroTitle = () => {
         const hour = new Date().getHours();
-        if (hour < 5) return "Bom dia! Café da Manhã";
-        if (hour < 11) return "Hora do Almoço";
-        if (hour < 15) return "Lanche da Tarde";
-        if (hour < 19) return "Boa noite! Vamos Jantar";
-        if (hour < 23) return "Corujão";
-        return "Sugestões para Você";
+        // Das 5h às 10h - Café da manhã
+        if (hour >= 5 && hour < 10) return "Bom dia! Hora do Café";
+        // Das 10h às 15h - Hora do almoço
+        if (hour >= 10 && hour < 15) return "Hora do Almoço";
+        // Das 15h às 19h - Lanche da tarde
+        if (hour >= 15 && hour < 19) return "Pausa para o Lanche";
+        // Das 19h às 23h - Janta
+        if (hour >= 19 && hour < 23) return "Boa noite! Vamos Jantar?";
+        // Das 23h às 5h - Corujão
+        return "Corujão: Fome da Noite";
     };
 
     return (

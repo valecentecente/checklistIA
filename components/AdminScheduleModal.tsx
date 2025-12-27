@@ -5,13 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 import type { ScheduleRule } from '../types';
 
 const DEFAULT_GRID: ScheduleRule[] = [
-    { id: '1', label: '☕ Café da Manhã', startHour: 6, endHour: 10, tags: ['Café', 'Suco', 'Pão', 'Fruta', 'Ovo', 'Tapioca'] },
-    { id: '2', label: '🥩 Almoço', startHour: 11, endHour: 14, tags: ['Almoço', 'Carne', 'Arroz', 'Feijão', 'Massa', 'Salada'] },
-    { id: '3', label: '🍰 Lanche da Tarde', startHour: 15, endHour: 18, tags: ['Lanche', 'Bolo', 'Torta', 'Café', 'Salgado'] },
-    { id: '4', label: '🥗 Jantar', startHour: 19, endHour: 22, tags: ['Jantar', 'Sopa', 'Leve', 'Massa', 'Pizza'] },
-    { id: '5', label: '🦉 Corujão', startHour: 23, endHour: 5, tags: ['Snack', 'Rápido', 'Hambúrguer', 'Doce'] },
-    { id: 'seasonal_1', label: '🎄 Especial Natal', startHour: 0, endHour: 24, tags: ['Natal', 'Ceia', 'Peru', 'Rabanada', 'Panetone'], startDate: '12-01', endDate: '12-24' },
-    { id: 'seasonal_2', label: '🥂 Réveillon', startHour: 0, endHour: 24, tags: ['Ano Novo', 'Reveillon', 'Lentilha', 'Festa', 'Drink'], startDate: '12-25', endDate: '12-31' }
+    { id: '1', label: '☕ Café da Manhã', startHour: 5, endHour: 10, tags: ['Café', 'Suco', 'Pão', 'Fruta', 'Ovo', 'Tapioca'] },
+    { id: '2', label: '🥩 Hora do Almoço', startHour: 10, endHour: 15, tags: ['Almoço', 'Carne', 'Arroz', 'Feijão', 'Massa', 'Salada'] },
+    { id: '3', label: '🍰 Lanche da Tarde', startHour: 15, endHour: 19, tags: ['Lanche', 'Bolo', 'Torta', 'Café', 'Salgado'] },
+    { id: '4', label: '🥗 Janta', startHour: 19, endHour: 23, tags: ['Jantar', 'Sopa', 'Leve', 'Massa', 'Pizza'] },
+    { id: '5', label: '🦉 Corujão', startHour: 23, endHour: 5, tags: ['Snack', 'Rápido', 'Hambúrguer', 'Doce', 'Pizza'] }
 ];
 
 export const AdminScheduleModal: React.FC = () => {
