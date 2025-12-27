@@ -16,16 +16,31 @@ export const ThemeRecipesModal: React.FC = () => {
     if (!isThemeRecipesModalOpen) return null;
 
     const handleSelectRecipe = (recipe: FullRecipe) => {
-        // Abre o modal de detalhes da receita diretamente
         showRecipe(recipe);
         closeModal('themeRecipes');
+    };
+
+    const renderTimeClocks = (min: number) => {
+        let active = 1;
+        if (min > 90) active = 4;
+        else if (min > 45) active = 3;
+        else if (min > 20) active = 2;
+
+        return (
+            <div className="flex gap-0.5 items-center">
+                {[1, 2, 3, 4].map(i => (
+                    <span key={i} className={`material-symbols-outlined text-[12px] ${i <= active ? 'text-primary font-variation-FILL-1' : 'text-gray-300 dark:text-white/10'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                        schedule
+                    </span>
+                ))}
+            </div>
+        );
     };
 
     return (
         <div className="fixed inset-0 z-[140] bg-black/60 flex items-end sm:items-center justify-center animate-fadeIn backdrop-blur-sm" onClick={() => closeModal('themeRecipes')}>
             <div className="bg-[#F7F7F7] dark:bg-[#121212] w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col overflow-hidden animate-slideUp shadow-2xl" onClick={e => e.stopPropagation()}>
                 
-                {/* Header */}
                 <div className="p-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-surface-dark">
                     <div>
                         <p className="text-xs font-bold text-primary uppercase tracking-wider mb-1">Sugestões do Acervo</p>
@@ -38,7 +53,6 @@ export const ThemeRecipesModal: React.FC = () => {
                     </button>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50 dark:bg-black/20">
                     {isSuggestionsLoading ? (
                         <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -50,7 +64,6 @@ export const ThemeRecipesModal: React.FC = () => {
                         </div>
                     ) : (
                         <div className="flex flex-col gap-4">
-                            {/* Horizontal Snap List Logic */}
                             <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 snap-x scrollbar-hide">
                                 {recipeSuggestions.map((recipe, idx) => (
                                     <button 
@@ -58,7 +71,6 @@ export const ThemeRecipesModal: React.FC = () => {
                                         onClick={() => handleSelectRecipe(recipe)}
                                         className="snap-center shrink-0 w-[260px] flex flex-col bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden group hover:border-primary/50 transition-all text-left"
                                     >
-                                        {/* Image Area */}
                                         <div className="h-32 w-full relative bg-gray-200 dark:bg-gray-800">
                                             {recipe.imageUrl ? (
                                                 <img 
@@ -77,7 +89,6 @@ export const ThemeRecipesModal: React.FC = () => {
                                                     </span>
                                                 </div>
                                             )}
-                                            
                                             <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
                                         </div>
                                         
@@ -85,12 +96,11 @@ export const ThemeRecipesModal: React.FC = () => {
                                             <h3 className="font-bold text-lg text-text-primary-light dark:text-text-primary-dark mb-2 leading-tight line-clamp-2">
                                                 {recipe.name}
                                             </h3>
-                                            <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+                                            <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
                                                 {recipe.prepTimeInMinutes > 0 && (
-                                                    <span className="flex items-center gap-1 bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
-                                                        <span className="material-symbols-outlined text-[10px]">schedule</span> 
-                                                        {recipe.prepTimeInMinutes} min
-                                                    </span>
+                                                    <div className="flex items-center gap-1 bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
+                                                        {renderTimeClocks(recipe.prepTimeInMinutes)}
+                                                    </div>
                                                 )}
                                                 <span className="flex items-center gap-1 bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-md">
                                                     <span className="material-symbols-outlined text-[10px]">inventory_2</span> 
@@ -106,7 +116,6 @@ export const ThemeRecipesModal: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-                            
                             {recipeSuggestions.length > 1 && (
                                 <p className="text-center text-xs text-gray-400 mt-2 flex items-center justify-center gap-1 animate-pulse">
                                     <span className="material-symbols-outlined text-sm">swipe</span>

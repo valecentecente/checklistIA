@@ -20,6 +20,23 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return ['suco', 'drink', 'vitamina', 'coquetel', 'bebida', 'smoothie', 'café', 'chá', 'limonada', 'batida'].some(t => text.includes(t));
     };
 
+    const renderTimeClocks = (min: number) => {
+        let active = 1;
+        if (min > 90) active = 4;
+        else if (min > 45) active = 3;
+        else if (min > 20) active = 2;
+
+        return (
+            <div className="flex gap-0.5 items-center">
+                {[1, 2, 3, 4].map(i => (
+                    <span key={i} className={`material-symbols-outlined text-[16px] ${i <= active ? 'text-primary font-variation-FILL-1' : 'text-white/20'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                        schedule
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
     useEffect(() => {
         if (displayRecipes.length <= 1) return;
         const interval = setInterval(() => {
@@ -111,15 +128,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
 
     const getHeroTitle = () => {
         const hour = new Date().getHours();
-        // Das 5h às 10h - Café da manhã
         if (hour >= 5 && hour < 10) return "Bom dia! Hora do Café";
-        // Das 10h às 15h - Hora do almoço
         if (hour >= 10 && hour < 15) return "Hora do Almoço";
-        // Das 15h às 19h - Lanche da tarde
         if (hour >= 15 && hour < 19) return "Pausa para o Lanche";
-        // Das 19h às 23h - Janta
         if (hour >= 19 && hour < 23) return "Boa noite! Vamos Jantar?";
-        // Das 23h às 5h - Corujão
         return "Corujão: Fome da Noite";
     };
 
@@ -157,11 +169,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                     </div>
                                     <div className="mt-6 flex items-center gap-6 animate-slideUp" style={{ animationDelay: '0.4s' }}>
                                         <div className="flex flex-col">
-                                            <span className="text-[8px] text-white/40 font-black uppercase tracking-widest">Tempo</span>
-                                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                                                <span className="material-symbols-outlined text-[14px] text-primary">schedule</span>
-                                                {recipe.prepTimeInMinutes || 30} MIN
-                                            </span>
+                                            <span className="text-[8px] text-white/40 font-black uppercase tracking-widest">Tempo de Preparo</span>
+                                            <div className="mt-1">
+                                                {renderTimeClocks(recipe.prepTimeInMinutes)}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -16,7 +16,6 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     
-    // Estados de Edição Avançada
     const [editingRecipe, setEditingRecipe] = useState<RecipeWithId | null>(null);
     const [editName, setEditName] = useState('');
     const [editTags, setEditTags] = useState<string[]>([]);
@@ -56,6 +55,23 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         return () => unsubscribe();
     }, [isOpen]);
 
+    const renderTimeClocks = (min: number) => {
+        let active = 1;
+        if (min > 90) active = 4;
+        else if (min > 45) active = 3;
+        else if (min > 20) active = 2;
+
+        return (
+            <div className="flex gap-0.5 items-center">
+                {[1, 2, 3, 4].map(i => (
+                    <span key={i} className={`material-symbols-outlined text-[10px] ${i <= active ? 'text-primary font-variation-FILL-1' : 'text-gray-200'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                        schedule
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
     const handleOpenEdit = (recipe: RecipeWithId) => {
         setEditingRecipe(recipe);
         setEditName(recipe.name);
@@ -77,15 +93,8 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         if (e.key === 'Enter' && tagInput.trim()) {
             e.preventDefault();
             const input = tagInput.trim().toLowerCase();
-            
-            // Lógica de separação por vírgula
-            const newTagsFromInput = input.split(',')
-                .map(t => t.trim())
-                .filter(t => t !== '' && !editTags.includes(t));
-
-            if (newTagsFromInput.length > 0) {
-                setEditTags([...editTags, ...newTagsFromInput]);
-            }
+            const newTagsFromInput = input.split(',').map(t => t.trim()).filter(t => t !== '' && !editTags.includes(t));
+            if (newTagsFromInput.length > 0) setEditTags([...editTags, ...newTagsFromInput]);
             setTagInput('');
         }
     };
@@ -94,15 +103,8 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         if (e.key === 'Enter' && leadInput.trim()) {
             e.preventDefault();
             const input = leadInput.trim().toLowerCase();
-
-            // Lógica de separação por vírgula para leads
-            const newLeadsFromInput = input.split(',')
-                .map(l => l.trim())
-                .filter(l => l !== '' && !editLeads.includes(l));
-
-            if (newLeadsFromInput.length > 0) {
-                setEditLeads([...editLeads, ...newLeadsFromInput]);
-            }
+            const newLeadsFromInput = input.split(',').map(l => l.trim()).filter(l => l !== '' && !editLeads.includes(l));
+            if (newLeadsFromInput.length > 0) setEditLeads([...editLeads, ...newLeadsFromInput]);
             setLeadInput('');
         }
     };
@@ -135,17 +137,11 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         setEditInstructions(editInstructions.filter((_, i) => i !== index));
     };
 
-    // Normalização local para o editor
     const normalizeIngredientsLocal = (ingredients: any[]) => {
         if (!Array.isArray(ingredients)) return [];
         return ingredients.map(ing => {
-            if (typeof ing === 'string') {
-                return { simplifiedName: ing.split(' ').slice(0, 2).join(' '), detailedName: ing };
-            }
-            return {
-                simplifiedName: String(ing.simplifiedName || ing.name || ''),
-                detailedName: String(ing.detailedName || ing.description || ing.name || '')
-            };
+            if (typeof ing === 'string') return { simplifiedName: ing.split(' ').slice(0, 2).join(' '), detailedName: ing };
+            return { simplifiedName: String(ing.simplifiedName || ing.name || ''), detailedName: String(ing.detailedName || ing.description || ing.name || '') };
         });
     };
 
@@ -153,64 +149,32 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         if (!editingRecipe || isRegeneratingText) return;
         const apiKey = process.env.API_KEY as string;
         if (!apiKey) { showToast("Chave IA ausente."); return; }
-
         setIsRegeneratingText(true);
         showToast("O Chef está reescrevendo a receita...");
-
         try {
             const ai = new GoogleGenAI({ apiKey });
-            const prompt = `Gere os dados JSON para a receita: "${editName}". 
-            Retorne APENAS o JSON com: ingredients (array {simplifiedName, detailedName}), instructions (array string), servings, prepTimeInMinutes, difficulty, cost, tags (array), suggestedLeads (itens de cozinha para venda). 
-            Seja detalhado e gourmet.`;
-
-            const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: prompt,
-                config: { responseMimeType: "application/json" }
-            }));
-
+            const prompt = `Gere os dados JSON para a receita: "${editName}". Retorne APENAS o JSON com: ingredients (array {simplifiedName, detailedName}), instructions (array string), servings, prepTimeInMinutes, difficulty, cost, tags (array), suggestedLeads (itens de cozinha para venda). Seja detalhado e gourmet.`;
+            const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt, config: { responseMimeType: "application/json" } }));
             const details = JSON.parse(response.text || "{}");
-            
-            if (details.ingredients) {
-                setEditIngredients(normalizeIngredientsLocal(details.ingredients));
-            }
+            if (details.ingredients) setEditIngredients(normalizeIngredientsLocal(details.ingredients));
             if (details.instructions) setEditInstructions(details.instructions);
             if (details.tags) setEditTags(prev => Array.from(new Set([...prev, ...details.tags])));
             if (details.suggestedLeads) setEditLeads(prev => Array.from(new Set([...prev, ...details.suggestedLeads])));
-            
             showToast("Receita reescrita! Revise e confirme.");
-        } catch (error) {
-            showToast("Erro ao regenerar texto.");
-        } finally {
-            setIsRegeneratingText(false);
-        }
+        } catch (error) { showToast("Erro ao regenerar texto."); } finally { setIsRegeneratingText(false); }
     };
 
     const handleSaveRecipe = async () => {
         if (!editingRecipe || isSaving) return;
         setIsSaving(true);
-
         try {
             const baseKeywords = generateKeywords(editName);
             const tagKeywords = editTags.flatMap(t => generateKeywords(t));
             const finalKeywords = Array.from(new Set([...baseKeywords, ...tagKeywords]));
-
-            await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), {
-                name: editName,
-                tags: editTags,
-                suggestedLeads: editLeads,
-                ingredients: editIngredients,
-                instructions: editInstructions,
-                keywords: finalKeywords,
-                updatedAt: serverTimestamp()
-            });
+            await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { name: editName, tags: editTags, suggestedLeads: editLeads, ingredients: editIngredients, instructions: editInstructions, keywords: finalKeywords, updatedAt: serverTimestamp() });
             showToast("Alterações salvas no acervo!");
             handleCloseEdit();
-        } catch (error) {
-            showToast("Erro ao salvar.");
-        } finally {
-            setIsSaving(false);
-        }
+        } catch (error) { showToast("Erro ao salvar."); } finally { setIsSaving(false); }
     };
 
     const handleAutoCleanup = async () => {
@@ -233,25 +197,10 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
         showToast("Gerando nova foto via IA...");
         try {
             const ai = new GoogleGenAI({ apiKey });
-            const response: any = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts: [{ text: `Foto profissional de: ${editName}. Gastronomia, close-up, luz natural.` }] },
-                config: { responseModalities: [Modality.IMAGE] },
-            }), 3);
-            
+            const response: any = await callGenAIWithRetry(() => ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: `Foto profissional de: ${editName}. Gastronomia, close-up, luz natural.` }] }, config: { responseModalities: [Modality.IMAGE] }, }), 3);
             let generatedUrl = null;
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    generatedUrl = `data:image/jpeg;base64,${part.inlineData.data}`;
-                    break;
-                }
-            }
-            
-            if (generatedUrl) {
-                await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { imageUrl: generatedUrl, imageSource: 'genai', updatedAt: serverTimestamp() });
-                setEditingRecipe(prev => prev ? {...prev, imageUrl: generatedUrl} : null);
-                showToast("Imagem atualizada!");
-            }
+            for (const part of response.candidates[0].content.parts) { if (part.inlineData) { generatedUrl = `data:image/jpeg;base64,${part.inlineData.data}`; break; } }
+            if (generatedUrl) { await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { imageUrl: generatedUrl, imageSource: 'genai', updatedAt: serverTimestamp() }); setEditingRecipe(prev => prev ? {...prev, imageUrl: generatedUrl} : null); showToast("Imagem atualizada!"); }
         } catch (error) { showToast("Erro ao gerar imagem."); } finally { setIsRegeneratingImage(false); }
     };
 
@@ -302,7 +251,9 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                     </div>
                                     <div className="p-3">
                                         <h3 className="font-bold text-[10px] text-gray-800 dark:text-gray-200 line-clamp-2 uppercase">{recipe.name}</h3>
-                                        <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">sell</span>{recipe.tags?.length || 0} Tags</p>
+                                        <div className="mt-1">
+                                            {renderTimeClocks(recipe.prepTimeInMinutes)}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -310,20 +261,14 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     )}
                 </div>
 
-                {/* MODAL DE EDIÇÃO AVANÇADA */}
                 {editingRecipe && (
                     <div className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
                         <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
-                            
                             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-black/40">
-                                <div className="flex items-center gap-3">
-                                    <h3 className="font-black text-gray-800 dark:text-white uppercase italic tracking-tighter">Editor Mestre de Receita</h3>
-                                </div>
+                                <h3 className="font-black text-gray-800 dark:text-white uppercase italic tracking-tighter">Editor Mestre de Receita</h3>
                                 <button onClick={handleCloseEdit} className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full"><span className="material-symbols-outlined">close</span></button>
                             </div>
-
                             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 scrollbar-hide">
-                                
                                 <div className="space-y-6">
                                     <div className="relative group rounded-[2rem] overflow-hidden bg-gray-100 dark:bg-gray-800 aspect-video border-2 border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center">
                                         {editingRecipe.imageUrl ? <img src={editingRecipe.imageUrl} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-6xl text-gray-300">image</span>}
@@ -334,120 +279,36 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                             </button>
                                         </div>
                                     </div>
-
                                     <div>
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Título da Receita</label>
                                         <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-2xl h-14 px-4 font-black text-lg text-gray-800 dark:text-white" />
                                     </div>
-
-                                    <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-[2rem] border border-blue-100 dark:border-blue-900/30">
-                                        <label className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-3 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-sm">shopping_bag</span>
-                                            Match de Inventário (Leads)
-                                        </label>
-                                        <div className="flex flex-wrap gap-2 mb-3">
-                                            {editLeads.map((lead, idx) => (
-                                                <span key={idx} className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase shadow-sm">
-                                                    {lead}
-                                                    <button onClick={() => setEditLeads(editLeads.filter(l => l !== lead))} className="opacity-60 hover:opacity-100"><span className="material-symbols-outlined text-sm">close</span></button>
-                                                </span>
-                                            ))}
-                                        </div>
-                                        <input 
-                                            type="text" 
-                                            value={leadInput} 
-                                            onChange={e => setLeadInput(e.target.value)} 
-                                            onKeyDown={handleAddLead} 
-                                            placeholder="Adicionar utensílio/eletro... (use vírgula para separar)" 
-                                            className="w-full bg-white dark:bg-black/20 border-0 rounded-xl h-10 px-4 text-xs font-bold" 
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Categorias & Tags</label>
-                                        <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-[2rem] min-h-[100px]">
-                                            {editTags.map((tag, idx) => (
-                                                <span key={idx} className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-3 py-1 rounded-full text-[10px] font-black uppercase">
-                                                    {tag}
-                                                    <button onClick={() => setEditTags(editTags.filter(t => t !== tag))}><span className="material-symbols-outlined text-sm">close</span></button>
-                                                </span>
-                                            ))}
-                                            <input 
-                                                type="text" 
-                                                value={tagInput} 
-                                                onChange={(e) => setTagInput(e.target.value)} 
-                                                onKeyDown={handleAddTag} 
-                                                placeholder="Nova tag... (use vírgula para separar)" 
-                                                className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold min-w-[80px] dark:text-white" 
-                                            />
-                                        </div>
-                                    </div>
                                 </div>
-
                                 <div className="space-y-6 bg-zinc-50 dark:bg-black/20 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex flex-col h-full">
                                     <div className="flex justify-between items-center mb-2">
                                         <div className="flex flex-col">
                                             <h4 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] italic">Composição do Prato</h4>
                                             <p className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Ingredientes e Modo de Preparo</p>
                                         </div>
-                                        <button 
-                                            onClick={handleRegenerateText} 
-                                            disabled={isRegeneratingText}
-                                            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-xl transition-all active:scale-95 disabled:opacity-50"
-                                        >
-                                            <span className={`material-symbols-outlined text-[16px] ${isRegeneratingText ? 'animate-spin' : ''}`}>auto_fix_high</span>
-                                            {isRegeneratingText ? 'Chef Escrevendo...' : 'IA: Re-gerar Texto'}
-                                        </button>
+                                        <button onClick={handleRegenerateText} disabled={isRegeneratingText} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-xl transition-all active:scale-95 disabled:opacity-50"> IA: Re-gerar Texto </button>
                                     </div>
-
                                     <div className="flex flex-col gap-3">
-                                        <div className="flex justify-between items-center">
-                                            <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="material-symbols-outlined text-sm">grocery</span>
-                                                Ingredientes ({editIngredients.length})
-                                            </label>
-                                            <button onClick={handleAddIngredient} className="text-primary font-black text-[10px] uppercase flex items-center gap-1 hover:underline"><span className="material-symbols-outlined text-sm">add_circle</span> Novo</button>
-                                        </div>
-                                        <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                                        <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">Ingredientes ({editIngredients.length})</label>
+                                        <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2">
                                             {editIngredients.map((ing, idx) => (
-                                                <div key={idx} className="flex gap-2 bg-white dark:bg-zinc-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 animate-fadeIn shadow-sm">
+                                                <div key={idx} className="flex gap-2 bg-white dark:bg-zinc-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                                                     <input value={ing.simplifiedName} onChange={e => handleIngredientChange(idx, 'simplifiedName', e.target.value)} placeholder="Curto" className="w-1/3 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-black h-8 px-2 dark:text-white" />
                                                     <input value={ing.detailedName} onChange={e => handleIngredientChange(idx, 'detailedName', e.target.value)} placeholder="Detalhes" className="flex-1 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-medium h-8 px-2 dark:text-white" />
-                                                    <button onClick={() => handleRemoveIngredient(idx)} className="text-red-500 p-1 hover:scale-110 transition-transform"><span className="material-symbols-outlined text-sm">delete</span></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div className="h-px bg-gray-200 dark:bg-gray-800 mx-2"></div>
-
-                                    <div className="flex flex-col gap-3">
-                                        <div className="flex justify-between items-center">
-                                            <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="material-symbols-outlined text-sm">cooking</span>
-                                                Modo de Preparo ({editInstructions.length})
-                                            </label>
-                                            <button onClick={handleAddInstruction} className="text-primary font-black text-[10px] uppercase flex items-center gap-1 hover:underline"><span className="material-symbols-outlined text-sm">add_circle</span> Passo</button>
-                                        </div>
-                                        <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
-                                            {editInstructions.map((inst, idx) => (
-                                                <div key={idx} className="flex gap-3 items-start animate-fadeIn group">
-                                                    <span className="w-6 h-6 shrink-0 bg-primary text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-sm">{idx + 1}</span>
-                                                    <textarea value={inst} onChange={e => handleInstructionChange(idx, e.target.value)} className="flex-1 bg-white dark:bg-zinc-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs p-3 min-h-[70px] resize-none font-medium shadow-sm focus:ring-1 focus:ring-primary/30 dark:text-white" />
-                                                    <button onClick={() => handleRemoveInstruction(idx)} className="text-red-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity"><span className="material-symbols-outlined text-sm">close</span></button>
+                                                    <button onClick={() => handleRemoveIngredient(idx)} className="text-red-500 p-1"><span className="material-symbols-outlined text-sm">delete</span></button>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
                             <div className="p-6 bg-gray-50 dark:bg-black/40 border-t border-gray-100 dark:border-gray-800 flex gap-4 shrink-0">
-                                <button onClick={handleCloseEdit} className="flex-1 h-14 rounded-2xl bg-gray-200 dark:bg-white/5 text-gray-600 dark:text-gray-300 font-black uppercase text-xs tracking-widest active:scale-95 transition-all">Descartar</button>
-                                <button onClick={handleSaveRecipe} disabled={isSaving} className="flex-[2] h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black shadow-xl transition-all active:scale-95 disabled:opacity-50 uppercase text-sm tracking-widest flex items-center justify-center gap-2">
-                                    {isSaving ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">save</span>}
-                                    {isSaving ? 'Salvando...' : 'Confirmar & Publicar'}
-                                </button>
+                                <button onClick={handleCloseEdit} className="flex-1 h-14 rounded-2xl bg-gray-200 dark:bg-white/5 text-gray-600 dark:text-gray-300 font-black uppercase text-xs tracking-widest">Descartar</button>
+                                <button onClick={handleSaveRecipe} disabled={isSaving} className="flex-[2] h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black shadow-xl transition-all active:scale-95 disabled:opacity-50 uppercase text-sm tracking-widest flex items-center justify-center gap-2"> {isSaving ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">save</span>} Salvar </button>
                             </div>
                         </div>
                     </div>

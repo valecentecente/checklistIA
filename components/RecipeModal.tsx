@@ -69,6 +69,23 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
       return '$';
   }, [recipe.cost]);
 
+  const renderTimeClocks = (min: number) => {
+    let active = 1;
+    if (min > 90) active = 4;
+    else if (min > 45) active = 3;
+    else if (min > 20) active = 2;
+
+    return (
+        <div className="flex gap-0.5 items-center">
+            {[1, 2, 3, 4].map(i => (
+                <span key={i} className={`material-symbols-outlined text-[18px] ${i <= active ? 'text-text-main dark:text-white font-variation-FILL-1' : 'text-gray-200 dark:text-white/10'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                    schedule
+                </span>
+            ))}
+        </div>
+    );
+  };
+
   const handleAddRequest = async () => {
       if (!hasActiveList) {
           setHomeViewActive(false); 
@@ -216,8 +233,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
                     {recipe.prepTimeInMinutes > 0 && (
                         <div className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 shadow-sm">
-                            <span className="material-symbols-outlined text-base text-text-secondary dark:text-gray-400">timer</span>
-                            <p className="text-text-secondary dark:text-gray-300 text-xs font-bold uppercase tracking-wide">{recipe.prepTimeInMinutes} min</p>
+                            {renderTimeClocks(recipe.prepTimeInMinutes)}
                         </div>
                     )}
                     

@@ -69,6 +69,23 @@ export const RecipeSelectionModal: React.FC = () => {
         await toggleFavorite(recipe);
     };
 
+    const renderTimeClocks = (min: number) => {
+        let active = 1;
+        if (min > 90) active = 4;
+        else if (min > 45) active = 3;
+        else if (min > 20) active = 2;
+
+        return (
+            <div className="flex gap-0.5 items-center">
+                {[1, 2, 3, 4].map(i => (
+                    <span key={i} className={`material-symbols-outlined text-[14px] ${i <= active ? 'text-primary font-variation-FILL-1' : 'text-white/20'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                        schedule
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
     const handleShare = async (e: React.MouseEvent, recipe: FullRecipe) => {
         e.stopPropagation();
         const shareText = `Confira esta receita de ${recipe.name} no ChecklistIA!`;
@@ -139,7 +156,6 @@ export const RecipeSelectionModal: React.FC = () => {
                                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90"></div>
                                 
                                 <div className="absolute top-0 left-0 w-full p-10 pt-16">
-                                    {/* CRÉDITOS DO ACERVO NO CARD DE SELEÇÃO */}
                                     {isFromCache && (
                                         <div className="mb-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 w-fit animate-fadeIn">
                                             <span className="material-symbols-outlined text-[14px] text-orange-400">photo_camera</span>
@@ -159,7 +175,9 @@ export const RecipeSelectionModal: React.FC = () => {
                                         <span className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em]">Acervo ChecklistIA</span>
                                         <div className="flex items-center gap-2">
                                             <span className="bg-white/10 backdrop-blur-md px-2 py-1 rounded text-[10px] text-white font-bold">{recipe.difficulty}</span>
-                                            <span className="bg-primary/20 backdrop-blur-md px-2 py-1 rounded text-[10px] text-primary font-bold">{recipe.prepTimeInMinutes}min</span>
+                                            <div className="bg-primary/20 backdrop-blur-md px-2 py-1 rounded">
+                                                {renderTimeClocks(recipe.prepTimeInMinutes)}
+                                            </div>
                                         </div>
                                     </div>
                                     
