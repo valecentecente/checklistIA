@@ -19,6 +19,7 @@ export const ToolsGridModal: React.FC = () => {
             app.showToast("Faça login para usar esta ferramenta.");
             return;
         }
+        
         app.closeModal('tools');
         app.openModal(modalName);
     };

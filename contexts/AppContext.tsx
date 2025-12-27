@@ -29,19 +29,13 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
-/**
- * Normalização Blindada de Ingredientes
- * Aceita strings, objetos parciais ou completos.
- */
 export const normalizeIngredients = (ingredients: any[]): { simplifiedName: string; detailedName: string }[] => {
     if (!Array.isArray(ingredients)) return [];
     
     const extractName = (text: string): string => {
         if (!text) return '';
         let cleaned = text.trim();
-        // Remove parênteses
         cleaned = cleaned.replace(/\(.*?\)/g, '');
-        // Remove números e frações no início
         cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
         
         const measures = ['gramas', 'kg', 'ml', 'litros', 'unidades', 'colher', 'xicara', 'cha', 'sopa', 'lata', 'pacote', 'pote', 'g', 'l', 'un'];
@@ -62,7 +56,6 @@ export const normalizeIngredients = (ingredients: any[]): { simplifiedName: stri
         if (typeof ing === 'string') {
             return { simplifiedName: extractName(ing), detailedName: ing };
         }
-        // Se já for o objeto esperado, mas estiver com campos vazios
         const s = ing.simplifiedName || ing.name || '';
         const d = ing.detailedName || ing.description || ing.name || '';
         
@@ -77,7 +70,6 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [] as FullRecipe[];
     return data.map((r: any): FullRecipe => ({
         name: String(r.name || 'Receita'),
-        // CORREÇÃO CRÍTICA: Aplica normalizeIngredients no carregamento do Acervo
         ingredients: normalizeIngredients(r.ingredients),
         instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
         imageQuery: String(r.imageQuery || r.name || ''),
@@ -155,7 +147,6 @@ interface AppContextType {
     isAdminReviewsModalOpen: boolean;
     isAdminScheduleModalOpen: boolean; 
     isAdminUsersModalOpen: boolean;
-    isAdminCategoriesModalOpen: boolean;
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
     isArcadeModalOpen: boolean;
@@ -662,6 +653,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
         if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
         if (modal === 'distribution') modalKey = 'isDistributionModalOpen';
+        if (modal === 'themeRecipes') modalKey = 'isThemeRecipesModalOpen';
         setModalStates(prev => ({...prev, [modalKey]: true}));
     };
 
@@ -672,7 +664,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
-        if (modal === 'adminCategories') modalKey = 'isAdminCategoriesModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
         if (modal === 'arcade') modalKey = 'isArcadeModalOpen';
@@ -686,12 +677,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'contentFactory') modalKey = 'isContentFactoryModalOpen';
         if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
         if (modal === 'distribution') modalKey = 'isDistributionModalOpen';
-         if (modal.toLowerCase() === 'tour') {
-            localStorage.setItem('hasSeenOnboardingTour', 'true');
-            setShowStartHerePrompt(true);
-         }
+        if (modal === 'themeRecipes') modalKey = 'isThemeRecipesModalOpen';
         setModalStates(prev => ({ ...prev, [modalKey]: false }));
-    }
+    };
+
     const toggleAppOptionsMenu = () => setModalStates(prev => ({ ...prev, isAppOptionsMenuOpen: !prev.isAppOptionsMenuOpen }));
     const toggleOptionsMenu = () => setModalStates(prev => ({ ...prev, isOptionsMenuOpen: !prev.isOptionsMenuOpen }));
 
@@ -875,7 +864,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
-            closeModal('recipeAssistant');
 
             if (db) {
                 const docId = getRecipeDocId(fullData.name);
@@ -911,7 +899,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (isOffline) { showToast("Organização por corredores requer internet."); return; }
         if (groupingMode === 'recipe') {
             const itemsToCategorize = items.filter(item => !itemCategories[item.id]);
-            if (itemsToCategorize.length === 0) { setGroupingMode('aisle'); closeModal('options'); return; }
+            if (itemsToCategorize.length === 0) { setGroupingMode('aisle'); return; }
             setIsOrganizing(true);
             try {
                 if (!apiKey) throw new Error("API Key missing");
@@ -934,13 +922,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             } catch (error: any) { showToast("Muitas tentativas."); }
             finally { setIsOrganizing(false); }
         } else { setGroupingMode('recipe'); }
-        closeModal('options');
     }, [groupingMode, items, itemCategories, apiKey, isOffline]);
 
     const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
         setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
         setRecipeSuggestions([] as FullRecipe[]);
-        setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
+        openModal('themeRecipes');
         setIsSuggestionsLoading(true);
         try {
             const suggestions: FullRecipe[] = getCategoryRecipes(key);
