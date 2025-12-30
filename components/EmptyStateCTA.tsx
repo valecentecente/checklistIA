@@ -136,10 +136,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             </div>
 
-            {/* VITRINE EDITORIAL DO ACERVO */}
+            {/* VITRINE EDITORIAL DO ACERVO - ALTURA AJUSTADA PARA MOBILE (60dvh) */}
             {displayRecipes.length > 0 ? (
                 <div 
-                    className="relative w-full h-[420px] lg:h-[540px] rounded-[2.5rem] lg:rounded-[3rem] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] group border border-white/5 bg-[#0a0a0a] touch-none"
+                    className="relative w-full h-[60dvh] lg:h-[540px] rounded-[2.5rem] lg:rounded-[3rem] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] group border border-white/5 bg-[#0a0a0a] touch-none"
                     onTouchStart={onTouchStart}
                     onTouchMove={onTouchMove}
                     onTouchEnd={onTouchEnd}
@@ -171,10 +171,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                         <span className="text-white/60 text-[8px] lg:text-[9px] font-bold uppercase tracking-widest">Global</span>
                                     </div>
                                     
-                                    <h2 className="font-display text-[30px] lg:text-[44px] font-black text-white uppercase italic tracking-[-0.05em] leading-[0.85] drop-shadow-[0_8px_16px_rgba(0,0,0,0.8)] line-clamp-3">
+                                    <h2 className="font-display text-[26px] sm:text-[30px] lg:text-[44px] font-black text-white uppercase italic tracking-tighter leading-[0.9] drop-shadow-[0_8px_16px_rgba(0,0,0,0.8)] line-clamp-3">
                                         {recipe.name}
                                     </h2>
-                                    <div className="h-1 lg:h-1.5 w-10 lg:w-14 bg-primary mt-5 lg:mt-7 rounded-full shadow-[0_0_15px_rgba(249,115,22,0.6)]"></div>
+                                    <div className="h-1 lg:h-1.5 w-10 lg:w-14 bg-primary mt-4 sm:mt-5 lg:mt-7 rounded-full shadow-[0_0_15px_rgba(249,115,22,0.6)]"></div>
                                 </div>
 
                                 <div className="w-full flex items-end justify-between">
@@ -207,7 +207,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_120px_rgba(0,0,0,0.4)]"></div>
                 </div>
             ) : (
-                <div className="w-full h-[420px] rounded-[2.5rem] bg-gray-100 dark:bg-zinc-900 flex flex-col items-center justify-center gap-4 border border-dashed border-gray-300 dark:border-gray-800">
+                <div className="w-full h-[60dvh] rounded-[2.5rem] bg-gray-100 dark:bg-zinc-900 flex flex-col items-center justify-center gap-4 border border-dashed border-gray-300 dark:border-gray-800">
                     <span className="material-symbols-outlined text-4xl text-gray-300 animate-spin">sync</span>
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Organizando Vitrine...</p>
                 </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, deleteDoc, updateDoc, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, deleteDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp, callGenAIWithRetry, generateKeywords } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -88,6 +88,34 @@ export const AdminContentFactoryModal: React.FC = () => {
         return new Promise(resolve => setTimeout(resolve, ms));
     };
 
+    // Função para comprimir imagem Base64 e evitar erro de limite do Firestore (1MB)
+    const compressBase64Image = (base64Str: string, maxWidth: number = 1024, quality: number = 0.75): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.src = base64Str;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error("Canvas context failed"));
+
+                ctx.drawImage(img, 0, 0, width, height);
+                // Retorna como JPEG para máxima compressão
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.onerror = (e) => reject(e);
+        });
+    };
+
     useEffect(() => {
         logEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [logs]);
@@ -168,6 +196,8 @@ export const AdminContentFactoryModal: React.FC = () => {
             }
         }
 
+        // Remover duplicatas exatas da fila antes de começar
+        masterQueue = Array.from(new Set(masterQueue));
         addLog(`📋 FILA TOTAL: ${masterQueue.length} RECEITAS`, 'info');
 
         // ETAPA 2: Produção em Lote "Humanizada"
@@ -178,7 +208,25 @@ export const AdminContentFactoryModal: React.FC = () => {
             }
 
             const title = masterQueue[i];
-            addLog(`[${i + 1}/${masterQueue.length}] Fabricando: ${title.toUpperCase()}`, 'info');
+            const docId = getRecipeDocId(title);
+            
+            addLog(`[${i + 1}/${masterQueue.length}] Verificando acervo: ${title.toUpperCase()}`, 'info');
+
+            // TRAVA DE INTELIGÊNCIA: Verificar se já existe e está completa
+            try {
+                const existingDoc = await getDoc(doc(db!, 'global_recipes', docId));
+                if (existingDoc.exists()) {
+                    const data = existingDoc.data() as FullRecipe;
+                    if (checkRecipeIntegrity(data)) {
+                        addLog(`✨ "${title}" já está impecável no acervo. Pulando...`, 'success');
+                        continue; // Pula para a próxima sem gastar créditos
+                    } else {
+                        addLog(`⚠️ "${title}" existe mas está incompleta. Reconstruindo...`, 'warning');
+                    }
+                }
+            } catch (e) {
+                addLog(`Erro ao consultar banco: ${title}. Tentando gerar...`, 'warning');
+            }
 
             try {
                 // 1. Geração de Texto (Receita)
@@ -218,7 +266,10 @@ export const AdminContentFactoryModal: React.FC = () => {
                 let finalImageUrl = "";
                 for (const part of imgRes.candidates[0].content.parts) {
                     if (part.inlineData) {
-                        finalImageUrl = `data:image/jpeg;base64,${part.inlineData.data}`;
+                        // Comprimindo a imagem para caber no limite do Firestore (1MB)
+                        addLog("[IA] Otimizando fotografia para o banco...");
+                        const rawBase64 = `data:image/jpeg;base64,${part.inlineData.data}`;
+                        finalImageUrl = await compressBase64Image(rawBase64);
                         break;
                     }
                 }
@@ -231,9 +282,8 @@ export const AdminContentFactoryModal: React.FC = () => {
                     createdAt: serverTimestamp() 
                 };
 
-                const docId = getRecipeDocId(details.name || title);
                 await setDoc(doc(db!, 'global_recipes', docId), finalData, { merge: true });
-                addLog(`✅ "${title}" salva no acervo!`, 'success');
+                addLog(`✅ [${i+1}/${masterQueue.length}] "${title}" finalizada!`, 'success');
 
                 // Human Delay: Tempo de descanso após finalizar um prato completo
                 if (i < masterQueue.length - 1) {
@@ -370,7 +420,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                             {/* CONSOLE À DIREITA */}
                             <div className="w-96 bg-black/40 rounded-[2.5rem] border border-white/5 flex flex-col overflow-hidden">
                                 <div className="p-4 bg-slate-800/50 border-b border-white/5 flex justify-between items-center">
-                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IA Console v4.1 (Humano)</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IA Console v4.2 (Otimizado)</span>
                                     <span className={`h-2 w-2 rounded-full ${isGenerating ? 'bg-green-500 animate-pulse shadow-[0_0_10px_green]' : 'bg-slate-600'}`}></span>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-[10px] scrollbar-hide bg-slate-950/50">
