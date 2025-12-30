@@ -9,14 +9,14 @@ const ignorePermissionError = (err: any) => {
     return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
 };
 
-// Fix: Defined AdminOffersModalProps interface to resolve 'Cannot find name' error.
 interface AdminOffersModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
 export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onClose }) => {
-    const { showToast, isAdmin } = useApp();
+    const app = useApp();
+    const { showToast, isAdmin, pendingInventoryItem, setPendingInventoryItem } = app;
     const { logAdminAction } = useShoppingList();
     const [activeTab, setActiveTab] = useState<'add' | 'list' | 'leads'>('list');
     const [offers, setOffers] = useState<Offer[]>([]);
@@ -37,6 +37,17 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     const [discount, setDiscount] = useState('');
     const [tags, setTags] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // NOVO: Detectar item pendente da Fábrica
+    useEffect(() => {
+        if (isOpen && pendingInventoryItem) {
+            handleCancelEdit(); // Limpa estado anterior
+            setName(pendingInventoryItem.name);
+            setTags(pendingInventoryItem.tags);
+            setActiveTab('add'); // Garante que abre no formulário "Novo"
+            setPendingInventoryItem(null); // Limpa para não preencher de novo na próxima vez
+        }
+    }, [isOpen, pendingInventoryItem]);
 
     useEffect(() => {
         if (!isOpen || !db || !auth?.currentUser || !isAdmin) return;

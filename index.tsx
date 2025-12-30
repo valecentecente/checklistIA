@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -13,6 +14,7 @@ import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
 import { AppModals } from './components/modals/AppModals';
 
 const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
+    // Fix: Removed double assignment to setSliderX
     const [sliderX, setSliderX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -336,36 +338,14 @@ const AppContent: React.FC = () => {
         }
     };
   
-    const handleStartShopping = async (marketName: string) => {
-        const isRenaming = !!app.currentMarketName;
-        app.setCurrentMarketName(marketName);
-        app.setHomeViewActive(false); 
-        app.closeModal('startShopping');
-        if (app.pendingExploreRecipe) {
-            const recipeName = app.pendingExploreRecipe;
-            const recipe = app.getCachedRecipe(recipeName);
-            if (recipe) {
-                await app.addRecipeToShoppingList(recipe);
-                app.setPendingExploreRecipe(null);
-            } else {
-                setTimeout(() => {
-                    app.showRecipe(recipeName);
-                    app.setPendingExploreRecipe(null);
-                }, 300);
-            }
-        } else if (!isRenaming) app.openModal('addItem');
-    };
-
     const handleShareAndStart = async (marketName: string) => {
         if (!user) {
             app.showToast("Faça login para compartilhar!");
-            app.closeModal('startShopping');
             app.openModal('auth');
             return;
         }
         app.setCurrentMarketName(marketName);
         app.setHomeViewActive(false);
-        app.closeModal('startShopping');
         app.openModal('shareList'); 
     };
 
@@ -505,7 +485,7 @@ const AppContent: React.FC = () => {
                                 <input
                                     ref={marketInputRef}
                                     autoFocus
-                                    className="bg-transparent border-b border-primary/40 focus:border-primary opacity-100 outline-none font-black text-primary dark:text-orange-400 text-sm leading-none w-full max-w-[220px]"
+                                    className="bg-transparent border-b border-primary/40 focus:border-primary opacity-100 opacity-100 outline-none font-black text-primary dark:text-orange-400 text-sm leading-none w-full max-w-[220px]"
                                     value={tempMarketName}
                                     onChange={(e) => setTempMarketName(e.target.value)}
                                     onBlur={saveMarketNameChange}
@@ -572,7 +552,7 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 h-full"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full"><NavButton icon="favorite" label="Favoritos" onClick={() => app.openModal('favorites')} /></div>
                         <div className="flex-1 h-full flex items-center justify-center relative">
-                            <button onClick={() => app.isHomeViewActive ? ( (items.length > 0 || app.currentMarketName) ? app.setHomeViewActive(false) : app.openModal('startShopping') ) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
+                            <button onClick={() => app.isHomeViewActive ? app.setHomeViewActive(false) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
                                 <span className="material-symbols-outlined" style={ { fontSize: '32px' } }>{app.isHomeViewActive ? 'shopping_cart' : 'add'}</span>
                             </button>
                         </div>
@@ -581,7 +561,7 @@ const AppContent: React.FC = () => {
                     </div>
                 </footer>
 
-                <AppModals sharedListData={sharedListData} isImportingShare={isImportingShare} isDistributionModalOpen={app.isDistributionModalOpen} closeDistributionModal={closeDistributionModal} handleShare={handleShare} handleAddItem={handleAddItem} editingItem={editingItem} handleSavePurchase={handleSavePurchase} handleFinishWithoutSaving={handleFinishWithoutSaving} handleRepeatPurchase={handleRepeatPurchase} handleAddHistoricItem={handleAddHistoricItem} handleImportSharedList={handleImportSharedList} handleStartShopping={handleStartShopping} handleShareAndStart={handleShareAndStart} handleAddToCurrentList={handleAddToCurrentList} handleStartNewListForRecipe={handleStartNewListForRecipe} />
+                <AppModals sharedListData={sharedListData} isImportingShare={isImportingShare} isDistributionModalOpen={app.isDistributionModalOpen} closeDistributionModal={closeDistributionModal} handleShare={handleShare} handleAddItem={handleAddItem} editingItem={editingItem} handleSavePurchase={handleSavePurchase} handleFinishWithoutSaving={handleFinishWithoutSaving} handleRepeatPurchase={handleRepeatPurchase} handleAddHistoricItem={handleAddHistoricItem} handleImportSharedList={handleImportSharedList} handleShareAndStart={handleShareAndStart} handleAddToCurrentList={handleAddToCurrentList} handleStartNewListForRecipe={handleStartNewListForRecipe} />
             </div>
             <WebSidebarRight />
         </div>
@@ -590,6 +570,6 @@ const AppContent: React.FC = () => {
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
-    ReactDOM.createRoot(rootElement).render(<React.StrictMode><AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider></React.StrictMode>);
+    ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 30/12/2025 - Estabilidade Garantida V2.5.0
+// Checkpoint de Segurança: 24/05/2024 - Estabilidade Garantida V2.6

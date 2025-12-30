@@ -30,7 +30,6 @@ import { ThemeModal } from '../ThemeModal';
 import { SharedListImportModal } from '../SharedListImportModal';
 import { ReceivedListNotificationModal } from '../ReceivedListNotificationModal';
 import { FeedbackModal } from '../FeedbackModal';
-import { StartShoppingModal } from '../StartShoppingModal';
 import { ShareListModal } from '../ShareListModal';
 import { RecipeDecisionModal } from '../RecipeDecisionModal';
 import { SupportInfoModal } from '../SupportInfoModal';
@@ -77,7 +76,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
     handleRepeatPurchase,
     handleAddHistoricItem,
     handleImportSharedList,
-    handleStartShopping,
     handleShareAndStart,
     handleAddToCurrentList,
     handleStartNewListForRecipe
@@ -157,13 +155,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <SharedListImportModal isOpen={app.isSharedListModalOpen} onClose={() => app.closeModal('sharedList')} onImport={handleImportSharedList} listData={sharedListData} isLoading={isImportingShare} />
             <ReceivedListNotificationModal />
             <FeedbackModal isOpen={app.isFeedbackModalOpen} onClose={() => app.closeModal('feedback')} />
-            <StartShoppingModal 
-                isOpen={app.isStartShoppingModalOpen} 
-                onClose={() => app.closeModal('startShopping')} 
-                onStart={handleStartShopping} 
-                onShareAndStart={handleShareAndStart}
-                initialMarketName={app.currentMarketName}
-            />
             <ShareListModal isOpen={app.isShareListModalOpen} onClose={() => app.closeModal('shareList')} />
             
             <RecipeDecisionModal 

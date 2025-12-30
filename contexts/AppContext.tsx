@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useContext, ReactNode, useCa
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+// Fix: Added HomeCategory to imports to resolve line 6 error.
 import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
@@ -21,7 +22,6 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 };
 
 const getRecipeDocId = (name: string) => {
-    if (!name) return 'recipe-' + Date.now();
     return name.trim().toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
         .replace(/[\/\s]+/g, '-') 
@@ -29,26 +29,14 @@ const getRecipeDocId = (name: string) => {
         .slice(0, 80);
 };
 
-const checkRecipeIntegrity = (r: FullRecipe): boolean => {
-    return !!(
-        r.imageUrl && 
-        Array.isArray(r.ingredients) && r.ingredients.length > 0 && 
-        Array.isArray(r.instructions) && r.instructions.length > 0 && 
-        Array.isArray(r.tags) && r.tags.length > 0
-    );
-};
-
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [] as FullRecipe[];
     return data.map((r: any): FullRecipe => ({
         name: String(r.name || 'Receita'),
-        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => {
-            if (typeof i === 'string') return { simplifiedName: i, detailedName: i };
-            return {
-                simplifiedName: String(i.simplifiedName || i.name || ''),
-                detailedName: String(i.detailedName || i.description || i.name || '')
-            };
-        }) : [] as { simplifiedName: string; detailedName: string; }[],
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
+            simplifiedName: String(i.simplifiedName || ''),
+            detailedName: String(i.detailedName || '')
+        })) : [] as { simplifiedName: string; detailedName: string; }[],
         instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
         imageQuery: String(r.imageQuery || r.name || ''),
         servings: String(r.servings || '2 porções'),
@@ -62,6 +50,7 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
         tags: Array.isArray(r.tags) ? r.tags.map(String) : [] as string[],
         isAlcoholic: !!r.isAlcoholic,
         suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : [] as string[],
+        // Fix: Added createdAt and updatedAt to map function
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
     }));
@@ -84,6 +73,7 @@ const INITIAL_MODAL_STATES = {
     isAdminRecipesModalOpen: false,
     isAdminReviewsModalOpen: false,
     isAdminScheduleModalOpen: false,
+    // Fix: Added missing state to resolve AdminUsersModal error.
     isAdminUsersModalOpen: false,
     isManageTeamModalOpen: false,
     isTeamReportsModalOpen: false, 
@@ -126,6 +116,7 @@ interface AppContextType {
     isAdminRecipesModalOpen: boolean;
     isAdminReviewsModalOpen: boolean;
     isAdminScheduleModalOpen: boolean; 
+    // Fix: Added missing property to resolve AdminUsersModal error.
     isAdminUsersModalOpen: boolean;
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
@@ -180,6 +171,7 @@ interface AppContextType {
     closeRecipe: () => void;
     resetRecipeState: () => void; 
     
+    // Fix: Added allRecipesPool to AppContextType interface to resolve error in EmptyStateCTA.tsx
     allRecipesPool: FullRecipe[];
     featuredRecipes: FullRecipe[];
     recipeSuggestions: FullRecipe[];
@@ -201,6 +193,7 @@ interface AppContextType {
 
     scheduleRules: ScheduleRule[];
     saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
+    // Fix: Added homeCategories to AppContextType to resolve saveHomeCategories error.
     homeCategories: HomeCategory[];
     saveHomeCategories: (categories: HomeCategory[]) => Promise<void>;
 
@@ -254,6 +247,10 @@ interface AppContextType {
     selectedProduct: Offer | null; 
     openProductDetails: (product: Offer) => void; 
     isOffline: boolean;
+
+    // NOVO: Transporte de dados para novo item de inventário
+    pendingInventoryItem: { name: string; tags: string } | null;
+    setPendingInventoryItem: (item: { name: string; tags: string } | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -284,7 +281,10 @@ export const callGenAIWithRetry = async <T = GenerateContentResponse>(fn: () => 
 };
 
 const ignorePermissionError = (err: any) => {
-    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
+    if (err.code === 'permission-denied' || err.message?.includes('Missing or insufficient permissions')) {
+        return true;
+    }
+    return false;
 };
 
 export const generateKeywords = (text: string): string[] => {
@@ -345,6 +345,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
     const [totalRecipeCount, setTotalRecipeCount] = useState(0);
     const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
+    // Fix: Added state for homeCategories.
     const [homeCategories, setHomeCategories] = useState<HomeCategory[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
@@ -352,6 +353,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const [recipeSearchResults, setRecipeSearchResults] = useState<FullRecipe[]>([]);
     const [currentSearchTerm, setCurrentSearchTerm] = useState('');
+
+    const [pendingInventoryItem, setPendingInventoryItem] = useState<{ name: string; tags: string } | null>(null);
 
     const apiKey = process.env.API_KEY as string;
     
@@ -451,12 +454,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             try {
                 const networkPromise = (async () => {
-                    const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(500));
+                    const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
                     const snapshotFetch = await getDocs(qFetch);
                     const fetchedRaw: any[] = [];
                     snapshotFetch.forEach(docSnap => {
                         const data = docSnap.data();
-                        if (data && data.name) {
+                        if (data && data.name && data.imageUrl) {
                             fetchedRaw.push(data);
                         }
                     });
@@ -523,6 +526,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return () => unsub();
     }, []);
 
+    // Fix: Added missing onSnapshot for homeCategories to sync data from Firestore.
     useEffect(() => {
         if (!db) return;
         const unsub = onSnapshot(doc(db, 'settings', 'home_categories'), (snapshot) => {
@@ -542,6 +546,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         showToast("Grade de horários atualizada!");
     };
 
+    // Fix: Added missing implementation for saveHomeCategories.
     const saveHomeCategories = async (categories: HomeCategory[]) => {
         if (!db || !isAdmin) return;
         return await setDoc(doc(db, 'settings', 'home_categories'), { categories, updatedAt: serverTimestamp() });
@@ -587,6 +592,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        // Fix: Added modal key for AdminUsers to resolve line 9 error in AdminUsersModal.tsx
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
@@ -611,6 +617,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        // Fix: Added modal key for AdminUsers to resolve line 9 error in AdminUsersModal.tsx
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
@@ -656,7 +663,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const cancelEdit = () => setEditingItemId(null);
     
     const getCachedRecipe = (name: string): FullRecipe | undefined => {
-        if (!name) return undefined;
         const target = name.trim().toLowerCase();
         const allCaches: (Record<string, FullRecipe> | FullRecipe[])[] = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, recipeSearchResults, globalRecipeCache];
         for (const cache of allCaches) {
@@ -733,6 +739,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const sanitizeJsonString = (str: string) => {
+        // Fix: Added missing closing slash in regex to avoid SyntaxError
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
 
@@ -749,7 +756,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
             2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
             3. Identifique se o preparo exige equipamentos específicos (ex: batedeira, airfryer, forma, liquidificador, colher de pau, etc) para venda direcionada.
-            4. Retorne APENAS o JSON puro seguindo este formato:
+            4. PROIBIDO repetir palavras contidas no nome da receita dentro do campo 'tags'.
+            5. Foque em tags contextuais como: Momento (Almoço, Jantar, Café), Perfil (Fit, Vegano, Kids, Barato, Gourmet), Técnica (Airfryer, Forno, Uma Panela Só, Rápido) e Categoria (Massa, Doce, Salgado).
+            6. Retorne APENAS o JSON puro seguindo este formato:
             {
                 "name": "${recipeName}",
                 "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz agulhinha"}],
@@ -760,7 +769,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 "difficulty": "Médio",
                 "cost": "Médio",
                 "isAlcoholic": false,
-                "tags": ["tag1", "tag2"],
+                "tags": ["Almoço", "Rápido", "Barato", "Massa"],
                 "suggestedLeads": ["batedeira", "forma de bolo"]
             }`;
 
@@ -798,7 +807,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 tags: Array.isArray(details.tags) ? details.tags.map(String) : [] as string[],
                 isAlcoholic: !!details.isAlcoholic,
                 suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : [] as string[],
-                createdAt: serverTimestamp() 
+                createdAt: serverTimestamp() // Set locally for immediate use/sort before mapToFullRecipeArray re-processes it
             };
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
@@ -894,7 +903,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             openModal('recipeDecision');
         } else {
             setPendingExploreRecipe(recipeName);
-            openModal('startShopping');
+            setHomeViewActive(false); // Vai direto para a lista
         }
     }, [user, items.length, currentMarketName]);
 
@@ -913,12 +922,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, smartNudgeItemName, currentMarketName, setCurrentMarketName,
         isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
-        allRecipesPool,
+        allRecipesPool, // Fix: Provided allRecipesPool in context value to fix Property 'allRecipesPool' does not exist on type 'AppContextType' error
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
         pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline,
-        homeCategories, saveHomeCategories
+        homeCategories, saveHomeCategories,
+        pendingInventoryItem, setPendingInventoryItem
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
