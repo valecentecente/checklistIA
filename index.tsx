@@ -302,6 +302,7 @@ const AppContent: React.FC = () => {
         app.setCurrentMarketName(null);
         app.setIsSharedSession(false);
         app.setFocusMode(false); 
+        app.clearBudget(); // Zera o orçamento ao finalizar
         app.closeModal('savePurchase');
         app.setHomeViewActive(true);
         app.showToast("Sua compra foi salva!");
@@ -312,6 +313,7 @@ const AppContent: React.FC = () => {
         app.setCurrentMarketName(null);
         app.setIsSharedSession(false);
         app.setFocusMode(false); 
+        app.clearBudget(); // Zera o orçamento ao limpar a lista
         app.closeModal('savePurchase');
         app.setHomeViewActive(true);
         app.showToast("Lista limpa.");
