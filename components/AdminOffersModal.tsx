@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { addDoc, collection, serverTimestamp, deleteDoc, doc, onSnapshot, query, updateDoc, limit, getDocs, orderBy } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -6,13 +5,18 @@ import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext'; 
 import type { Offer, SalesOpportunity } from '../types';
 
+const ignorePermissionError = (err: any) => {
+    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
+};
+
+// Fix: Defined AdminOffersModalProps interface to resolve 'Cannot find name' error.
 interface AdminOffersModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
 export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onClose }) => {
-    const { showToast } = useApp();
+    const { showToast, isAdmin } = useApp();
     const { logAdminAction } = useShoppingList();
     const [activeTab, setActiveTab] = useState<'add' | 'list' | 'leads'>('list');
     const [offers, setOffers] = useState<Offer[]>([]);
@@ -35,7 +39,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        if (!isOpen || !db || !auth?.currentUser) return;
+        if (!isOpen || !db || !auth?.currentUser || !isAdmin) return;
 
         const qOffers = query(collection(db, 'offers'), limit(300));
         const unsubscribeOffers = onSnapshot(qOffers, 
@@ -43,7 +47,9 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                 setOffers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Offer)));
             },
             (error) => {
-                console.warn("[Admin Offers] Erro:", error.message);
+                if (!ignorePermissionError(error)) {
+                    console.warn("[Admin Offers] Erro:", error.message);
+                }
             }
         );
 
@@ -54,12 +60,14 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                 setLeads(allLeads.filter(l => l.status === 'pending' || !l.status));
             },
             (error) => {
-                console.warn("[Admin Leads] Sem permissão no momento.");
+                if (!ignorePermissionError(error)) {
+                    console.warn("[Admin Leads] Sem permissão no momento.");
+                }
             }
         );
 
         return () => { unsubscribeOffers(); unsubscribeLeads(); };
-    }, [isOpen]);
+    }, [isOpen, isAdmin]);
 
     const processedOffers = useMemo(() => {
         let result = [...offers];
@@ -88,7 +96,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
 
     const handleGenerateManualTest = async () => {
         if (!db || !auth?.currentUser) {
-            showToast("Usuário não autenticado no Firebase.");
+            showToast("Usuário não autenticado.");
             return;
         }
         
@@ -99,9 +107,9 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                 status: 'pending',
                 createdAt: new Date().toISOString()
             });
-            showToast("SUCESSO: Lead criado!");
+            showToast("Lead criado!");
         } catch (e: any) {
-            showToast(`Erro ao gerar lead de teste.`);
+            showToast(`Erro ao gerar lead.`);
         }
     };
 
@@ -166,7 +174,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            // Refinamento: Garante que a vírgula funcione bem como separador
             const tagsArray = tags.split(',')
                 .map(t => t.trim())
                 .filter(t => t !== '');

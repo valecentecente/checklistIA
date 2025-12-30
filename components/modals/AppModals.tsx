@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -21,7 +20,6 @@ import { ThemeRecipesModal } from '../ThemeRecipesModal';
 import { FavoriteRecipesModal } from '../FavoriteRecipesModal';
 import { OffersModal } from '../OffersModal';
 import { AdminOffersModal } from '../AdminOffersModal';
-import { AdminRecipesModal } from '../AdminRecipesModal';
 import { AdminReviewsModal } from '../AdminReviewsModal';
 import { AdminScheduleModal } from '../AdminScheduleModal'; 
 import { SavePurchaseModal } from '../SavePurchaseModal';
@@ -44,6 +42,8 @@ import { ArcadeModal } from '../arcade/ArcadeModal';
 import { UnitConverterModal } from '../UnitConverterModal';
 import { AdminContentFactoryModal } from '../AdminContentFactoryModal';
 import { RecipeSelectionModal } from '../RecipeSelectionModal'; 
+import { AdminUsersModal } from './AdminUsersModal';
+import { AdminHubModal } from './AdminHubModal';
 
 interface AppModalsProps {
     sharedListData: any;
@@ -117,14 +117,15 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <OffersModal isOpen={app.isOffersModalOpen} onClose={() => app.closeModal('offers')} />
             
             {/* ADMIN MODALS */}
+            <AdminHubModal />
             <AdminOffersModal isOpen={app.isAdminModalOpen} onClose={() => app.closeModal('admin')} />
-            <AdminRecipesModal isOpen={app.isAdminRecipesModalOpen} onClose={() => app.closeModal('adminRecipes')} />
             <AdminReviewsModal isOpen={app.isAdminReviewsModalOpen} onClose={() => app.closeModal('adminReviews')} />
             <AdminScheduleModal /> 
             <AdminContentFactoryModal /> 
             <ManageTeamModal />
             <AdminInviteModal />
             <TeamReportsModal />
+            <AdminUsersModal />
             
             <ArcadeModal />
             

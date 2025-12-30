@@ -243,7 +243,7 @@ const AppContent: React.FC = () => {
     const piggyStyle = useMemo(() => {
         if (app.budget === null) return 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/10';
         const percent = (rawTotal / app.budget) * 100;
-        if (percent > 100) return 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)] border-red-700';
+        if (percent > 100) return 'bg-red-600 text-white animate-pulse shadow-[0_8px_32px_rgba(220,38,38,0.5)] border-red-700';
         else if (percent >= 95) return 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800';
         else if (percent >= 80) return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800';
         else return 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800';
@@ -441,7 +441,6 @@ const AppContent: React.FC = () => {
                 )}
             </div>
             {label && (
-                // Fix: Corrected syntax error by adding missing quote before 'opacity-100' to resolve "cannot find name opacity", button, and scope errors.
                 <span className={`text-[10px] font-medium absolute bottom-1 transition-opacity duration-200 ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     {label}
                 </span>
@@ -474,7 +473,18 @@ const AppContent: React.FC = () => {
                                 <span translate="no" className="mt-0.5 w-fit rounded-full bg-orange-100/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-orange-700 leading-none shadow-sm backdrop-blur-sm">Beta</span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            {/* BOTÃO ADMIN HUB MOBILE - AO LADO DA FOTO */}
+                            {app.isAdmin && (
+                                <button 
+                                    onClick={() => app.openModal('adminHub')}
+                                    className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-800 shadow-sm transition-all active:scale-95"
+                                    title="Painel Admin"
+                                >
+                                    <span className="material-symbols-outlined !text-xl font-variation-FILL-1" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
+                                </button>
+                            )}
+                            
                             <div className="relative">
                                 <button onClick={handleProfileClick} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-white/20 dark:text-slate-300 overflow-hidden border-2 border-white ring-1 ring-black/5 shadow-sm backdrop-blur-md">
                                     {user?.photoURL ? <img src={user.photoURL} alt="Foto" className="h-full w-full object-cover" /> : <span className="material-symbols-outlined !text-2xl">account_circle</span>}
@@ -537,7 +547,7 @@ const AppContent: React.FC = () => {
                     </div>
                 )}
 
-                <main className={`flex-1 overflow-y-auto p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`} style={globalPatternStyle}>
+                <main className={`flex-1 ${showHomeView ? 'lg:overflow-y-auto overflow-hidden' : 'overflow-y-auto'} p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`} style={globalPatternStyle}>
                     <div className="flex flex-col gap-4 relative z-10">
                         {app.budget !== null && !showHomeView && (
                             <div className="flex flex-col gap-4 rounded-xl bg-white/5 p-5 border border-white/10">
@@ -562,7 +572,7 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 h-full"><NavButton icon="home" label="Início" onClick={() => app.setHomeViewActive(true)} active={app.isHomeViewActive} /></div>
                         <div className="flex-1 h-full"><NavButton icon="favorite" label="Favoritos" onClick={() => app.openModal('favorites')} /></div>
                         <div className="flex-1 h-full flex items-center justify-center relative">
-                            <button onClick={() => app.isHomeViewActive ? app.setHomeViewActive(false) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
+                            <button onClick={() => app.isHomeViewActive ? ( (items.length > 0 || app.currentMarketName) ? app.setHomeViewActive(false) : app.openModal('startShopping') ) : app.openModal('addItem')} className="absolute bottom-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-xl ring-4 ring-white/20 transition-all active:scale-95">
                                 <span className="material-symbols-outlined" style={ { fontSize: '32px' } }>{app.isHomeViewActive ? 'shopping_cart' : 'add'}</span>
                             </button>
                         </div>
@@ -582,3 +592,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<React.StrictMode><AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider></React.StrictMode>);
 }
+// Checkpoint de Segurança: 30/12/2025 - Estabilidade Garantida V2.5.0

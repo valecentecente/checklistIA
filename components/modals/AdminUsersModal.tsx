@@ -5,6 +5,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
 import type { User } from '../../types';
 
+const ignorePermissionError = (err: any) => {
+    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
+};
+
 export const AdminUsersModal: React.FC = () => {
     const { isAdminUsersModalOpen, closeModal, showToast, isAdmin } = useApp();
     const { user: currentUser, banUser, deleteUserProfile, updateUserRole } = useAuth();
@@ -15,13 +19,11 @@ export const AdminUsersModal: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Só tenta buscar se o modal estiver aberto E o usuário já tiver sido identificado como Admin pelo AppContext/AuthContext
         if (!isAdminUsersModalOpen || !db || !isAdmin) return;
 
         setIsLoading(true);
         setError(null);
         
-        // Query de usuários cadastrados
         const q = query(collection(db, 'users'), limit(500));
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -30,20 +32,20 @@ export const AdminUsersModal: React.FC = () => {
                 ...docSnap.data()
             } as User));
 
-            // Ordenação local alfabética
             userList.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
 
             setUsers(userList);
             setIsLoading(false);
         }, (err: any) => {
+            if (ignorePermissionError(err)) {
+                setIsLoading(false);
+                setError("Acesso restrito. Verificando permissões...");
+                return;
+            }
+
             console.error("Erro ao carregar usuários:", err);
             setIsLoading(false);
-            
-            if (err.code === 'permission-denied') {
-                setError("Sua permissão de Admin ainda está sendo validada pelo Firebase. Tente sair e entrar novamente ou aguarde 5 segundos.");
-            } else {
-                setError("Ocorreu um erro ao carregar a lista. Verifique sua conexão.");
-            }
+            setError("Ocorreu um erro ao carregar a lista. Verifique sua conexão.");
         });
 
         return () => unsubscribe();

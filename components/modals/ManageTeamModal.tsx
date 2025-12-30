@@ -5,8 +5,12 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import type { AdminPermissions, AdminInvite } from '../../types';
 
+const ignorePermissionError = (err: any) => {
+    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
+};
+
 export const ManageTeamModal: React.FC = () => {
-    const { isManageTeamModalOpen, closeModal, showToast } = useApp();
+    const { isManageTeamModalOpen, closeModal, showToast, isAdmin } = useApp();
     const { user, sendAdminInvite, cancelAdminInvite } = useAuth();
     
     const [activeTab, setActiveTab] = useState<'invite' | 'pending'>('invite');
@@ -24,9 +28,8 @@ export const ManageTeamModal: React.FC = () => {
         reports: false
     });
 
-    // Listener para convites pendentes
     useEffect(() => {
-        if (!isManageTeamModalOpen || !db || !user) return;
+        if (!isManageTeamModalOpen || !db || !user || !isAdmin) return;
 
         const q = query(
             collection(db, 'admin_invites'),
@@ -39,7 +42,6 @@ export const ManageTeamModal: React.FC = () => {
                 id: doc.id
             } as AdminInvite));
 
-            // Ordenação manual para evitar erro de índice no Firestore
             invites.sort((a, b) => {
                 const dateA = a.createdAt?.seconds || 0;
                 const dateB = b.createdAt?.seconds || 0;
@@ -48,11 +50,13 @@ export const ManageTeamModal: React.FC = () => {
 
             setPendingInvites(invites);
         }, (error) => {
-            console.warn("Erro ao buscar convites pendentes:", error.message);
+            if (!ignorePermissionError(error)) {
+                console.warn("[ManageTeam] Erro ao buscar convites pendentes:", error.message);
+            }
         });
 
         return () => unsubscribe();
-    }, [isManageTeamModalOpen, user]);
+    }, [isManageTeamModalOpen, user, isAdmin]);
 
     if (!isManageTeamModalOpen) return null;
 
@@ -63,7 +67,7 @@ export const ManageTeamModal: React.FC = () => {
     const handleCancel = async (id: string, name: string) => {
         if (window.confirm(`Deseja realmente cancelar o convite para ${name}?`)) {
             await cancelAdminInvite(id);
-            showToast("Convite cancelado com sucesso.");
+            showToast("Convite cancelado.");
         }
     };
 
@@ -80,7 +84,7 @@ export const ManageTeamModal: React.FC = () => {
             if (result.success) {
                 showToast(result.message);
                 setIdentifier('');
-                setActiveTab('pending'); // Muda para a aba de pendentes para ver o convite
+                setActiveTab('pending');
             } else {
                 showToast(result.message);
             }
@@ -106,7 +110,6 @@ export const ManageTeamModal: React.FC = () => {
         <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 animate-fadeIn" onClick={() => closeModal('manageTeam')}>
             <div className="bg-white dark:bg-surface-dark w-full max-w-sm rounded-[2.5rem] shadow-2xl animate-slideUp relative flex flex-col h-[85vh] max-h-[700px] overflow-hidden" onClick={e => e.stopPropagation()}>
                 
-                {/* Visual Header com Status de Nível */}
                 <div className={`p-6 text-center relative overflow-hidden shrink-0 transition-colors duration-500 ${isAdminL1 ? 'bg-blue-600' : 'bg-emerald-600'}`}>
                     <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
                     <button onClick={() => closeModal('manageTeam')} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-10">
@@ -120,7 +123,6 @@ export const ManageTeamModal: React.FC = () => {
                     <h2 className="text-white font-black text-xl uppercase italic tracking-tighter">Gestão de Equipe</h2>
                 </div>
 
-                {/* TABS SELECTOR */}
                 <div className="flex bg-gray-100 dark:bg-black/20 p-1 shrink-0">
                     <button 
                         onClick={() => setActiveTab('invite')}
@@ -133,7 +135,6 @@ export const ManageTeamModal: React.FC = () => {
                         onClick={() => setActiveTab('pending')}
                         className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-2 relative ${activeTab === 'pending' ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm' : 'text-gray-500'}`}
                     >
-                        <span className="material-symbols-outlined text-sm">hourglass_empty</span>
                         Enviados
                         {pendingInvites.length > 0 && (
                             <span className="absolute top-2 right-4 h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>
@@ -145,19 +146,19 @@ export const ManageTeamModal: React.FC = () => {
                     {activeTab === 'invite' ? (
                         <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">E-mail ou @Usuário</label>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">Identificador</label>
                                 <input 
                                     type="text" 
                                     value={identifier} 
                                     onChange={e => setIdentifier(e.target.value)}
                                     className="form-input w-full h-14 rounded-2xl border-gray-200 dark:border-gray-800 dark:bg-black/20 font-bold focus:ring-blue-500"
-                                    placeholder="amor@email.com ou @usuario"
+                                    placeholder="E-mail ou @usuario"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">Habilitar Acessos</label>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">Acessos</label>
                                 <div className="flex flex-col gap-2">
                                     {permissionLabels.map((p) => (
                                         <button
@@ -186,20 +187,12 @@ export const ManageTeamModal: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
-                            
-                            <div className="mt-4 p-4 rounded-2xl bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-gray-800">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Nível de Acesso</p>
-                                <p className={`text-xs font-bold ${isAdminL1 ? 'text-blue-600' : 'text-emerald-600'}`}>
-                                    {isAdminL1 ? 'NÍVEL 1 - Acesso Irrestrito' : 'NÍVEL 2 - Acesso Parcial'}
-                                </p>
-                            </div>
                         </form>
                     ) : (
                         <div className="space-y-4 animate-fadeIn">
                             {pendingInvites.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
-                                    <span className="material-symbols-outlined text-5xl mb-3">mark_email_read</span>
-                                    <p className="text-sm font-bold text-gray-500">Nenhum convite pendente no momento.</p>
+                                    <p className="text-sm font-bold text-gray-500">Nenhum convite pendente.</p>
                                 </div>
                             ) : (
                                 pendingInvites.map((invite) => {
@@ -210,13 +203,12 @@ export const ManageTeamModal: React.FC = () => {
                                         <div key={invite.id} className="bg-gray-50 dark:bg-white/5 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 flex flex-col gap-4 group">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate uppercase tracking-tight">{invite.toIdentifier}</p>
-                                                    <p className="text-[10px] text-gray-500 font-medium">Enviado em {invite.createdAt?.toDate ? invite.createdAt.toDate().toLocaleDateString() : 'Agora'}</p>
+                                                    <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate uppercase">{invite.toIdentifier}</p>
+                                                    <p className="text-[10px] text-gray-500">Enviado em {invite.createdAt?.toDate ? invite.createdAt.toDate().toLocaleDateString() : 'Hoje'}</p>
                                                 </div>
                                                 <button 
                                                     onClick={() => handleCancel(invite.id, invite.toIdentifier)}
-                                                    className="h-10 w-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm"
-                                                    title="Cancelar Convite"
+                                                    className="h-10 w-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-colors"
                                                 >
                                                     <span className="material-symbols-outlined text-lg">delete</span>
                                                 </button>
@@ -226,13 +218,6 @@ export const ManageTeamModal: React.FC = () => {
                                                 <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${isL1 ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
                                                     {isL1 ? 'Nível 1' : 'Nível 2'}
                                                 </span>
-                                                <div className="flex gap-1">
-                                                    {permissionLabels.map(pl => invitePerms?.[pl.id as keyof AdminPermissions] && (
-                                                        <div key={pl.id} className="w-5 h-5 bg-gray-200 dark:bg-white/10 rounded flex items-center justify-center" title={pl.label}>
-                                                            <span className="material-symbols-outlined text-[12px] text-gray-600 dark:text-gray-400">{pl.icon}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -242,7 +227,6 @@ export const ManageTeamModal: React.FC = () => {
                     )}
                 </div>
 
-                {/* STICKY ACTION BUTTON (Only for Invite Tab) */}
                 {activeTab === 'invite' && (
                     <div className="p-6 pt-2 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800 shrink-0">
                         <button 
@@ -264,12 +248,6 @@ export const ManageTeamModal: React.FC = () => {
                         </button>
                     </div>
                 )}
-                
-                <div className="p-3 bg-gray-50 dark:bg-black/20 text-center border-t border-gray-100 dark:border-gray-800 shrink-0">
-                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">
-                        Segurança ChecklistIA Ativa
-                    </p>
-                </div>
             </div>
         </div>
     );

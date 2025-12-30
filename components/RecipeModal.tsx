@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { FullRecipe } from '../types';
 import { useApp } from '../contexts/AppContext';
@@ -71,13 +70,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
   const renderTimeClocks = (min: number) => {
     let active = 1;
-    if (min > 90) active = 4;
-    else if (min > 45) active = 3;
-    else if (min > 20) active = 2;
+    if (min > 60) active = 3;
+    else if (min > 30) active = 2;
 
     return (
         <div className="flex gap-0.5 items-center">
-            {[1, 2, 3, 4].map(i => (
+            {[1, 2, 3].map(i => (
                 <span key={i} className={`material-symbols-outlined text-[18px] ${i <= active ? 'text-text-main dark:text-white font-variation-FILL-1' : 'text-gray-200 dark:text-white/10'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
                     schedule
                 </span>
@@ -117,7 +115,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const relatedOffers = useMemo(() => {
       if (!offers || offers.length === 0) return [];
       const leads = (recipe.suggestedLeads || []).map(l => l.toLowerCase().trim()).filter(l => l !== 'nenhum');
-      const fullText = (recipe.name + ' ' + safeIngredients.map(i => i.simplifiedName).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
+      const fullText = (recipe.name + ' ' + safeIngredients.map((i: any) => i.simplifiedName || i).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
       const filtered = offers.filter(offer => {
           const offerName = offer.name.toLowerCase();
           const offerTags = (offer.tags || []).map(t => t.toLowerCase().trim());
@@ -182,7 +180,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                      <div className="absolute top-4 left-4 z-[110] flex flex-col gap-2 items-start pointer-events-none">
                          {imageUrl && isFromCache && !isRecipeLoading && (
                              <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/80 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 shadow-xl">
-                                 <span className="material-symbols-outlined text-[20px] text-orange-400 leading-none">photo_camera</span>
+                                 <span className="material-symbols-outlined text-[14px] text-orange-400">photo_camera</span>
                                  <span className="text-[10px] font-black uppercase tracking-[0.1em] leading-none pt-[1px]">
                                     <span className="text-white">Checklist</span><span className="text-blue-500 ml-0.5">IA</span>
                                  </span>
@@ -259,10 +257,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                         Ingredientes
                     </h3>
                     <div className="flex flex-col gap-3 p-4 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 shadow-sm min-h-[100px]">
-                        {safeIngredients.length > 0 ? safeIngredients.map((ingredient, idx) => (
+                        {safeIngredients.length > 0 ? safeIngredients.map((ingredient: any, idx) => (
                             <div key={idx} className="flex items-start gap-3 animate-fadeIn">
                                 <span className="material-symbols-outlined text-primary text-lg mt-0.5">check_circle</span>
-                                <span className="text-text-main dark:text-gray-200 text-sm leading-relaxed">{ingredient.detailedName}</span>
+                                <span className="text-text-main dark:text-gray-200 text-sm leading-relaxed">
+                                    {typeof ingredient === 'string' ? ingredient : (ingredient.detailedName || ingredient.simplifiedName || 'Ingrediente')}
+                                </span>
                             </div>
                         )) : (
                             <div className="flex flex-col items-center justify-center py-4 gap-2 text-center">

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext';
@@ -71,13 +70,12 @@ export const RecipeSelectionModal: React.FC = () => {
 
     const renderTimeClocks = (min: number) => {
         let active = 1;
-        if (min > 90) active = 4;
-        else if (min > 45) active = 3;
-        else if (min > 20) active = 2;
+        if (min > 60) active = 3;
+        else if (min > 30) active = 2;
 
         return (
             <div className="flex gap-0.5 items-center">
-                {[1, 2, 3, 4].map(i => (
+                {[1, 2, 3].map(i => (
                     <span key={i} className={`material-symbols-outlined text-[14px] ${i <= active ? 'text-primary font-variation-FILL-1' : 'text-white/20'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
                         schedule
                     </span>

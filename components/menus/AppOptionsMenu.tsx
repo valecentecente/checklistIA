@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -23,7 +22,6 @@ const XIcon: React.FC<{className?: string}> = ({ className }) => (
 export const AppOptionsMenu: React.FC = () => {
     const app = useApp();
     const { user, logout } = useAuth();
-    const [isAdminExpanded, setIsAdminExpanded] = useState(false);
 
     if (!app.isAppOptionsMenuOpen) return null;
 
@@ -53,14 +51,6 @@ export const AppOptionsMenu: React.FC = () => {
                 app.showToast("Erro ao copiar link.");
             }
         }
-    };
-
-    // Lógica de Permissões
-    const p = user?.permissions;
-    const hasPerm = (key: string) => {
-        if (!app.isAdmin) return false;
-        if (!p) return true; 
-        return (p as any)[key] !== false;
     };
 
     return (
@@ -100,77 +90,6 @@ export const AppOptionsMenu: React.FC = () => {
                 </button>
                 
                 <div className="py-1 overflow-y-auto flex-1 scrollbar-hide">
-                    {app.isAdmin && (
-                        <>
-                            <button 
-                                onClick={() => setIsAdminExpanded(!isAdminExpanded)} 
-                                className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors text-yellow-600 dark:text-yellow-400 font-bold bg-yellow-50 dark:bg-yellow-500/10"
-                            >
-                                <div className="flex items-center">
-                                    <span className="material-symbols-outlined w-5 h-5 mr-3">security</span>
-                                    Painel Administrativo
-                                </div>
-                                <span className={`material-symbols-outlined transition-transform duration-200 ${isAdminExpanded ? 'rotate-180' : ''}`}>expand_more</span>
-                            </button>
-
-                            {isAdminExpanded && (
-                                <div className="bg-yellow-50/50 dark:bg-yellow-900/10 border-t border-yellow-100 dark:border-yellow-800/30 animate-slideUp">
-                                    {hasPerm('offers') && (
-                                        <button onClick={() => handleOptionClick('admin')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors text-yellow-700 dark:text-yellow-300 pl-8 font-medium">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">shopping_bag</span>
-                                            Ofertas
-                                        </button>
-                                    )}
-                                    
-                                    {hasPerm('schedule') && (
-                                        <button onClick={() => handleOptionClick('adminSchedule')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors text-indigo-700 dark:text-indigo-300 pl-8 font-bold border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">calendar_month</span>
-                                            Grade Vitrine
-                                        </button>
-                                    )}
-
-                                    {hasPerm('factory') && (
-                                        <button onClick={() => handleOptionClick('contentFactory')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-green-700 dark:text-green-300 pl-8 font-bold border-l-4 border-green-500 bg-green-50 dark:bg-green-900/20">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">factory</span>
-                                            Fábrica Inventário
-                                        </button>
-                                    )}
-
-                                    {hasPerm('recipes') && (
-                                        <button onClick={() => handleOptionClick('adminRecipes')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors text-yellow-700 dark:text-yellow-300 pl-8 font-medium">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">menu_book</span>
-                                            Acervo Receitas
-                                        </button>
-                                    )}
-
-                                    {hasPerm('reviews') && (
-                                        <button onClick={() => handleOptionClick('adminReviews')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors text-yellow-700 dark:text-yellow-300 pl-8 font-medium">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">rate_review</span>
-                                            Avaliações
-                                        </button>
-                                    )}
-                                    
-                                    <div className="h-px bg-yellow-200/50 dark:bg-yellow-800/30 mx-4 my-1"></div>
-                                    
-                                    {hasPerm('team') && (
-                                        <button onClick={() => handleOptionClick('manageTeam')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-700 dark:text-blue-300 pl-8 font-medium">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">group</span>
-                                            Gerenciar Equipe
-                                        </button>
-                                    )}
-
-                                    {hasPerm('reports') && (
-                                        <button onClick={() => handleOptionClick('teamReports')} className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-700 dark:text-blue-300 pl-8 font-medium">
-                                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-[18px]">monitoring</span>
-                                            Relatórios Equipe
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                            <div className="h-px bg-border-light dark:bg-border-dark mx-3 my-1"></div>
-                        </>
-                    )}
-
                     <button onClick={() => handleOptionClick('favorites')} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                         <span className="material-symbols-outlined w-5 h-5 mr-3 text-red-500">favorite</span>
                         Receitas Favoritas
@@ -212,16 +131,6 @@ export const AppOptionsMenu: React.FC = () => {
                             <a href="https://www.tiktok.com/@checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white transition-colors" title="TikTok"><TikTokIcon className="w-5 h-5" /></a>
                             <a href="https://www.youtube.com/@checklistiaof" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-red-600 transition-colors" title="YouTube"><YouTubeIcon className="w-5 h-5" /></a>
                             <a href="https://x.com/checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white transition-colors" title="X"><XIcon className="w-4 h-4" /></a>
-                            
-                            <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"></div>
-                            
-                            <button 
-                                onClick={handleShareApp}
-                                className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-blue-600 transition-colors flex items-center justify-center"
-                                title="Compartilhar ChecklistIA"
-                            >
-                                <span className="material-symbols-outlined !text-[20px]">share</span>
-                            </button>
                         </div>
                     </div>
 

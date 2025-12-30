@@ -39,6 +39,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ignorePermissionError = (err: any) => {
+    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -108,7 +112,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const userEmail = currentUser.email?.toLowerCase();
         const isOwnerEmail = userEmail === 'admin@checklistia.com' || userEmail === 'itensnamao@gmail.com' || userEmail === 'ricardo029@gmail.com';
         
-        // Blindagem Local: Se for dono, o cargo é L1 indiferente do que venha do banco inicialmente
         if (isOwnerEmail) roleToUse = 'admin_l1';
 
         if (db) {
@@ -126,13 +129,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (data.role) roleToUse = data.role;
                     if (data.status) statusToUse = data.status;
 
-                    // Sincronização de Cargo Físico no Banco
                     if (isOwnerEmail && data.role !== 'admin_l1') {
                         await updateDoc(userDocRef, { role: 'admin_l1' });
                         roleToUse = 'admin_l1';
                     }
                 } else if (isOwnerEmail) {
-                    // Garante que o documento do Ricardo exista no banco com as permissões corretas
                     await setDoc(userDocRef, {
                         displayName: currentUser.displayName || 'Ricardo Admin',
                         email: userEmail,
@@ -203,7 +204,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
-        if (!user || !db || !auth?.currentUser) return;
+        if (!user || !db || !auth?.currentUser) {
+            setPendingAdminInvite(null);
+            return;
+        }
         const email = user.email?.toLowerCase();
         const username = user.username?.toLowerCase();
         if (!email && !username) return;
@@ -227,7 +231,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setPendingAdminInvite(null);
             }
         }, (error) => {
-            console.warn("[Auth] Erro ao buscar convites de admin:", error.message);
+            if (!ignorePermissionError(error)) {
+                console.warn("[Auth] Erro ao buscar convites de admin:", error.message);
+            }
         });
 
         return () => unsubscribe();
@@ -368,7 +374,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }, { merge: true });
                 await syncUserToPublicDirectory(result.user, undefined, username);
             } else if (isOwner) {
-                // Sincroniza cargo físico de dono existente
                 const data = userDocSnap.data();
                 if (data.role !== 'admin_l1') {
                     await updateDoc(userDocRef, { role: 'admin_l1' });

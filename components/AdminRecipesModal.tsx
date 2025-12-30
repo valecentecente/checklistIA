@@ -1,258 +1,221 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, limit, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 import { db, auth } from '../firebase';
-import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContext';
 import type { FullRecipe } from '../types';
 
 interface RecipeWithId extends FullRecipe {
     id: string;
+    isBroken: boolean;
 }
 
+const ignorePermissionError = (err: any) => {
+    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
+};
+
 export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-    const { showToast, generateKeywords, totalRecipeCount } = useApp();
+    const { showToast, isAdmin } = useApp();
     const [recipes, setRecipes] = useState<RecipeWithId[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [permissionWarning, setPermissionWarning] = useState(false);
     
     const [editingRecipe, setEditingRecipe] = useState<RecipeWithId | null>(null);
-    const [editName, setEditName] = useState('');
-    const [editTags, setEditTags] = useState<string[]>([]);
-    const [editLeads, setEditLeads] = useState<string[]>([]);
-    const [editIngredients, setEditIngredients] = useState<{simplifiedName: string, detailedName: string}[]>([]);
-    const [editInstructions, setEditInstructions] = useState<string[]>([]);
-    const [tagInput, setTagInput] = useState('');
-    const [leadInput, setLeadInput] = useState('');
-    
-    const [isSaving, setIsSaving] = useState(false);
-    const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
-    const [isRegeneratingText, setIsRegeneratingText] = useState(false);
+
+    const checkRecipeIntegrity = (r: FullRecipe): boolean => {
+        return !!(
+            r.imageUrl && 
+            r.imageUrl.length > 50 &&
+            r.ingredients && r.ingredients.length > 0 &&
+            r.instructions && r.instructions.length > 0 &&
+            r.tags && r.tags.length > 0 &&
+            r.suggestedLeads && r.suggestedLeads.length > 0
+        );
+    };
 
     useEffect(() => {
-        if (!isOpen || !db || !auth?.currentUser) {
-            if (isOpen && !auth?.currentUser) setIsLoading(false);
+        if (!isOpen || !db || !auth?.currentUser || !isAdmin) {
+            if (isOpen && !isAdmin) {
+                setPermissionWarning(true);
+                setIsLoading(false);
+            }
             return;
         }
         
         setIsLoading(true);
-        const q = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(1000));
+        setPermissionWarning(false);
+        const q = query(collection(db, 'global_recipes'), limit(2000));
+        
         const unsubscribe = onSnapshot(q, 
             (snapshot) => {
                 const loadedRecipes: RecipeWithId[] = [];
                 snapshot.forEach(doc => {
                     const data = doc.data() as FullRecipe;
-                    if (data.name) loadedRecipes.push({ ...data, id: doc.id });
+                    if (data.name) {
+                        loadedRecipes.push({ 
+                            ...data, 
+                            id: doc.id,
+                            isBroken: !checkRecipeIntegrity(data)
+                        });
+                    }
                 });
+                
+                // ORDENAÇÃO: Saudáveis primeiro (por data), Quebradas por último
+                loadedRecipes.sort((a, b) => {
+                    if (a.isBroken && !b.isBroken) return 1;
+                    if (!a.isBroken && b.isBroken) return -1;
+                    
+                    const dateA = a.createdAt?.seconds || 0;
+                    const dateB = b.createdAt?.seconds || 0;
+                    return dateB - dateA;
+                });
+                
                 setRecipes(loadedRecipes);
                 setIsLoading(false);
             }, 
             (error) => {
-                console.warn("[Admin] Erro de permissão em 'recipes':", error.message);
+                if (ignorePermissionError(error)) {
+                    setPermissionWarning(true);
+                } else {
+                    console.error("[Admin] Erro Acervo:", error.message);
+                }
                 setIsLoading(false);
             }
         );
         return () => unsubscribe();
-    }, [isOpen]);
-
-    const renderTimeClocks = (min: number) => {
-        let active = 1;
-        if (min > 90) active = 4;
-        else if (min > 45) active = 3;
-        else if (min > 20) active = 2;
-
-        return (
-            <div className="flex gap-0.5 items-center">
-                {[1, 2, 3, 4].map(i => (
-                    <span key={i} className={`material-symbols-outlined text-[10px] ${i <= active ? 'text-primary font-variation-FILL-1' : 'text-gray-200'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
-                        schedule
-                    </span>
-                ))}
-            </div>
-        );
-    };
+    }, [isOpen, isAdmin]);
 
     const handleOpenEdit = (recipe: RecipeWithId) => {
         setEditingRecipe(recipe);
-        setEditName(recipe.name);
-        setEditTags(recipe.tags || []);
-        setEditLeads(recipe.suggestedLeads || []);
-        setEditIngredients(recipe.ingredients || []);
-        setEditInstructions(recipe.instructions || []);
-        setTagInput('');
-        setLeadInput('');
-    };
-
-    const handleCloseEdit = () => {
-        setEditingRecipe(null);
-        setIsRegeneratingImage(false);
-        setIsRegeneratingText(false);
-    };
-
-    const handleAddTag = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && tagInput.trim()) {
-            e.preventDefault();
-            const input = tagInput.trim().toLowerCase();
-            const newTagsFromInput = input.split(',').map(t => t.trim()).filter(t => t !== '' && !editTags.includes(t));
-            if (newTagsFromInput.length > 0) setEditTags([...editTags, ...newTagsFromInput]);
-            setTagInput('');
-        }
-    };
-
-    const handleAddLead = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && leadInput.trim()) {
-            e.preventDefault();
-            const input = leadInput.trim().toLowerCase();
-            const newLeadsFromInput = input.split(',').map(l => l.trim()).filter(l => l !== '' && !editLeads.includes(l));
-            if (newLeadsFromInput.length > 0) setEditLeads([...editLeads, ...newLeadsFromInput]);
-            setLeadInput('');
-        }
-    };
-
-    const handleIngredientChange = (index: number, field: 'simplifiedName' | 'detailedName', value: string) => {
-        const newIngs = [...editIngredients];
-        newIngs[index] = { ...newIngs[index], [field]: value };
-        setEditIngredients(newIngs);
-    };
-
-    const handleAddIngredient = () => {
-        setEditIngredients([...editIngredients, { simplifiedName: '', detailedName: '' }]);
-    };
-
-    const handleRemoveIngredient = (index: number) => {
-        setEditIngredients(editIngredients.filter((_, i) => i !== index));
-    };
-
-    const handleInstructionChange = (index: number, value: string) => {
-        const newInst = [...editInstructions];
-        newInst[index] = value;
-        setEditInstructions(newInst);
-    };
-
-    const handleAddInstruction = () => {
-        setEditInstructions([...editInstructions, '']);
-    };
-
-    const handleRemoveInstruction = (index: number) => {
-        setEditInstructions(editInstructions.filter((_, i) => i !== index));
-    };
-
-    const normalizeIngredientsLocal = (ingredients: any[]) => {
-        if (!Array.isArray(ingredients)) return [];
-        return ingredients.map(ing => {
-            if (typeof ing === 'string') return { simplifiedName: ing.split(' ').slice(0, 2).join(' '), detailedName: ing };
-            return { simplifiedName: String(ing.simplifiedName || ing.name || ''), detailedName: String(ing.detailedName || ing.description || ing.name || '') };
-        });
-    };
-
-    const handleRegenerateText = async () => {
-        if (!editingRecipe || isRegeneratingText) return;
-        const apiKey = process.env.API_KEY as string;
-        if (!apiKey) { showToast("Chave IA ausente."); return; }
-        setIsRegeneratingText(true);
-        showToast("O Chef está reescrevendo a receita...");
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const prompt = `Gere os dados JSON para a receita: "${editName}". Retorne APENAS o JSON com: ingredients (array {simplifiedName, detailedName}), instructions (array string), servings, prepTimeInMinutes, difficulty, cost, tags (array), suggestedLeads (itens de cozinha para venda). Seja detalhado e gourmet.`;
-            const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt, config: { responseMimeType: "application/json" } }));
-            const details = JSON.parse(response.text || "{}");
-            if (details.ingredients) setEditIngredients(normalizeIngredientsLocal(details.ingredients));
-            if (details.instructions) setEditInstructions(details.instructions);
-            if (details.tags) setEditTags(prev => Array.from(new Set([...prev, ...details.tags])));
-            if (details.suggestedLeads) setEditLeads(prev => Array.from(new Set([...prev, ...details.suggestedLeads])));
-            showToast("Receita reescrita! Revise e confirme.");
-        } catch (error) { showToast("Erro ao regenerar texto."); } finally { setIsRegeneratingText(false); }
-    };
-
-    const handleSaveRecipe = async () => {
-        if (!editingRecipe || isSaving) return;
-        setIsSaving(true);
-        try {
-            const baseKeywords = generateKeywords(editName);
-            const tagKeywords = editTags.flatMap(t => generateKeywords(t));
-            const finalKeywords = Array.from(new Set([...baseKeywords, ...tagKeywords]));
-            await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { name: editName, tags: editTags, suggestedLeads: editLeads, ingredients: editIngredients, instructions: editInstructions, keywords: finalKeywords, updatedAt: serverTimestamp() });
-            showToast("Alterações salvas no acervo!");
-            handleCloseEdit();
-        } catch (error) { showToast("Erro ao salvar."); } finally { setIsSaving(false); }
-    };
-
-    const handleAutoCleanup = async () => {
-        const recipesToDelete = recipes.filter(r => !r.imageUrl || !r.ingredients || r.ingredients.length === 0);
-        const count = recipesToDelete.length;
-        if (count === 0) { showToast("O acervo está íntegro!"); return; }
-        if (!window.confirm(`⚠️ LIMPEZA DE DADOS\n\nIsso apagará permanentemente ${count} receitas incompletas.\n\nDeseja continuar?`)) return;
-        try {
-            const deletePromises = recipesToDelete.map(r => deleteDoc(doc(db!, 'global_recipes', r.id)));
-            await Promise.all(deletePromises);
-            showToast(`${count} itens removidos.`);
-        } catch (error) { showToast("Erro na limpeza."); }
-    };
-
-    const handleRegenerateImage = async () => {
-        if (!editingRecipe || isRegeneratingImage) return;
-        const apiKey = process.env.API_KEY as string;
-        if (!apiKey) { showToast("Chave IA ausente."); return; }
-        setIsRegeneratingImage(true);
-        showToast("Gerando nova foto via IA...");
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const response: any = await callGenAIWithRetry(() => ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: `Foto profissional de: ${editName}. Gastronomia, close-up, luz natural.` }] }, config: { responseModalities: [Modality.IMAGE] }, }), 3);
-            let generatedUrl = null;
-            for (const part of response.candidates[0].content.parts) { if (part.inlineData) { generatedUrl = `data:image/jpeg;base64,${part.inlineData.data}`; break; } }
-            if (generatedUrl) { await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { imageUrl: generatedUrl, imageSource: 'genai', updatedAt: serverTimestamp() }); setEditingRecipe(prev => prev ? {...prev, imageUrl: generatedUrl} : null); showToast("Imagem atualizada!"); }
-        } catch (error) { showToast("Erro ao gerar imagem."); } finally { setIsRegeneratingImage(false); }
     };
 
     const handleDelete = async (recipeId: string, recipeName: string) => {
-        if (!window.confirm(`Apagar "${recipeName}" permanentemente?`)) return;
-        try { await deleteDoc(doc(db!, 'global_recipes', recipeId)); showToast("Removido."); if (editingRecipe?.id === recipeId) handleCloseEdit(); } catch (error) { showToast("Erro ao deletar."); }
+        if (!window.confirm(`Apagar "${recipeName}" do acervo global?`)) return;
+        try {
+            await deleteDoc(doc(db!, 'global_recipes', recipeId));
+            showToast("Removido com sucesso.");
+        } catch (e) {
+            showToast("Erro ao deletar.");
+        }
     };
 
     const processedRecipes = useMemo(() => {
-        const lowerSearch = searchTerm.toLowerCase();
-        return recipes.filter(r => r.name.toLowerCase().includes(lowerSearch) || r.tags?.some(tag => tag.toLowerCase().includes(lowerSearch)));
+        const lowerSearch = searchTerm.toLowerCase().trim();
+        if (!lowerSearch) return recipes;
+        return recipes.filter(r => 
+            (r.name && r.name.toLowerCase().includes(lowerSearch)) || 
+            (r.tags && r.tags.some(tag => tag.toLowerCase().includes(lowerSearch)))
+        );
     }, [recipes, searchTerm]);
+
+    const brokenCount = useMemo(() => recipes.filter(r => r.isBroken).length, [recipes]);
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 animate-fadeIn" onClick={onClose}>
-            <div className="relative w-full max-w-5xl bg-white dark:bg-surface-dark rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 animate-fadeIn" onClick={onClose}>
+            <div className="relative w-full max-w-6xl bg-[#0f172a] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-[90vh] border border-white/10" onClick={e => e.stopPropagation()}>
                 
-                <div className="bg-slate-800 text-white p-4 flex justify-between items-center shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-orange-400">menu_book</span>
-                            <h2 className="text-lg font-bold">Gestão de Acervo</h2>
+                {/* Header Dinâmico */}
+                <div className="p-6 bg-slate-800 border-b border-white/5 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 shadow-inner">
+                            <span className="material-symbols-outlined text-3xl">menu_book</span>
                         </div>
-                        <div className="bg-orange-500/20 text-orange-400 px-3 py-0.5 rounded-full border border-orange-500/30 flex items-center gap-1.5">
-                             <span className="text-sm font-black font-mono">{totalRecipeCount || recipes.length}</span>
+                        <div>
+                            <h2 className="text-white font-black text-xl uppercase italic tracking-tighter">Acervo Global</h2>
+                            <div className="flex items-center gap-3 mt-1">
+                                <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total: {recipes.length}</span>
+                                <span className="h-1 w-1 rounded-full bg-slate-600"></span>
+                                <span className="text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Para Ajustar: {brokenCount}</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={handleAutoCleanup} className="text-[10px] bg-red-600 text-white px-3 py-1.5 rounded-lg font-black uppercase hover:bg-red-700 transition-all flex items-center gap-2"><span className="material-symbols-outlined text-sm">cleaning_services</span> Limpeza</button>
-                        <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><span className="material-symbols-outlined">close</span></button>
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <div className="p-6 bg-slate-900 border-b border-white/5 shrink-0 flex gap-4">
+                    <div className="relative flex-1">
+                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">search</span>
+                        <input 
+                            type="text" 
+                            placeholder="Pesquisar por nome ou tag..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full h-14 bg-slate-800 border-white/5 rounded-2xl pl-12 pr-4 text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        />
                     </div>
+                    {/* Botão de Filtro Rápido (Opcional, mas útil) */}
+                    <button 
+                        onClick={() => setSearchTerm(searchTerm === 'incompleta' ? '' : 'incompleta')}
+                        className={`px-6 h-14 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all border shrink-0 flex items-center gap-2 ${searchTerm === 'incompleta' ? 'bg-red-600 text-white border-red-500' : 'bg-slate-800 text-red-500 border-red-500/30'}`}
+                    >
+                        <span className="material-symbols-outlined text-base">emergency_home</span>
+                        Ver Pendências
+                    </button>
                 </div>
 
-                <div className="p-3 bg-gray-50 dark:bg-black/40 border-b border-gray-200 dark:border-gray-700 shrink-0">
-                    <input type="text" placeholder="Buscar no acervo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-4 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-surface-dark text-sm" />
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 bg-gray-100 dark:bg-black/20">
-                    {isLoading ? <div className="flex flex-col items-center justify-center py-20"><span className="material-symbols-outlined animate-spin text-4xl text-primary">sync</span></div> : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="flex-1 overflow-y-auto p-6 scrollbar-hide bg-slate-950/30">
+                    {isLoading ? (
+                        <div className="h-full flex flex-col items-center justify-center gap-4 opacity-50">
+                            <div className="h-10 w-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                            <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Sincronizando Banco...</p>
+                        </div>
+                    ) : permissionWarning ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center px-10">
+                            <span className="material-symbols-outlined text-6xl mb-4 text-red-500/50">gpp_maybe</span>
+                            <p className="text-white font-bold mb-2">Permissão Negada</p>
+                            <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs shadow-lg">Relogar</button>
+                        </div>
+                    ) : processedRecipes.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                            <span className="material-symbols-outlined text-6xl mb-4">search_off</span>
+                            <p className="font-bold uppercase tracking-widest text-xs">Nada encontrado.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fadeIn">
                             {processedRecipes.map((recipe) => (
-                                <div key={recipe.id} onClick={() => handleOpenEdit(recipe)} className="bg-white dark:bg-surface-dark rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700 flex flex-col group relative cursor-pointer hover:border-primary/50">
-                                    <div className="aspect-square bg-gray-200 dark:bg-gray-800 relative overflow-hidden">
-                                        {recipe.imageUrl ? <img src={recipe.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" /> : <div className="absolute inset-0 flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-4xl">image</span></div>}
-                                        {(!recipe.ingredients || recipe.ingredients.length === 0) && <div className="absolute inset-0 bg-red-600/40 flex items-center justify-center backdrop-blur-[2px]"><span className="bg-white text-red-600 text-[10px] font-black px-2 py-1 rounded uppercase">Vazia</span></div>}
+                                <div 
+                                    key={recipe.id} 
+                                    className={`rounded-3xl overflow-hidden border transition-all flex flex-col relative shadow-xl min-h-[220px] group ${
+                                        recipe.isBroken 
+                                        ? 'bg-red-500/5 border-red-500/40 hover:border-red-500/70 shadow-red-900/10' 
+                                        : 'bg-slate-800 border-white/5 hover:border-blue-500/50'
+                                    }`}
+                                >
+                                    <div className="aspect-square w-full bg-slate-900 relative overflow-hidden shrink-0">
+                                        {recipe.imageUrl ? (
+                                            <img src={recipe.imageUrl} className={`absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${recipe.isBroken ? 'grayscale' : ''}`} />
+                                        ) : (
+                                            <div className="absolute inset-0 flex items-center justify-center text-slate-700">
+                                                <span className="material-symbols-outlined text-4xl">no_photography</span>
+                                            </div>
+                                        )}
+                                        
+                                        {recipe.isBroken && (
+                                            <div className="absolute top-2 left-2 z-10 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter shadow-lg">
+                                                Incompleta
+                                            </div>
+                                        )}
+
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+                                            <button onClick={() => handleOpenEdit(recipe)} className="h-10 w-10 bg-white text-slate-900 rounded-xl flex items-center justify-center hover:scale-110 transition-transform shadow-lg"><span className="material-symbols-outlined">edit</span></button>
+                                            <button onClick={() => handleDelete(recipe.id, recipe.name)} className="h-10 w-10 bg-red-600 text-white rounded-xl flex items-center justify-center hover:scale-110 transition-transform shadow-lg"><span className="material-symbols-outlined">delete</span></button>
+                                        </div>
                                     </div>
-                                    <div className="p-3">
-                                        <h3 className="font-bold text-[10px] text-gray-800 dark:text-gray-200 line-clamp-2 uppercase">{recipe.name}</h3>
-                                        <div className="mt-1">
-                                            {renderTimeClocks(recipe.prepTimeInMinutes)}
+                                    <div className="p-4 flex-1 flex flex-col justify-between">
+                                        <h3 className={`font-black uppercase text-[11px] truncate mb-2 ${recipe.isBroken ? 'text-red-200' : 'text-white'}`}>
+                                            {recipe.name}
+                                        </h3>
+                                        <div className="flex items-center justify-between">
+                                            <span className={`text-[9px] font-black uppercase ${recipe.isBroken ? 'text-red-400' : 'text-slate-500'}`}>
+                                                {recipe.difficulty}
+                                            </span>
+                                            <span className={`text-[9px] font-black ${recipe.isBroken ? 'text-red-400' : 'text-blue-400'}`}>
+                                                {recipe.prepTimeInMinutes}M
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -261,62 +224,8 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     )}
                 </div>
 
-                {editingRecipe && (
-                    <div className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-                        <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
-                            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-black/40">
-                                <h3 className="font-black text-gray-800 dark:text-white uppercase italic tracking-tighter">Editor Mestre de Receita</h3>
-                                <button onClick={handleCloseEdit} className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full"><span className="material-symbols-outlined">close</span></button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 scrollbar-hide">
-                                <div className="space-y-6">
-                                    <div className="relative group rounded-[2rem] overflow-hidden bg-gray-100 dark:bg-gray-800 aspect-video border-2 border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                                        {editingRecipe.imageUrl ? <img src={editingRecipe.imageUrl} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-6xl text-gray-300">image</span>}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
-                                            <button onClick={handleRegenerateImage} disabled={isRegeneratingImage} className="px-6 py-2 bg-white text-black rounded-full text-xs font-black uppercase shadow-xl flex items-center gap-2 transition-all active:scale-95">
-                                                <span className={`material-symbols-outlined text-sm ${isRegeneratingImage ? 'animate-spin' : ''}`}>photo_camera</span>
-                                                Nova Foto IA
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Título da Receita</label>
-                                        <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 rounded-2xl h-14 px-4 font-black text-lg text-gray-800 dark:text-white" />
-                                    </div>
-                                </div>
-                                <div className="space-y-6 bg-zinc-50 dark:bg-black/20 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex flex-col h-full">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <div className="flex flex-col">
-                                            <h4 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] italic">Composição do Prato</h4>
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Ingredientes e Modo de Preparo</p>
-                                        </div>
-                                        <button onClick={handleRegenerateText} disabled={isRegeneratingText} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-xl transition-all active:scale-95 disabled:opacity-50"> IA: Re-gerar Texto </button>
-                                    </div>
-                                    <div className="flex flex-col gap-3">
-                                        <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">Ingredientes ({editIngredients.length})</label>
-                                        <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2">
-                                            {editIngredients.map((ing, idx) => (
-                                                <div key={idx} className="flex gap-2 bg-white dark:bg-zinc-800 p-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                                                    <input value={ing.simplifiedName} onChange={e => handleIngredientChange(idx, 'simplifiedName', e.target.value)} placeholder="Curto" className="w-1/3 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-black h-8 px-2 dark:text-white" />
-                                                    <input value={ing.detailedName} onChange={e => handleIngredientChange(idx, 'detailedName', e.target.value)} placeholder="Detalhes" className="flex-1 bg-gray-50 dark:bg-black/20 border-0 rounded-lg text-[11px] font-medium h-8 px-2 dark:text-white" />
-                                                    <button onClick={() => handleRemoveIngredient(idx)} className="text-red-500 p-1"><span className="material-symbols-outlined text-sm">delete</span></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-6 bg-gray-50 dark:bg-black/40 border-t border-gray-100 dark:border-gray-800 flex gap-4 shrink-0">
-                                <button onClick={handleCloseEdit} className="flex-1 h-14 rounded-2xl bg-gray-200 dark:bg-white/5 text-gray-600 dark:text-gray-300 font-black uppercase text-xs tracking-widest">Descartar</button>
-                                <button onClick={handleSaveRecipe} disabled={isSaving} className="flex-[2] h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black shadow-xl transition-all active:scale-95 disabled:opacity-50 uppercase text-sm tracking-widest flex items-center justify-center gap-2"> {isSaving ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">save</span>} Salvar </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                <div className="bg-white dark:bg-surface-dark border-t border-gray-200 dark:border-gray-700 p-3 text-center text-[10px] text-gray-500 flex justify-between px-6 shrink-0 font-bold uppercase tracking-widest">
-                    <span>Exibindo: <strong>{processedRecipes.length}</strong></span>
-                    <span>Acervo Global: <strong>{totalRecipeCount} / 2000</strong></span>
+                <div className="p-4 bg-slate-900 border-t border-white/5 flex justify-between items-center px-8 shrink-0">
+                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em]">ChecklistIA Health Monitor v3.1</p>
                 </div>
             </div>
         </div>

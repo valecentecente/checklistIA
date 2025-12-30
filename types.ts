@@ -1,5 +1,4 @@
 
-
 export interface ArcadeStats {
   gameId: 'memory' | 'speed' | 'slide';
   bestScore: number;
@@ -90,6 +89,9 @@ export interface FullRecipe {
   tags?: string[]; 
   isAlcoholic?: boolean; 
   suggestedLeads?: string[]; 
+  // Fix: Added createdAt and updatedAt to resolve property missing errors in Admin components
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface RecipeSuggestion {
@@ -124,7 +126,6 @@ export interface User {
   dietaryPreferences?: string[]; 
   birthDate?: string; 
   role?: 'user' | 'admin_l1' | 'admin_l2';
-  // Fix: Added status property to User interface to resolve Property 'status' does not exist error.
   status?: 'active' | 'banned';
   permissions?: AdminPermissions;
 }
@@ -187,7 +188,7 @@ export interface AdminInvite {
     id: string;
     fromUid: string;
     fromName: string;
-    toIdentifier: string; // Pode ser email ou username
+    toIdentifier: string; 
     permissions: AdminPermissions;
     status: 'pending' | 'accepted' | 'rejected';
     createdAt: any;
@@ -204,7 +205,6 @@ export interface ActivityLog {
     timestamp: any;
 }
 
-// Fix: Added HomeCategory interface to resolve import error in AppContext.
 export interface HomeCategory {
     id: string;
     label: string;

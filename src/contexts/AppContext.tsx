@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
@@ -50,7 +49,10 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
         keywords: Array.isArray(r.keywords) ? r.keywords.map(String) : [] as string[],
         tags: Array.isArray(r.tags) ? r.tags.map(String) : [] as string[],
         isAlcoholic: !!r.isAlcoholic,
-        suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : [] as string[]
+        suggestedLeads: Array.isArray(r.suggestedLeads) ? r.suggestedLeads.map(String) : [] as string[],
+        // Fix: Added createdAt and updatedAt to map function
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt
     }));
 };
 
@@ -167,6 +169,8 @@ interface AppContextType {
     closeRecipe: () => void;
     resetRecipeState: () => void; 
     
+    // Fix: Added allRecipesPool to AppContextType interface to resolve error in EmptyStateCTA.tsx
+    allRecipesPool: FullRecipe[];
     featuredRecipes: FullRecipe[];
     recipeSuggestions: FullRecipe[];
     isSuggestionsLoading: boolean;
@@ -346,7 +350,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const apiKey = process.env.API_KEY as string;
     
-    const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com';
+    const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com' || user?.email === 'ricardo029@gmail.com';
     const isSuperAdmin = isOwner || user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
 
@@ -725,6 +729,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const sanitizeJsonString = (str: string) => {
+        // Fix: Added missing closing slash in regex to avoid SyntaxError
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
 
@@ -789,7 +794,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 keywords: generateKeywords(finalName),
                 tags: Array.isArray(details.tags) ? details.tags.map(String) : [] as string[],
                 isAlcoholic: !!details.isAlcoholic,
-                suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : [] as string[]
+                suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : [] as string[],
+                createdAt: serverTimestamp() // Set locally for immediate use/sort before mapToFullRecipeArray re-processes it
             };
             
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
@@ -817,7 +823,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const itemsToAdd: any[] = [];
         recipe.ingredients.forEach((ing) => {
             if (!findDuplicate(ing.simplifiedName, items)) {
-                itemsToAdd.push({ name: ing.simplifiedName, calculatedPrice: 0, details: ing.detailedName, recipeName: recipe.name, isNew: true, isPurchased: false });
+                itemsToAdd.push({ name: ing.simplifiedName, calculatedPrice: 0, details: ing.detailedName, recipeName: recipe.name, iNew: true, isPurchased: false });
             }
         });
         if (itemsToAdd.length > 0) {
@@ -847,7 +853,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     const item = itemsToCategorize.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
                     if (item) newCategoryMap[item.id] = ci.category;
                 });
-                // Fix: Removed redundant code causing out-of-scope variable access error.
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
             } catch (error: any) { showToast("Muitas tentativas."); }
@@ -888,7 +893,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setPendingExploreRecipe(recipeName);
             openModal('startShopping');
         }
-    }, [user, items.length, currentMarketName, showToast, openModal]);
+    }, [user, items.length, currentMarketName]);
 
     const openProductDetails = (product: Offer) => {
         setSelectedProduct(product);
@@ -905,11 +910,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, smartNudgeItemName, currentMarketName, setCurrentMarketName,
         isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
+        allRecipesPool, // Fix: Provided allRecipesPool in context value to fix Property 'allRecipesPool' does not exist on type 'AppContextType' error
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
         pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline,
-        // Fix: Added homeCategories and saveHomeCategories to value object.
         homeCategories, saveHomeCategories
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,601 +1,455 @@
-
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { GoogleGenAI, Modality } from "@google/genai";
-import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs, updateDoc, addDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { useApp, callGenAIWithRetry } from '../contexts/AppContext';
+import { GoogleGenAI } from "@google/genai";
+import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, deleteDoc, updateDoc, where } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useApp, callGenAIWithRetry, generateKeywords } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { FullRecipe } from '../types';
+import type { FullRecipe, SalesOpportunity } from '../types';
 
 interface FactoryLog {
     text: string;
-    type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota' | 'lead';
+    type: 'info' | 'error' | 'success' | 'warning';
 }
 
-interface CategoryStat {
-    name: string;
-    count: number | null;
+interface RecipeWithId extends FullRecipe {
+    id: string;
+    isBroken: boolean;
 }
+
+const FACTORY_CATEGORIES = [
+    "🍎 Hortifruti", "🥩 Açougue", "🥛 Laticínios", "🍞 Padaria", "🛒 Mercearia", 
+    "💧 Bebidas", "🍰 Sobremesas", "🥗 Saudável/Fit", "🌬️ Airfryer", "🍳 Café da Manhã",
+    "🍝 Massas/Pizzas", "🍹 Drinks/Coquetéis"
+];
+
+const ignorePermissionError = (err: any) => {
+    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
+};
+
+const getRecipeDocId = (name: string) => {
+    if (!name) return 'recipe-' + Date.now();
+    return name.trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+        .replace(/[\/\s]+/g, '-') 
+        .replace(/[^a-z0-9-]/g, '') 
+        .slice(0, 80);
+};
 
 export const AdminContentFactoryModal: React.FC = () => {
-    const { isContentFactoryModalOpen, closeModal, showToast, generateKeywords } = useApp();
+    const { isContentFactoryModalOpen, closeModal, showToast, isAdmin } = useApp();
     const { user } = useAuth();
     
-    const [activeSubTab, setActiveSubTab] = useState<'bulk' | 'manual'>('bulk');
-    const [manualRecipeName, setManualRecipeName] = useState('');
-
-    const baseCategories = useMemo(() => [
-        "Sazonal / Datas Comemorativas", 
-        "Café da Manhã", 
-        "Almoço Rápido", 
-        "Sobremesas", 
-        "Sorvetes",
-        "Massas", 
-        "Pizzas",
-        "Sucos",
-        "Fit / Saudável", 
-        "Vegano", 
-        "Sem Glúten",
-        "Drinks", 
-        "Bolos", 
-        "Carnes", 
-        "Lanches", 
-        "Brasileira Clássica",
-        "Comida Japonesa",
-        "Comida Árabe",
-        "Hambúrgueres & Sanduíches"
-    ], []);
-
+    // Estados de UI
+    const [activeTab, setActiveTab] = useState<'producao' | 'acervo' | 'leads'>('producao');
+    const [searchTerm, setSearchTerm] = useState('');
+    
+    // Estados de Produção
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-    const [customSazonal, setCustomSazonal] = useState('');
-    const [quantity, setQuantity] = useState(10);
+    const [qtyPerCategory, setQtyPerCategory] = useState(1);
+    const [manualTitles, setManualTitles] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
-    const [isScanning, setIsScanning] = useState(false);
-    const [progress, setProgress] = useState(0);
     const [logs, setLogs] = useState<FactoryLog[]>([]);
     const [shouldStop, setShouldStop] = useState(false);
+    const stopSignalRef = useRef(false);
     
-    const [categoryStats, setCategoryStats] = useState<CategoryStat[]>(
-        baseCategories.map(cat => ({ name: cat, count: null }))
-    );
-    const [isStatsLoading, setIsStatsLoading] = useState(false);
-    
-    const logsEndRef = useRef<HTMLDivElement>(null);
-    const isGuest = user?.uid?.startsWith('offline-user-');
-    const isFirebaseAuthenticated = !!auth?.currentUser;
+    // Estados do Acervo
+    const [recipes, setRecipes] = useState<RecipeWithId[]>([]);
+    const [isLoadingAcervo, setIsLoadingAcervo] = useState(true);
+    const [pendingLeads, setPendingLeads] = useState<SalesOpportunity[]>([]);
+    const logEndRef = useRef<HTMLDivElement>(null);
+
+    // Estados do Editor
+    const [editingRecipe, setEditingRecipe] = useState<RecipeWithId | null>(null);
+    const [editName, setEditName] = useState('');
+    const [editIngredients, setEditIngredients] = useState('');
+    const [editInstructions, setEditInstructions] = useState('');
+    const [editTags, setEditTags] = useState('');
+    const [editLeads, setEditLeads] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
     const apiKey = process.env.API_KEY as string;
 
-    const fetchCategoryStats = async () => {
-        if (!db) return;
-        setIsStatsLoading(true);
-        try {
-            const querySnapshot = await getDocs(collection(db, 'global_recipes'));
-            const allRecipes: FullRecipe[] = [];
-            querySnapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                if (data) allRecipes.push(data as FullRecipe);
-            });
-
-            const stats = baseCategories.map(cat => {
-                const searchLabel = cat.toLowerCase().replace(' / datas comemorativas', '').trim();
-                const count = allRecipes.filter(r => {
-                    const nameMatch = r.name && typeof r.name === 'string' 
-                        ? r.name.toLowerCase().includes(searchLabel) 
-                        : false;
-                    const tagMatch = Array.isArray(r.tags) 
-                        ? r.tags.some(t => typeof t === 'string' && t.toLowerCase().includes(searchLabel)) 
-                        : false;
-                    return nameMatch || tagMatch;
-                }).length;
-                return { name: cat, count };
-            });
-
-            setCategoryStats(stats.sort((a, b) => (a.count ?? 0) - (b.count ?? 0)));
-        } catch (error) {
-            console.error("Erro ao calcular estatísticas:", error);
-        } finally {
-            setIsStatsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (isContentFactoryModalOpen) {
-            fetchCategoryStats();
-        }
-    }, [isContentFactoryModalOpen]);
-
-    useEffect(() => {
-        if (logsEndRef.current) {
-            logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [logs]);
-
-    const addLog = (msg: string, type: 'info' | 'error' | 'success' | 'separator' | 'warning' | 'quota' | 'lead' = 'info') => {
-        setLogs(prev => [...prev, { text: msg, type }]);
-    };
-
-    const toggleCategory = (name: string) => {
-        setSelectedCategories(prev => 
-            prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name]
+    const checkRecipeIntegrity = (r: FullRecipe): boolean => {
+        return !!(
+            r.imageUrl && r.imageUrl.length > 50 &&
+            r.ingredients && r.ingredients.length > 0 &&
+            r.instructions && r.instructions.length > 0 &&
+            r.tags && r.tags.length > 0
         );
     };
 
-    const selectCritical = () => {
-        const critical = categoryStats.filter(s => s.count !== null && s.count < 10).map(s => s.name);
-        if (critical.length === 0) {
-            showToast("Nenhuma categoria crítica detectada.");
+    const addLog = (text: string, type: FactoryLog['type'] = 'info') => {
+        setLogs(prev => [...prev, { text, type }]);
+    };
+
+    // Função de Jitter para Humanização
+    const waitRandom = (min: number, max: number) => {
+        const ms = Math.floor(Math.random() * (max - min + 1) + min);
+        return new Promise(resolve => setTimeout(resolve, ms));
+    };
+
+    useEffect(() => {
+        logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [logs]);
+
+    useEffect(() => {
+        if (!isContentFactoryModalOpen || !db || !isAdmin) return;
+
+        setIsLoadingAcervo(true);
+        const qRecipes = query(collection(db, 'global_recipes'), limit(2000));
+        const unsubRecipes = onSnapshot(qRecipes, 
+            (snap) => {
+                const data = snap.docs.map(d => {
+                    const rData = d.data() as FullRecipe;
+                    return { ...rData, id: d.id, isBroken: !checkRecipeIntegrity(rData) } as RecipeWithId;
+                });
+                
+                data.sort((a,b) => {
+                    if (a.isBroken && !b.isBroken) return 1;
+                    if (!a.isBroken && b.isBroken) return -1;
+                    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+                });
+                
+                setRecipes(data);
+                setIsLoadingAcervo(false);
+            }, 
+            (error) => {
+                if (!ignorePermissionError(error)) console.warn("[Factory] Erro Acervo:", error.message);
+                setIsLoadingAcervo(false);
+            }
+        );
+
+        const qLeads = query(collection(db, 'sales_opportunities'), where('status', '==', 'pending'), limit(100));
+        const unsubLeads = onSnapshot(qLeads, 
+            (snap) => setPendingLeads(snap.docs.map(d => ({ ...d.data(), id: d.id } as SalesOpportunity))),
+            (error) => { if (!ignorePermissionError(error)) console.warn("[Factory] Erro Leads:", error.message); }
+        );
+
+        return () => { unsubRecipes(); unsubLeads(); };
+    }, [isContentFactoryModalOpen, isAdmin]);
+
+    const runBatchProduction = async () => {
+        const manualList = manualTitles.split('\n').map(t => t.trim()).filter(t => t);
+        if (manualList.length === 0 && selectedCategories.length === 0) {
+            showToast("Selecione categorias ou digite títulos.");
             return;
         }
-        setSelectedCategories(critical);
-    };
 
-    const compressImage = (base64Str: string): Promise<string> => {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.src = base64Str;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 600; 
-                let width = img.width;
-                let height = img.height;
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6));
-                } else {
-                    resolve(base64Str);
-                }
-            };
-            img.onerror = () => resolve(base64Str);
-        });
-    };
-
-    /**
-     * NORMALIZAÇÃO BLINDADA PARA A FÁBRICA
-     */
-    const normalizeIngredientsFactory = (ingredients: any[]) => {
-        if (!Array.isArray(ingredients)) return [];
-        
-        const extractName = (text: string): string => {
-            if (!text) return '';
-            let cleaned = text.trim();
-            cleaned = cleaned.replace(/\(.*?\)/g, '');
-            cleaned = cleaned.replace(/^[\d\s\.,\/\\\-¼½¾]+/, '').trim();
-            const measures = ['g', 'kg', 'ml', 'l', 'un', 'colher', 'xicara', 'cha', 'sopa', 'lata', 'pacote', 'pote'];
-            const connectives = ['de', 'da', 'do', 'com', 'sem', 'para'];
-            let l = true;
-            while(l){
-                let p = cleaned;
-                measures.forEach(m => { cleaned = cleaned.replace(new RegExp(`^${m}\\b`, 'i'), '').trim(); });
-                connectives.forEach(c => { cleaned = cleaned.replace(new RegExp(`^${c}\\s+`, 'i'), '').trim(); });
-                if(cleaned === p) l = false;
-            }
-            return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
-        };
-
-        return ingredients.map(ing => {
-            if (!ing) return null;
-            if (typeof ing === 'string') {
-                return { simplifiedName: extractName(ing), detailedName: ing };
-            }
-            const s = ing.simplifiedName || ing.name || '';
-            const d = ing.detailedName || ing.description || ing.name || '';
-            return {
-                simplifiedName: extractName(s || d),
-                detailedName: String(d)
-            };
-        }).filter(i => i !== null && i.detailedName.trim() !== '');
-    };
-
-    const createLeads = async (recipeName: string, suggestedLeads: string[]) => {
-        if (!db || !suggestedLeads || suggestedLeads.length === 0) return;
-        try {
-            const offersSnap = await getDocs(collection(db, 'offers'));
-            const inventoryItems: string[] = [];
-            offersSnap.forEach(oDoc => {
-                const o = oDoc.data();
-                if (o.name) inventoryItems.push(o.name.toLowerCase().trim());
-                if (o.tags && Array.isArray(o.tags)) {
-                    o.tags.forEach((t: string) => inventoryItems.push(t.toLowerCase().trim()));
-                }
-            });
-
-            const cleanRecipePart = recipeName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-
-            for (const term of suggestedLeads) {
-                const termLower = term.toLowerCase().trim();
-                const alreadyHasInStock = inventoryItems.some(item => item.includes(termLower) || termLower.includes(item));
-                if (alreadyHasInStock) continue;
-
-                const cleanTermPart = termLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-                const leadId = `LEAD-${cleanRecipePart.slice(0,12)}-${cleanTermPart.slice(0,15)}`;
-                
-                await setDoc(doc(db, 'sales_opportunities', leadId), {
-                    term: termLower,
-                    recipeName: recipeName,
-                    status: 'pending',
-                    createdAt: serverTimestamp()
-                }, { merge: true });
-                
-                addLog(`[IA LEAD] Gravado: ${term}`, 'lead');
-            }
-        } catch (e) {
-            console.warn("Erro ao gravar lead:", e);
-        }
-    };
-
-    const handleManualProduction = async () => {
-        if (!manualRecipeName.trim()) return;
-        if (!apiKey) { showToast("API Key ausente."); return; }
-        
         setIsGenerating(true);
-        setLogs([]);
-        setProgress(0);
-        addLog(`--- INICIANDO PEDIDO ESPECIAL: ${manualRecipeName.toUpperCase()} ---`, 'separator');
-
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const docId = manualRecipeName.trim().toLowerCase()
-                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-                .replace(/[\/\s]+/g, '-') 
-                .replace(/[^a-z0-9-]/g, '') 
-                .slice(0, 80);
-
-            addLog(`1/3 - Escrevendo receita gourmet...`, 'info');
-            const detailPrompt = `Você é um chef especialista. Gere uma receita completa para '${manualRecipeName}' em JSON.
-            REGRAS OBRIGATÓRIAS:
-            1. O campo 'ingredients' DEVE conter no mínimo 6 itens.
-            2. Cada ingrediente DEVE ser um objeto { "simplifiedName": "Nome Curto", "detailedName": "Qtd + Nome" }.
-            3. Identifique utensílios necessários no campo 'suggestedLeads'.
-            Formato: { 'name': '${manualRecipeName}', 'ingredients': [], 'instructions': [], 'prepTimeInMinutes': 30, 'difficulty': 'Médio', 'cost': 'Médio', 'tags': [], 'suggestedLeads': [] }`;
-
-            const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: detailPrompt,
-                config: { responseMimeType: "application/json" }
-            }));
-
-            const recipeData = JSON.parse(detailRes.text || "{}");
-            const normalizedIngs = normalizeIngredientsFactory(recipeData.ingredients);
-
-            if (normalizedIngs.length < 3) {
-                addLog(`ERRO: IA retornou receita com poucos ou nenhum ingrediente. Abortando.`, 'error');
-                return;
-            }
-
-            setProgress(40);
-
-            addLog(`2/3 - Fotografando prato via IA...`, 'info');
-            const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts: [{ text: "Foto profissional de alta gastronomia, luz suave, close-up de: " + manualRecipeName }] },
-                config: { responseModalities: [Modality.IMAGE] }
-            }));
-
-            let imageUrl = null;
-            // Fix: Iterating through parts to find the image part instead of assuming it is the first part
-            for (const part of imageRes.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    imageUrl = await compressImage("data:image/jpeg;base64," + part.inlineData.data);
-                    break;
-                }
-            }
-            setProgress(80);
-
-            addLog(`3/3 - Salvando no Acervo Global...`, 'info');
-            if (db) {
-                const finalRecipe = {
-                    ...recipeData,
-                    ingredients: normalizedIngs,
-                    imageUrl,
-                    imageSource: 'genai',
-                    keywords: generateKeywords(manualRecipeName),
-                    createdAt: serverTimestamp()
-                };
-
-                await setDoc(doc(db, 'global_recipes', docId), finalRecipe, { merge: true });
-                if (recipeData.suggestedLeads && recipeData.suggestedLeads.length > 0) {
-                    await createLeads(manualRecipeName, recipeData.suggestedLeads);
-                }
-                addLog(`SUCESSO TOTAL! "${manualRecipeName}" disponível no acervo.`, 'success');
-                setProgress(100);
-                setManualRecipeName('');
-                fetchCategoryStats();
-            }
-        } catch (err) {
-            addLog(`ERRO: Falha na produção unitária.`, 'error');
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    const handleRetroactiveScan = async () => {
-        if (!apiKey || !db) return;
-        setIsScanning(true);
         setShouldStop(false);
-        setLogs([]);
-        setProgress(0);
-        addLog("--- INICIANDO SCANNER DE OPORTUNIDADES ---", 'separator');
+        stopSignalRef.current = false;
+        setLogs([{ text: "🛡️ MODO BLINDAGEM HUMANA ATIVO", type: 'warning' }]);
+        addLog("Iniciando produção com padrões de tráfego orgânico...");
+        
+        const ai = new GoogleGenAI({ apiKey });
+        let masterQueue: string[] = [...manualList];
 
-        try {
-            const querySnapshot = await getDocs(collection(db, 'global_recipes'));
-            const allRecipes: any[] = [];
-            querySnapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                if (data.name) allRecipes.push({ id: docSnap.id, ...data });
-            });
-
-            if (allRecipes.length === 0) {
-                addLog("Nenhuma receita encontrada.", 'warning');
-                setIsScanning(false);
-                return;
-            }
-
-            addLog(`Analisando acervo de ${allRecipes.length} receitas...`, 'info');
-            const ai = new GoogleGenAI({ apiKey });
-
-            let processed = 0;
-            for (const recipe of allRecipes) {
-                if (shouldStop) break;
-                addLog(`Analisando prato: ${recipe.name}`, 'info');
-
-                const scanPrompt = `Analise a receita '${recipe.name}'. Quais equipamentos são necessários? Retorne APENAS um JSON com array 'suggestedLeads'. Formato: { "suggestedLeads": ["item1", "item2"] }`;
-
+        // ETAPA 1: Gerar nomes por categoria se necessário
+        if (selectedCategories.length > 0) {
+            addLog(`[IA] Planejando ${qtyPerCategory} pratos para cada nicho selecionado...`, 'info');
+            for (const cat of selectedCategories) {
+                if (stopSignalRef.current) break;
                 try {
+                    const promptNames = `Você é um curador gastronômico. Gere uma lista com EXATAMENTE ${qtyPerCategory} nomes de receitas famosas, deliciosas e gourmet para a categoria de mercado: "${cat}". Retorne apenas um JSON array de strings. Ex: ["Nome 1", "Nome 2"]`;
                     const res = await callGenAIWithRetry(() => ai.models.generateContent({
                         model: 'gemini-3-flash-preview',
-                        contents: scanPrompt,
+                        contents: promptNames,
                         config: { responseMimeType: "application/json" }
                     }));
-
-                    const data = JSON.parse(res.text || "{}");
-                    const leads = data.suggestedLeads || [];
-
-                    if (leads.length > 0) {
-                        await updateDoc(doc(db, 'global_recipes', recipe.id), { suggestedLeads: leads });
-                        await createLeads(recipe.name, leads);
-                        addLog(`> ${recipe.name}: ${leads.length} itens mapeados.`, 'success');
-                    }
+                    const categoryTitles = JSON.parse(res.text || "[]") as string[];
+                    masterQueue = [...masterQueue, ...categoryTitles];
+                    addLog(`Curadoria ${cat}: ${categoryTitles.length} itens encontrados.`, 'success');
                     
-                    processed++;
-                    setProgress((processed / allRecipes.length) * 100);
-                    await new Promise(r => setTimeout(r, 1500));
-                } catch (err) {
-                    addLog(`Erro ao analisar: ${recipe.name}`, 'error');
+                    // Human Delay após "pensar" na categoria
+                    await waitRandom(2000, 5000);
+                } catch (e: any) {
+                    addLog(`Erro na curadoria de ${cat}: ${e.message}`, 'error');
                 }
             }
-
-            addLog("--- SCANNER FINALIZADO ---", 'separator');
-            showToast("IA Leads Atualizado!");
-        } finally {
-            setIsScanning(false);
         }
-    };
 
-    const handleStart = async () => {
-        if (!apiKey) { showToast("API Key ausente."); return; }
-        if (isGuest || !isFirebaseAuthenticated) { showToast("Login real necessário."); return; }
-        if (selectedCategories.length === 0) { showToast("Selecione categorias."); return; }
+        addLog(`📋 FILA TOTAL: ${masterQueue.length} RECEITAS`, 'info');
 
-        setIsGenerating(true);
-        setShouldStop(false);
-        setLogs([]);
-        setProgress(0);
+        // ETAPA 2: Produção em Lote "Humanizada"
+        for (let i = 0; i < masterQueue.length; i++) {
+            if (stopSignalRef.current) {
+                addLog("⚠️ Produção interrompida manualmente.", 'warning');
+                break;
+            }
 
-        addLog("--- INICIANDO PRODUÇÃO EM MASSA ---", 'separator');
+            const title = masterQueue[i];
+            addLog(`[${i + 1}/${masterQueue.length}] Fabricando: ${title.toUpperCase()}`, 'info');
 
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            
-            for (const currentCat of selectedCategories) {
-                if (shouldStop) break;
-                addLog(`CATEGORIA: ${currentCat}`, 'separator');
+            try {
+                // 1. Geração de Texto (Receita)
+                const systemPrompt = `Gere uma receita brasileira completa para: "${title}".
+                Formato JSON: {
+                    "name": "${title}",
+                    "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz"}],
+                    "instructions": ["Passo 1..."],
+                    "imageQuery": "Apetizing food photography of ${title}, studio light",
+                    "servings": "4 porções",
+                    "prepTimeInMinutes": 45,
+                    "difficulty": "Médio",
+                    "cost": "Médio",
+                    "tags": ["caseiro", "almoço", "brasileiro"],
+                    "suggestedLeads": ["panela", "faca"]
+                }`;
+
+                const textRes = await callGenAIWithRetry(() => ai.models.generateContent({
+                    model: 'gemini-3-flash-preview',
+                    contents: systemPrompt,
+                    config: { responseMimeType: "application/json" }
+                }));
+
+                const details = JSON.parse(textRes.text || "{}");
                 
-                const listPrompt = `Gere uma lista JSON com 100 nomes das receitas mais populares da categoria '${currentCat}'. Retorne apenas o JSON array de strings.`;
+                // Human Delay: Simula tempo de leitura da receita gerada
+                addLog("Revisando ingredientes e passos...");
+                await waitRandom(3000, 6000);
 
-                try {
-                    const listResponse = await callGenAIWithRetry(() => ai.models.generateContent({
-                        model: 'gemini-3-flash-preview',
-                        contents: listPrompt,
-                        config: { responseMimeType: "application/json" }
-                    }));
+                // 2. Geração de Imagem
+                addLog("Preparando estúdio fotográfico IA...");
+                const imgRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: { parts: [{ text: details.imageQuery || `High-end food photography of ${title}, ultra-realistic, 4k.` }] }
+                }));
 
-                    const recipeNames: string[] = JSON.parse(listResponse.text || "[]");
-                    let successCount = 0;
-                    let attemptCount = 0;
-
-                    while (successCount < quantity && attemptCount < recipeNames.length) {
-                        if (shouldStop) break;
-                        const name = recipeNames[attemptCount];
-                        attemptCount++;
-                        
-                        const docId = name.trim().toLowerCase()
-                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-                            .replace(/[\/\s]+/g, '-') 
-                            .replace(/[^a-z0-9-]/g, '') 
-                            .slice(0, 80);
-                        
-                        try {
-                            const checkSnap = await getDoc(doc(db!, 'global_recipes', docId));
-                            if (checkSnap.exists()) {
-                                addLog(`> Pulo: "${name}" já existe.`, 'warning');
-                                continue;
-                            }
-                        } catch (checkErr) {}
-
-                        addLog(`${successCount + 1}/${quantity} - Produzindo: ${name}`, 'info');
-                        
-                        try {
-                            const detailPrompt = `Gere a receita gourmet para '${name}' em JSON. 
-                            REGRAS: 
-                            1. 'ingredients' DEVE conter objetos {simplifiedName, detailedName}.
-                            2. Mínimo 6 ingredientes.
-                            Formato: { 'name': '${name}', 'ingredients': [], 'instructions': [], 'prepTimeInMinutes': 30, 'difficulty': 'Fácil', 'cost': 'Médio', 'tags': [], 'suggestedLeads': [] }`;
-
-                            const detailRes = await callGenAIWithRetry(() => ai.models.generateContent({
-                                model: 'gemini-3-flash-preview',
-                                contents: detailPrompt,
-                                config: { responseMimeType: "application/json" }
-                            }));
-
-                            const recipeData = JSON.parse(detailRes.text || "{}");
-                            const normalizedIngs = normalizeIngredientsFactory(recipeData.ingredients);
-                            
-                            if (normalizedIngs.length < 3) {
-                                addLog(`> DESCARTADO: "${name}" retornou dados incompletos.`, 'error');
-                                continue;
-                            }
-
-                            const imageRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
-                                model: 'gemini-2.5-flash-image',
-                                contents: { parts: [{ text: "Foto gourmet realística de " + name }] },
-                                config: { responseModalities: [Modality.IMAGE] }
-                            }));
-
-                            let imageUrl = null;
-                            // Fix: Iterating through parts to find the image part instead of assuming it is the first part
-                            for (const part of imageRes.candidates[0].content.parts) {
-                                if (part.inlineData) {
-                                    imageUrl = await compressImage("data:image/jpeg;base64," + part.inlineData.data);
-                                    break;
-                                }
-                            }
-
-                            if (db) {
-                                const finalRecipe = {
-                                    ...recipeData,
-                                    ingredients: normalizedIngs,
-                                    imageUrl,
-                                    imageSource: 'genai',
-                                    keywords: generateKeywords(name),
-                                    createdAt: serverTimestamp()
-                                };
-
-                                await setDoc(doc(db, 'global_recipes', docId), finalRecipe, { merge: true });
-                                if (recipeData.suggestedLeads && recipeData.suggestedLeads.length > 0) {
-                                    await createLeads(name, recipeData.suggestedLeads);
-                                }
-                                successCount++; 
-                                addLog(`> SUCESSO: ${name}`, 'success');
-                                setProgress(((selectedCategories.indexOf(currentCat) * quantity + successCount) / (selectedCategories.length * quantity)) * 100);
-                            }
-                            await new Promise(r => setTimeout(r, 12000));
-                        } catch (err) {
-                            addLog(`> ERRO no item: ${name}`, 'error');
-                        }
+                let finalImageUrl = "";
+                for (const part of imgRes.candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        finalImageUrl = `data:image/jpeg;base64,${part.inlineData.data}`;
+                        break;
                     }
-                } catch (catErr) {
-                    addLog(`Erro crítico na categoria ${currentCat}`, 'error');
                 }
+
+                const finalData = { 
+                    ...details, 
+                    imageUrl: finalImageUrl, 
+                    imageSource: 'genai', 
+                    keywords: generateKeywords(details.name || title),
+                    createdAt: serverTimestamp() 
+                };
+
+                const docId = getRecipeDocId(details.name || title);
+                await setDoc(doc(db!, 'global_recipes', docId), finalData, { merge: true });
+                addLog(`✅ "${title}" salva no acervo!`, 'success');
+
+                // Human Delay: Tempo de descanso após finalizar um prato completo
+                if (i < masterQueue.length - 1) {
+                    addLog("Aguardando próximo pedido (Padrão Humano)...");
+                    await waitRandom(8000, 15000); // Entre 8 e 15 segundos de intervalo entre pratos
+                }
+
+            } catch (err: any) {
+                addLog(`❌ Falha em "${title}": ${err.message}`, 'error');
+                await waitRandom(5000, 10000); // Delay extra em caso de erro para não spammar
             }
-            addLog("--- OPERAÇÃO FINALIZADA ---", 'separator');
-            fetchCategoryStats(); 
-        } finally {
-            setIsGenerating(false);
         }
+
+        addLog("🏁 PROCESSO FINALIZADO COM SEGURANÇA", 'success');
+        setIsGenerating(false);
+        setShouldStop(false);
+        stopSignalRef.current = false;
+        setSelectedCategories([]);
+        setManualTitles("");
     };
+
+    const toggleCategory = (cat: string) => {
+        setSelectedCategories(prev => 
+            prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+        );
+    };
+
+    const handleOpenEditor = (recipe: RecipeWithId) => {
+        setEditingRecipe(recipe);
+        setEditName(recipe.name || '');
+        setEditIngredients(recipe.ingredients?.map(i => i.detailedName).join('\n') || '');
+        setEditInstructions(recipe.instructions?.join('\n') || '');
+        setEditTags(recipe.tags?.join(', ') || '');
+        setEditLeads(recipe.suggestedLeads?.join(', ') || '');
+    };
+
+    const handleSaveRecipe = async () => {
+        if (!editingRecipe || isSaving) return;
+        setIsSaving(true);
+        try {
+            const ingredientsArray = editIngredients.split('\n').filter(l => l.trim()).map(line => ({ simplifiedName: line.split(' ').slice(0, 2).join(' '), detailedName: line.trim() }));
+            const instructionsArray = editInstructions.split('\n').filter(l => l.trim());
+            const tagsArray = editTags.split(',').map(t => t.trim()).filter(t => t);
+            const leadsArray = editLeads.split(',').map(l => l.trim()).filter(l => l);
+            await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { name: editName, ingredients: ingredientsArray, instructions: instructionsArray, tags: tagsArray, suggestedLeads: leadsArray, keywords: generateKeywords(editName), updatedAt: serverTimestamp() });
+            showToast("Atualizado!");
+            setEditingRecipe(null);
+        } catch (e) { showToast("Erro."); } finally { setIsSaving(false); }
+    };
+
+    const filteredRecipes = useMemo(() => {
+        const term = searchTerm.toLowerCase().trim();
+        return recipes.filter(r => (r.name?.toLowerCase().includes(term)) || (r.tags?.some(t => t.toLowerCase().includes(term))));
+    }, [recipes, searchTerm]);
+
+    const brokenCount = useMemo(() => recipes.filter(r => r.isBroken).length, [recipes]);
 
     if (!isContentFactoryModalOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[250] bg-black/90 flex items-center justify-center p-4 animate-fadeIn" onClick={() => closeModal('contentFactory')}>
-            <div className="bg-slate-900 w-full max-w-2xl rounded-xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col h-[85vh]" onClick={e => e.stopPropagation()}>
-                <div className="p-4 border-b border-slate-700 bg-slate-800 flex justify-between items-center shrink-0">
-                    <h2 className="text-white font-bold text-lg flex items-center gap-2">
-                        <span className="material-symbols-outlined text-green-400">factory</span>
-                        Fábrica de Inventário
-                    </h2>
-                    <button onClick={() => closeModal('contentFactory')} className="text-gray-400 hover:text-white">
-                        <span className="material-symbols-outlined">close</span>
-                    </button>
+        <div className="fixed inset-0 z-[250] bg-black/95 flex items-center justify-center p-4 animate-fadeIn" onClick={() => closeModal('contentFactory')}>
+            <div className="bg-[#0f172a] w-full max-w-7xl rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col h-[90vh]" onClick={e => e.stopPropagation()}>
+                
+                <div className="p-6 bg-slate-800 border-b border-white/5 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400"><span className="material-symbols-outlined">factory</span></div>
+                        <h2 className="text-white font-black text-xl uppercase italic tracking-tighter">Fábrica de Conteúdo</h2>
+                    </div>
+                    <button onClick={() => closeModal('contentFactory')} className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"><span className="material-symbols-outlined">close</span></button>
                 </div>
 
-                <div className="flex bg-slate-800 shrink-0 border-b border-slate-700">
-                    <button onClick={() => setActiveSubTab('bulk')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'bulk' ? 'text-green-400 bg-white/5 border-b-2 border-green-400' : 'text-gray-500'}`}>Produção em Massa</button>
-                    <button onClick={() => setActiveSubTab('manual')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'manual' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-400' : 'text-gray-500'}`}>Produção Unitária (Especial)</button>
+                <div className="flex bg-slate-900 shrink-0 border-b border-white/5 px-4">
+                    <button onClick={() => setActiveTab('producao')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'producao' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-500 hover:text-gray-300'}`}>Produção Lote</button>
+                    <button onClick={() => setActiveTab('acervo')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'acervo' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>Acervo Global ({recipes.length})</button>
+                    <button onClick={() => setActiveTab('leads')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'leads' ? 'text-orange-400 border-b-2 border-orange-400' : 'text-gray-500 hover:text-gray-300'}`}>IA Leads ({pendingLeads.length})</button>
                 </div>
 
-                <div className="p-4 bg-slate-800/50 flex flex-col gap-4 border-b border-slate-700 shrink-0">
-                    {activeSubTab === 'bulk' ? (
-                        <div className="flex flex-col gap-4 animate-fadeIn">
-                            <div className="flex flex-col gap-2">
-                                <div className="flex justify-between items-end">
-                                    <label className="text-xs text-gray-400 uppercase font-black">Categorias ({selectedCategories.length})</label>
-                                    <div className="flex gap-2">
-                                        <button onClick={handleRetroactiveScan} disabled={isGenerating || isScanning} className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-blue-500/30 flex items-center gap-1 transition-all">
-                                            <span className="material-symbols-outlined text-[12px]">search_check</span>
-                                            Scanner de Leads (Acervo)
-                                        </button>
-                                        <button onClick={selectCritical} disabled={isGenerating || isScanning || isStatsLoading} className="text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded font-bold uppercase hover:bg-orange-500/30">Auto-Selecionar Críticos</button>
+                <div className="flex-1 overflow-hidden flex flex-col relative">
+                    {activeTab === 'producao' && (
+                        <div className="flex-1 flex gap-6 p-8 animate-fadeIn overflow-hidden">
+                            
+                            {/* CONFIGURAÇÃO À ESQUERDA */}
+                            <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-hide">
+                                
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">1. Selecionar Nichos de Corredor</label>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        {FACTORY_CATEGORIES.map(cat => (
+                                            <button 
+                                                key={cat}
+                                                onClick={() => toggleCategory(cat)}
+                                                className={`py-3 px-4 rounded-xl text-[10px] font-black uppercase transition-all border ${selectedCategories.includes(cat) ? 'bg-green-600 border-green-400 text-white shadow-lg scale-95' : 'bg-slate-900 border-white/5 text-slate-400 hover:border-white/20'}`}
+                                            >
+                                                {cat}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-900/50 p-3 rounded-xl border border-slate-700 max-h-40 overflow-y-auto">
-                                    {categoryStats.map(stat => (
-                                        <label key={stat.name} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedCategories.includes(stat.name) ? 'bg-green-50/10 border-green-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
-                                            <input type="checkbox" checked={selectedCategories.includes(stat.name)} onChange={() => toggleCategory(stat.name)} disabled={isGenerating || isScanning} className="rounded border-slate-600 text-green-500" />
-                                            <div className="flex justify-between items-center w-full">
-                                                <span className="text-xs font-bold text-gray-300">{stat.name}</span>
-                                                <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-400/10 px-1.5 rounded">{stat.count === null ? '...' : stat.count}</span>
-                                            </div>
-                                        </label>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">2. Qtd por Categoria</label>
+                                        <input 
+                                            type="number" 
+                                            min="1" 
+                                            max="50" 
+                                            value={qtyPerCategory}
+                                            onChange={e => setQtyPerCategory(Number(e.target.value))}
+                                            className="w-full h-14 bg-slate-900 border-white/5 rounded-2xl px-6 text-white font-black text-xl outline-none focus:ring-2 focus:ring-green-500"
+                                        />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">3. Produzir agora?</label>
+                                        {isGenerating ? (
+                                            <button onClick={() => { setShouldStop(true); stopSignalRef.current = true; }} className="w-full h-14 bg-red-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl animate-pulse">Interromper Lote</button>
+                                        ) : (
+                                            <button onClick={runBatchProduction} className="w-full h-14 bg-green-600 hover:bg-green-500 text-white font-black uppercase text-xs rounded-2xl shadow-xl active:scale-95 transition-all">Ligar Máquina IA</button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1 flex flex-col min-h-[150px]">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">4. Pedidos Manuais (Opcional - Um por linha)</label>
+                                    <textarea 
+                                        className="flex-1 w-full bg-slate-900 border-white/5 rounded-2xl p-6 text-white font-bold resize-none focus:ring-2 focus:ring-green-500 outline-none placeholder:text-slate-700"
+                                        placeholder="Ex: Torta Holandesa de Nutella&#10;Pão de Fermentação Natural..."
+                                        value={manualTitles}
+                                        onChange={e => setManualTitles(e.target.value)}
+                                        disabled={isGenerating}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* CONSOLE À DIREITA */}
+                            <div className="w-96 bg-black/40 rounded-[2.5rem] border border-white/5 flex flex-col overflow-hidden">
+                                <div className="p-4 bg-slate-800/50 border-b border-white/5 flex justify-between items-center">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IA Console v4.1 (Humano)</span>
+                                    <span className={`h-2 w-2 rounded-full ${isGenerating ? 'bg-green-500 animate-pulse shadow-[0_0_10px_green]' : 'bg-slate-600'}`}></span>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-[10px] scrollbar-hide bg-slate-950/50">
+                                    {logs.length === 0 && <p className="text-slate-700 italic">Aguardando comando de produção...</p>}
+                                    {logs.map((log, i) => (
+                                        <div key={i} className={`p-2 rounded-lg ${ log.type === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : log.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : log.type === 'warning' ? 'bg-yellow-500/10 text-yellow-400' : 'text-slate-400' }`}>
+                                            {log.text}
+                                        </div>
                                     ))}
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Meta de Novos Pratos</span>
-                                    <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} disabled={isGenerating || isScanning} min={1} max={50} className="w-full bg-slate-700 text-white rounded-lg h-10 px-3" />
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold ml-1">Tema Sazonal Ativo</span>
-                                    <input type="text" value={customSazonal} onChange={e => setCustomSazonal(e.target.value)} disabled={isGenerating || isScanning} placeholder="Ex: Natal" className="w-full bg-slate-700/50 text-white rounded-lg h-10 px-3" />
-                                </div>
-                            </div>
-                            <button onClick={isGenerating ? () => setShouldStop(true) : handleStart} disabled={isScanning} className={`h-12 w-full rounded-xl font-black text-sm uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-red-600' : 'bg-green-600 hover:bg-green-500 disabled:opacity-50'}`}>
-                                <span className="material-symbols-outlined">{isGenerating ? 'stop' : 'bolt'}</span>
-                                {isGenerating ? 'Parar Produção' : 'Iniciar Abastecimento'}
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-4 animate-fadeIn py-2">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs text-gray-400 uppercase font-black ml-1">Qual prato você deseja produzir?</label>
-                                <div className="flex gap-2">
-                                    <input type="text" value={manualRecipeName} onChange={e => setManualRecipeName(e.target.value)} disabled={isGenerating} placeholder="Ex: Pudim de Café com Chantilly" className="flex-1 bg-slate-700 text-white rounded-xl h-14 px-4 font-bold text-lg border-2 border-transparent focus:border-blue-500 outline-none" />
-                                    <button onClick={handleManualProduction} disabled={isGenerating || !manualRecipeName.trim()} className="h-14 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2">
-                                        {isGenerating ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">auto_awesome</span>}
-                                        Produzir
-                                    </button>
+                                    <div ref={logEndRef} />
                                 </div>
                             </div>
                         </div>
                     )}
-                </div>
 
-                <div className="h-1.5 bg-slate-700 w-full shrink-0">
-                    <div className={`h-full transition-all duration-300 ${isScanning ? 'bg-blue-500' : 'bg-green-500'}`} style={{ width: progress + "%" }}></div>
-                </div>
-                <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-[11px] space-y-1 scrollbar-hide">
-                    {logs.length === 0 && <p className="text-gray-600 italic">Aguardando comando...</p>}
-                    {logs.map((log, i) => (
-                        <p key={i} className={`break-words ${
-                            log.type === 'error' ? 'text-red-500' : 
-                            log.type === 'success' ? 'text-green-400' : 
-                            log.type === 'warning' ? 'text-yellow-500' : 
-                            log.type === 'quota' ? 'text-orange-400 font-bold bg-orange-400/5 p-1 rounded' : 
-                            log.type === 'lead' ? 'text-blue-300 font-bold bg-blue-500/5 p-1 rounded italic' :
-                            log.type === 'separator' ? 'text-blue-400 pt-2 border-t border-slate-800' : 'text-gray-400'}`}>
-                            {log.text}
-                        </p>
-                    ))}
-                    <div ref={logsEndRef} />
+                    {activeTab === 'acervo' && (
+                        <div className="flex flex-col h-full animate-fadeIn">
+                            <div className="p-6 bg-slate-900 border-b border-white/5 flex gap-4">
+                                <input type="text" placeholder="Filtrar receitas no acervo global..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 h-12 bg-slate-800 border-0 rounded-xl pl-5 text-white outline-none focus:ring-2 focus:ring-blue-500" />
+                                <div className="px-4 bg-red-500/10 rounded-xl flex items-center gap-2 border border-red-500/20">
+                                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Incompletas: {brokenCount}</span>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 scrollbar-hide">
+                                {isLoadingAcervo ? (
+                                    <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 opacity-50">
+                                        <div className="h-10 w-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                                        <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Sincronizando Banco...</p>
+                                    </div>
+                                ) : filteredRecipes.map(r => (
+                                    <div key={r.id} onClick={() => handleOpenEditor(r)} className={`rounded-3xl border overflow-hidden cursor-pointer group transition-all shadow-xl min-h-[180px] w-full flex flex-col relative ${r.isBroken ? 'bg-red-500/5 border-red-500/30' : 'bg-slate-800 border-white/5 hover:border-blue-500/50'}`}>
+                                        <div className="aspect-square w-full bg-slate-900 relative shrink-0 overflow-hidden">
+                                            {r.imageUrl ? (
+                                                <img src={r.imageUrl} className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${r.isBroken ? 'grayscale' : ''}`} />
+                                            ) : (
+                                                <div className="absolute inset-0 flex items-center justify-center text-slate-700"><span className="material-symbols-outlined text-4xl">no_photography</span></div>
+                                            )}
+                                            {r.isBroken && <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase shadow-lg">Incompleto</div>}
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><span className="material-symbols-outlined text-white text-3xl">edit</span></div>
+                                        </div>
+                                        <div className="p-4 flex-1 flex items-center"><h3 className={`font-black uppercase text-[10px] truncate ${r.isBroken ? 'text-red-300' : 'text-white'}`}>{r.name}</h3></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'leads' && (
+                        <div className="flex-1 overflow-y-auto p-8 animate-fadeIn scrollbar-hide">
+                            {pendingLeads.length === 0 ? ( 
+                                <div className="flex flex-col items-center justify-center h-64 text-slate-600">
+                                    <span className="material-symbols-outlined text-6xl mb-4 opacity-20">analytics</span>
+                                    <p className="font-bold">Nenhum lead de busca pendente.</p>
+                                </div> 
+                            ) : ( 
+                                <div className="grid gap-4">
+                                    {pendingLeads.map(lead => ( 
+                                        <div key={lead.id} className="bg-slate-800 p-5 rounded-3xl border border-white/5 flex items-center justify-between group hover:border-orange-500/30 transition-colors">
+                                            <div>
+                                                <h3 className="text-white font-black text-lg italic uppercase">{lead.term}</h3>
+                                                <p className="text-slate-500 text-xs">Origem da Falta: {lead.recipeName}</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => updateDoc(doc(db!, 'sales_opportunities', lead.id), { status: 'dismissed' })} className="h-10 w-10 rounded-xl bg-slate-700 text-slate-400 flex items-center justify-center hover:bg-red-500/20 hover:text-red-500 transition-all"><span className="material-symbols-outlined">close</span></button>
+                                                <button onClick={() => { setManualTitles(lead.term); setActiveTab('producao'); }} className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all shadow-lg">Produzir Item</button>
+                                            </div>
+                                        </div> 
+                                    ))}
+                                </div> 
+                            )}
+                        </div>
+                    )}
+
+                    {editingRecipe && (
+                        <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col animate-fadeIn">
+                            <div className="p-6 bg-slate-900 border-b border-white/10 flex justify-between items-center shrink-0"><button onClick={() => setEditingRecipe(null)} className="h-10 w-10 rounded-full hover:bg-white/5 flex items-center justify-center text-slate-400"><span className="material-symbols-outlined">arrow_back</span></button><button onClick={handleSaveRecipe} disabled={isSaving} className="h-12 px-8 rounded-xl bg-blue-600 text-white font-black uppercase tracking-widest shadow-lg">{isSaving ? 'Salvando...' : 'Confirmar Alterações'}</button></div>
+                            <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 scrollbar-hide"><div className="space-y-6">{editingRecipe.imageUrl && <img src={editingRecipe.imageUrl} className="w-full aspect-video rounded-[2.5rem] object-cover border border-white/5 shadow-2xl" />}<div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Título</label><input value={editName} onChange={e => setEditName(e.target.value)} className="w-full h-14 bg-slate-900 border-white/10 rounded-2xl px-5 text-white font-black text-xl" /></div><div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Ingredientes</label><textarea value={editIngredients} onChange={e => setEditIngredients(e.target.value)} className="w-full h-64 bg-slate-900 border-white/10 rounded-3xl p-6 text-slate-300 font-medium text-sm resize-none" /></div></div><div className="space-y-6"><div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Modo de Preparo</label><textarea value={editInstructions} onChange={e => setEditInstructions(e.target.value)} className="w-full h-[32rem] bg-slate-900 border-white/10 rounded-3xl p-6 text-slate-300 font-medium text-sm resize-none" /></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Tags</label><textarea value={editTags} onChange={e => setEditTags(e.target.value)} className="w-full h-24 bg-slate-900 border-white/10 rounded-xl p-4 text-white text-[10px] font-bold" /></div><div><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Leads</label><textarea value={editLeads} onChange={e => setEditLeads(e.target.value)} className="w-full h-24 bg-slate-900 border-white/10 rounded-xl p-4 text-white text-[10px] font-bold" /></div></div></div></div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
@@ -257,13 +256,6 @@ export const WebSidebarLeft: React.FC = () => {
                                                 <button onClick={() => app.openModal('contentFactory')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-green-400 hover:bg-white/5 transition-colors text-xs font-bold border-l-2 border-green-500/50">
                                                     <span className="material-symbols-outlined text-base">factory</span>
                                                     Fábrica de Conteúdo
-                                                </button>
-                                            )}
-
-                                            {hasPerm('recipes') && (
-                                                <button onClick={() => app.openModal('adminRecipes')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-white/5 transition-colors text-xs">
-                                                    <span className="material-symbols-outlined text-base">menu_book</span>
-                                                    Receitas
                                                 </button>
                                             )}
 
