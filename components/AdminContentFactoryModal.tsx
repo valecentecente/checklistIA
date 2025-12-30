@@ -4,6 +4,7 @@ import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit
 import { db } from '../firebase';
 import { useApp, callGenAIWithRetry, generateKeywords } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useShoppingList } from '../contexts/ShoppingListContext';
 import type { FullRecipe, SalesOpportunity } from '../types';
 
 interface FactoryLog {
@@ -44,6 +45,7 @@ export const AdminContentFactoryModal: React.FC = () => {
     const app = useApp();
     const { isContentFactoryModalOpen, closeModal, showToast, isAdmin } = app;
     const { user } = useAuth();
+    const { offers } = useShoppingList();
     
     // Estados de UI
     const [activeTab, setActiveTab] = useState<'producao' | 'acervo' | 'leads'>('producao');
@@ -78,23 +80,39 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     const apiKey = process.env.API_KEY as string;
 
-    // NOVO: Agregação de Leads das Receitas
+    // NOVO: Agregação de Leads das Receitas filtrando itens já no Inventário
     const recipeLeadsRanking = useMemo(() => {
         const counts: Record<string, number> = {};
+        
+        // Criar uma lista de termos que já temos no inventário para comparação rápida
+        const existingTerms = offers.map(o => o.name.toLowerCase().trim());
+        const existingTags = offers.flatMap(o => o.tags || []).map(t => t.toLowerCase().trim());
+
         recipes.forEach(recipe => {
             if (recipe.suggestedLeads && Array.isArray(recipe.suggestedLeads)) {
                 recipe.suggestedLeads.forEach(lead => {
                     const cleanLead = lead.trim().toLowerCase();
                     if (cleanLead && cleanLead !== 'nenhum') {
-                        counts[cleanLead] = (counts[cleanLead] || 0) + 1;
+                        // VERIFICAÇÃO DE DUPLICIDADE:
+                        // 1. O termo do lead é EXATAMENTE igual a algum nome de produto?
+                        // 2. O termo do lead está contido em algum nome de produto?
+                        // 3. O termo do lead é uma tag de algum produto?
+                        const alreadyExists = 
+                            existingTerms.some(t => t.includes(cleanLead)) || 
+                            existingTags.includes(cleanLead);
+
+                        if (!alreadyExists) {
+                            counts[cleanLead] = (counts[cleanLead] || 0) + 1;
+                        }
                     }
                 });
             }
         });
+
         return Object.entries(counts)
             .map(([term, count]) => ({ term, count } as AggregatedLead))
             .sort((a, b) => b.count - a.count);
-    }, [recipes]);
+    }, [recipes, offers]);
 
     const checkRecipeIntegrity = (r: FullRecipe): boolean => {
         return !!(
@@ -246,7 +264,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                 }
                 REGRAS CRÍTICAS:
                 1. Campo 'tags': PROIBIDO repetir palavras do título "${title}". Use Momento, Perfil, Técnica.
-                2. Campo 'suggestedLeads': Deve conter APENAS nomes de UTENSÍLIOS ou ELETRODOMÉSTICOS (ex: batedeira, airfryer, liquidificador, forma de bolo). PROIBIDO copiar as tags ou o modo de preparo para este campo.`;
+                2. Campo 'suggestedLeads': Deve conter APENAS nomes de UTENSÍLIOS ou ELETRODOMÉSTICOS (ex: batedeira, airfryer, liquidificador, forma de bolo). PROIBIDO copiar as tags ou o nome da receita para este campo.`;
                 
                 const textRes = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-3-flash-preview',
@@ -401,14 +419,12 @@ export const AdminContentFactoryModal: React.FC = () => {
         setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
     };
 
-    // NOVO: Link direto para o Inventário preenchendo os dados
     const handleGerarOfertaAction = (term: string) => {
         app.setPendingInventoryItem({ 
             name: term.charAt(0).toUpperCase() + term.slice(1), 
             tags: term.toLowerCase() 
         });
         closeModal('contentFactory');
-        // Pequeno delay para animação de fechamento/abertura
         setTimeout(() => app.openModal('admin'), 300);
     };
 
@@ -518,19 +534,20 @@ export const AdminContentFactoryModal: React.FC = () => {
                                     <div className="h-12 w-12 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-400"><span className="material-symbols-outlined">analytics</span></div>
                                     <div>
                                         <h3 className="text-white font-black text-lg italic uppercase">Ranking de Necessidades</h3>
-                                        <p className="text-orange-300/60 text-[10px] font-black uppercase tracking-widest">Baseado em {recipes.length} receitas catalogadas</p>
+                                        <p className="text-orange-300/60 text-[10px] font-black uppercase tracking-widest">Baseado em {recipes.length} receitas catalogadas (Filtrado por Inventário)</p>
                                     </div>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-orange-500 font-black text-2xl tracking-tighter leading-none">{recipeLeadsRanking.length}</p>
-                                    <p className="text-[8px] text-orange-300/40 font-black uppercase tracking-widest">Produtos Únicos</p>
+                                    <p className="text-[8px] text-orange-300/40 font-black uppercase tracking-widest">Oportunidades Inéditas</p>
                                 </div>
                             </div>
 
                             {recipeLeadsRanking.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-64 text-slate-600">
                                     <span className="material-symbols-outlined text-6xl mb-4 opacity-20">inventory_2</span>
-                                    <p className="font-bold">Processando dados do acervo...</p>
+                                    <p className="font-bold">Nenhuma nova oportunidade detectada.</p>
+                                    <p className="text-xs">Todos os termos mapeados já constam no inventário.</p>
                                 </div>
                             ) : (
                                 <div className="grid gap-3">
@@ -540,17 +557,17 @@ export const AdminContentFactoryModal: React.FC = () => {
                                                 <div className="h-10 w-10 rounded-xl bg-slate-700 flex items-center justify-center text-slate-400 font-black text-xs">#{idx + 1}</div>
                                                 <div>
                                                     <h3 className="text-white font-black text-lg italic uppercase">{lead.term}</h3>
-                                                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Presente em {lead.count} receitas</p>
+                                                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Requisitado em {lead.count} receitas</p>
                                                 </div>
                                             </div>
                                             <div className="flex gap-2">
                                                 <div className="h-10 px-4 rounded-xl bg-slate-900 border border-white/5 flex items-center gap-2">
                                                     <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Popularidade {Math.round((lead.count / recipes.length) * 100)}%</span>
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Conversão Estimada {Math.round((lead.count / recipes.length) * 100)}%</span>
                                                 </div>
                                                 <button 
                                                     onClick={() => handleGerarOfertaAction(lead.term)} 
-                                                    className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all shadow-lg flex items-center gap-2"
+                                                    className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"
                                                 >
                                                     <span className="material-symbols-outlined text-sm">shopping_cart_checkout</span>
                                                     Gerar Oferta
