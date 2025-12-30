@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { ShoppingItem } from '../types';
 
@@ -34,6 +33,9 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
   // Filter out the legacy text "Pendente (clique para editar)" and empty strings
   const showDetails = item.details && item.details.trim() !== '' && item.details !== 'Pendente (clique para editar)';
 
+  // CORREÇÃO: Forçando Number no calculatedPrice para a lógica de cor
+  const itemPrice = parseFloat(String(item.calculatedPrice)) || 0;
+
   return (
     <label className="flex flex-row items-center gap-x-4 py-3 group">
       <input 
@@ -55,7 +57,7 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
       </div>
 
       <div className="flex flex-col items-end gap-1">
-        <span className={`text-[13px] font-black whitespace-nowrap ${item.calculatedPrice > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-300 dark:text-gray-700'}`}>
+        <span className={`text-[13px] font-black whitespace-nowrap ${itemPrice > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-300 dark:text-gray-700'}`}>
             {item.displayPrice}
         </span>
         

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { ShoppingItem } from '../types';
 import { PriceHistoryWidget } from './PriceHistoryWidget';
@@ -6,7 +5,7 @@ import { PriceHistoryWidget } from './PriceHistoryWidget';
 interface AddItemFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddItem: (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased'>) => Promise<void>;
+  onAddItem: (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased'> & { isPurchased?: boolean }) => Promise<void>;
 }
 
 const formatPriceInput = (value: string): string => {
@@ -89,7 +88,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
       return;
     }
 
-    let newItem: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased'>;
+    let newItem: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased'> & { isPurchased?: boolean };
 
     const hasPriceDetails = isWeightBased 
         ? (weight.trim() !== '' && priceInput.trim() !== '')
@@ -109,6 +108,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
           name: trimmedName,
           calculatedPrice: calculatedTotal,
           details: `${weightNum}g`,
+          isPurchased: calculatedTotal > 0 // MARCA COMO COMPRADO SE TIVER PREÇO
         };
       } else {
         const quantityNum = parseInt(quantity, 10) || 1;
@@ -118,6 +118,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
           name: trimmedName,
           calculatedPrice: quantityNum * pricePerUnitNum,
           details: `${quantityNum} un.`,
+          isPurchased: (quantityNum * pricePerUnitNum) > 0 // MARCA COMO COMPRADO SE TIVER PREÇO
         };
       }
     } else {
@@ -125,6 +126,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
           name: trimmedName,
           calculatedPrice: 0,
           details: isWeightBased && weight ? `${weight}g` : (quantity && quantity !== '1' ? `${quantity} un.` : ''),
+          isPurchased: false
       };
     }
 
@@ -187,7 +189,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
                     {/* SELETOR DE MODO */}
                     <div className="flex bg-gray-100 dark:bg-black/40 rounded-xl p-1.5 border border-gray-200 dark:border-gray-800">
                         <button 
-                            type="button"
+                            type="button" 
                             onClick={() => setIsWeightBased(false)}
                             className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${!isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}
                         >
@@ -195,7 +197,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
                             Unidade
                         </button>
                         <button 
-                            type="button"
+                            type="button" 
                             onClick={() => setIsWeightBased(true)}
                             className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}
                         >

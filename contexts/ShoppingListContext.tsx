@@ -29,7 +29,7 @@ interface ShoppingListContextType {
     savedOffers: Offer[]; 
     arcadeStats: Record<string, number>;
     formatCurrency: (value: number) => string;
-    addItem: (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'isPurchased' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => Promise<void>;
+    addItem: (item: Omit<ShoppingItem, 'id' | 'displayPrice' | 'creatorUid' | 'creatorDisplayName' | 'creatorPhotoURL' | 'listId' | 'responsibleUid' | 'responsibleDisplayName'>) => Promise<void>;
     addIngredientsBatch: (items: any[]) => Promise<void>;
     deleteItem: (id: string) => void;
     updateItem: (item: ShoppingItem) => Promise<void>;
@@ -240,12 +240,16 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, [items, history, arcadeStats, user]);
 
     const addItem = async (item: any) => {
+        const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
+        const isPurchased = item.isPurchased ?? (numericPrice > 0);
+        
         if (!user || user.uid.startsWith('offline-user-')) {
             const newItem = {
                 id: Date.now().toString(),
-                isPurchased: false,
-                displayPrice: formatCurrency(item.calculatedPrice),
-                ...item
+                isPurchased: isPurchased,
+                displayPrice: formatCurrency(numericPrice),
+                ...item,
+                calculatedPrice: numericPrice
             };
             setItems([...items, newItem]);
             return;
@@ -253,8 +257,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const listId = user.activeListId || user.uid;
         await addDoc(collection(db!, `users/${listId}/items`), {
             ...item,
-            isPurchased: false,
-            displayPrice: formatCurrency(item.calculatedPrice),
+            calculatedPrice: numericPrice,
+            isPurchased: isPurchased,
+            displayPrice: formatCurrency(numericPrice),
             creatorUid: user.uid,
             creatorDisplayName: user.displayName,
             creatorPhotoURL: user.photoURL,
@@ -264,12 +269,16 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const addIngredientsBatch = async (newItems: any[]) => {
         if (!user || user.uid.startsWith('offline-user-')) {
-            const added = newItems.map((item, idx) => ({
-                id: (Date.now() + idx).toString(),
-                isPurchased: false,
-                displayPrice: formatCurrency(item.calculatedPrice),
-                ...item
-            }));
+            const added = newItems.map((item, idx) => {
+                const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
+                return {
+                    id: (Date.now() + idx).toString(),
+                    isPurchased: item.isPurchased ?? (numericPrice > 0),
+                    displayPrice: formatCurrency(numericPrice),
+                    ...item,
+                    calculatedPrice: numericPrice
+                };
+            });
             setItems([...items, ...added]);
             return;
         }
@@ -277,10 +286,12 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const batch = writeBatch(db!);
         newItems.forEach(item => {
             const ref = doc(collection(db!, `users/${listId}/items`));
+            const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
             batch.set(ref, {
                 ...item,
-                isPurchased: false,
-                displayPrice: formatCurrency(item.calculatedPrice),
+                calculatedPrice: numericPrice,
+                isPurchased: item.isPurchased ?? (numericPrice > 0),
+                displayPrice: formatCurrency(numericPrice),
                 creatorUid: user.uid,
                 creatorDisplayName: user.displayName,
                 creatorPhotoURL: user.photoURL,
@@ -300,9 +311,11 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const updateItem = async (item: ShoppingItem) => {
+        const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
         const updated = {
             ...item,
-            displayPrice: formatCurrency(item.calculatedPrice)
+            calculatedPrice: numericPrice,
+            displayPrice: formatCurrency(numericPrice)
         };
         if (!user || user.uid.startsWith('offline-user-')) {
             setItems(items.map(i => i.id === item.id ? updated : i));
@@ -343,7 +356,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const purchasedItems = items.filter(i => i.isPurchased);
         if (purchasedItems.length === 0) return;
 
-        const total = purchasedItems.reduce((acc, i) => acc + i.calculatedPrice, 0);
+        const total = purchasedItems.reduce((acc, i) => acc + (parseFloat(String(i.calculatedPrice)) || 0), 0);
         const record: Omit<PurchaseRecord, 'id'> = {
             date: new Date().toISOString(),
             marketName,
@@ -351,7 +364,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             items: purchasedItems.map(i => ({
                 name: i.name,
                 displayPrice: i.displayPrice,
-                calculatedPrice: i.calculatedPrice,
+                calculatedPrice: parseFloat(String(i.calculatedPrice)) || 0,
                 details: i.details
             }))
         };
@@ -398,20 +411,25 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const addHistoricItem = async (item: HistoricItem) => {
+        const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
         await addItem({
             name: item.name,
-            calculatedPrice: item.calculatedPrice,
-            details: item.details
+            calculatedPrice: numericPrice,
+            details: item.details,
+            isPurchased: numericPrice > 0
         });
     };
 
     const repeatPurchase = async (purchase: PurchaseRecord) => {
-        const itemsToRepeat = purchase.items.map(i => ({
-            name: i.name,
-            calculatedPrice: i.calculatedPrice,
-            details: i.details,
-            isPurchased: false
-        }));
+        const itemsToRepeat = purchase.items.map(i => {
+            const numericPrice = parseFloat(String(i.calculatedPrice)) || 0;
+            return {
+                name: i.name,
+                calculatedPrice: numericPrice,
+                details: i.details,
+                isPurchased: numericPrice > 0
+            };
+        });
         await addIngredientsBatch(itemsToRepeat);
         return { message: "Itens adicionados!" };
     };
@@ -456,7 +474,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             const match = p.items.find(i => i.name.trim().toLowerCase() === cleanName);
             if (match) {
                 results.push({
-                    price: match.calculatedPrice,
+                    price: parseFloat(String(match.calculatedPrice)) || 0,
                     date: p.date,
                     marketName: p.marketName,
                     details: match.details

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { ShoppingItem } from '../types';
 import { PriceHistoryWidget } from './PriceHistoryWidget';
@@ -130,6 +129,7 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
 
         updatedItem.calculatedPrice = finalTotal;
         updatedItem.details = `${weightNum}g`;
+        if (finalTotal > 0) updatedItem.isPurchased = true; // AUTO TICK
       } else {
         const quantityNum = parseInt(quantity, 10) || 1;
         const pricePerUnitNum = parseFloat(pricePerUnit.replace(/\./g, '').replace(',', '.'));
@@ -139,11 +139,12 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
           return;
         }
         
-        updatedItem.calculatedPrice = quantityNum * pricePerUnitNum;
+        const finalTotal = quantityNum * pricePerUnitNum;
+        updatedItem.calculatedPrice = finalTotal;
         updatedItem.details = `${quantityNum} un.`;
+        if (finalTotal > 0) updatedItem.isPurchased = true; // AUTO TICK
       }
     } else {
-        // Zera o preço se o usuário apagou os campos
         updatedItem.calculatedPrice = 0;
         updatedItem.details = isWeightBased && weight ? `${weight}g` : (quantity && quantity !== '1' ? `${quantity} un.` : '');
     }
