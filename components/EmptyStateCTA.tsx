@@ -136,10 +136,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             </div>
 
-            {/* VITRINE EDITORIAL DO ACERVO - ALTURA AJUSTADA PARA MOBILE (60dvh) */}
+            {/* VITRINE EDITORIAL DO ACERVO - ALTURA AJUSTADA PARA MOBILE (72dvh) */}
             {displayRecipes.length > 0 ? (
                 <div 
-                    className="relative w-full h-[60dvh] lg:h-[540px] rounded-[2.5rem] lg:rounded-[3rem] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] group border border-white/5 bg-[#0a0a0a] touch-none"
+                    className="relative w-full h-[72dvh] lg:h-[540px] rounded-[2.5rem] lg:rounded-[3rem] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] group border border-white/5 bg-[#0a0a0a] touch-none"
                     onTouchStart={onTouchStart}
                     onTouchMove={onTouchMove}
                     onTouchEnd={onTouchEnd}
@@ -207,7 +207,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_120px_rgba(0,0,0,0.4)]"></div>
                 </div>
             ) : (
-                <div className="w-full h-[60dvh] rounded-[2.5rem] bg-gray-100 dark:bg-zinc-900 flex flex-col items-center justify-center gap-4 border border-dashed border-gray-300 dark:border-gray-800">
+                <div className="w-full h-[72dvh] rounded-[2.5rem] bg-gray-100 dark:bg-zinc-900 flex flex-col items-center justify-center gap-4 border border-dashed border-gray-300 dark:border-gray-800">
                     <span className="material-symbols-outlined text-4xl text-gray-300 animate-spin">sync</span>
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Organizando Vitrine...</p>
                 </div>
