@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { addDoc, collection, serverTimestamp, deleteDoc, doc, onSnapshot, query, updateDoc, limit, getDocs, orderBy } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, deleteDoc, doc, onSnapshot, query, updateDoc, limit } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext'; 
-import type { Offer, SalesOpportunity } from '../types';
+import type { Offer } from '../types';
 
 const ignorePermissionError = (err: any) => {
     return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
@@ -18,9 +18,8 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     const app = useApp();
     const { showToast, isAdmin, pendingInventoryItem, setPendingInventoryItem } = app;
     const { logAdminAction } = useShoppingList();
-    const [activeTab, setActiveTab] = useState<'add' | 'list' | 'leads'>('list');
+    const [activeTab, setActiveTab] = useState<'add' | 'list'>('list');
     const [offers, setOffers] = useState<Offer[]>([]);
-    const [leads, setLeads] = useState<SalesOpportunity[]>([]);
     
     const [searchTerm, setSearchTerm] = useState('');
     const [sortMode, setSortMode] = useState<'newest' | 'alphabetical'>('newest');
@@ -38,14 +37,14 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     const [tags, setTags] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // NOVO: Detectar item pendente da Fábrica
+    // Detectar item pendente da Fábrica
     useEffect(() => {
         if (isOpen && pendingInventoryItem) {
-            handleCancelEdit(); // Limpa estado anterior
+            handleCancelEdit(); 
             setName(pendingInventoryItem.name);
             setTags(pendingInventoryItem.tags);
-            setActiveTab('add'); // Garante que abre no formulário "Novo"
-            setPendingInventoryItem(null); // Limpa para não preencher de novo na próxima vez
+            setActiveTab('add'); 
+            setPendingInventoryItem(null); 
         }
     }, [isOpen, pendingInventoryItem]);
 
@@ -64,20 +63,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
             }
         );
 
-        const qLeads = query(collection(db, 'sales_opportunities'), limit(100));
-        const unsubscribeLeads = onSnapshot(qLeads, 
-            (snapshot) => {
-                const allLeads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SalesOpportunity));
-                setLeads(allLeads.filter(l => l.status === 'pending' || !l.status));
-            },
-            (error) => {
-                if (!ignorePermissionError(error)) {
-                    console.warn("[Admin Leads] Sem permissão no momento.");
-                }
-            }
-        );
-
-        return () => { unsubscribeOffers(); unsubscribeLeads(); };
+        return () => { unsubscribeOffers(); };
     }, [isOpen, isAdmin]);
 
     const processedOffers = useMemo(() => {
@@ -105,25 +91,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         return result;
     }, [offers, searchTerm, sortMode]);
 
-    const handleGenerateManualTest = async () => {
-        if (!db || !auth?.currentUser) {
-            showToast("Usuário não autenticado.");
-            return;
-        }
-        
-        try {
-            await addDoc(collection(db, 'sales_opportunities'), {
-                term: "TESTE DIAGNÓSTICO " + Math.floor(Math.random() * 999),
-                recipeName: "Sistema de Alerta",
-                status: 'pending',
-                createdAt: new Date().toISOString()
-            });
-            showToast("Lead criado!");
-        } catch (e: any) {
-            showToast(`Erro ao gerar lead.`);
-        }
-    };
-
     const handleEdit = (offer: Offer) => {
         setEditingId(offer.id);
         setName(offer.name);
@@ -147,26 +114,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         } catch (e) {
             showToast("Erro ao deletar.");
         }
-    };
-
-    const handleConvertLead = (lead: SalesOpportunity) => {
-        setEditingId(null);
-        setName(lead.term.charAt(0).toUpperCase() + lead.term.slice(1));
-        setPrice('');
-        setOldPrice('');
-        setDescription(`Indispensável para o preparo de ${lead.recipeName}.`);
-        setImages(['']);
-        setLink('');
-        setCategory('Utensílios');
-        setTags(`${lead.term}, ${lead.recipeName}`);
-        updateDoc(doc(db!, 'sales_opportunities', lead.id), { status: 'converted' });
-        setActiveTab('add');
-    };
-
-    const handleDismissLead = async (leadId: string) => {
-        try {
-            await updateDoc(doc(db!, 'sales_opportunities', leadId), { status: 'dismissed' });
-        } catch (e) {}
     };
 
     const handleCancelEdit = () => {
@@ -221,7 +168,6 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
 
                 <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 shrink-0">
                     <button onClick={() => setActiveTab('list')} className={`flex-1 py-3 text-[10px] font-black uppercase transition-all ${activeTab === 'list' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}>Listagem</button>
-                    <button onClick={() => setActiveTab('leads')} className={`flex-1 py-3 text-[10px] font-black uppercase transition-all ${activeTab === 'leads' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>IA Leads ({leads.length})</button>
                     <button onClick={() => setActiveTab('add')} className={`flex-1 py-3 text-[10px] font-black uppercase transition-all ${activeTab === 'add' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>{editingId ? 'Editar' : 'Novo'}</button>
                 </div>
 
@@ -262,36 +208,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                 )}
 
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide bg-gray-50 dark:bg-black/10">
-                    {activeTab === 'leads' ? (
-                        <div className="flex flex-col gap-3 animate-fadeIn">
-                            <button 
-                                onClick={handleGenerateManualTest}
-                                className="w-full py-4 bg-blue-600 text-white text-[12px] font-black uppercase rounded-xl shadow-lg animate-pulse active:scale-95 transition-all"
-                            >
-                                <span className="material-symbols-outlined align-middle mr-2">bolt</span>
-                                GERAR LEAD DE TESTE
-                            </button>
-                            
-                            {leads.length === 0 ? (
-                                <div className="py-20 text-center opacity-40">
-                                    <p className="text-sm font-bold italic text-gray-500 dark:text-gray-400">Nenhum lead pendente.</p>
-                                </div>
-                            ) : (
-                                leads.map(lead => (
-                                    <div key={lead.id} className="p-4 bg-white dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30 flex justify-between items-center group">
-                                        <div className="flex-1 min-w-0 pr-4">
-                                            <h3 className="font-bold text-blue-900 dark:text-blue-300 capitalize truncate">{lead.term}</h3>
-                                            <p className="text-[10px] text-blue-700/60 dark:text-blue-400/60 font-medium truncate">Falta para: {lead.recipeName}</p>
-                                        </div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => handleDismissLead(lead.id)} className="h-8 w-8 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors"><span className="material-symbols-outlined text-sm">close</span></button>
-                                            <button onClick={() => handleConvertLead(lead)} className="h-8 px-3 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase hover:bg-blue-700 transition-all">Cadastrar</button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    ) : activeTab === 'add' ? (
+                    {activeTab === 'add' ? (
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4 animate-fadeIn pb-8">
                             <div>
                                 <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Nome do Produto</label>
