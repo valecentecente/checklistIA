@@ -43,7 +43,7 @@ const getRecipeDocId = (name: string) => {
 
 export const AdminContentFactoryModal: React.FC = () => {
     const app = useApp();
-    const { isContentFactoryModalOpen, closeModal, showToast, isAdmin } = app;
+    const { isContentFactoryModalOpen, closeModal, showToast, isAdmin, pendingInventoryItem, setPendingInventoryItem } = app;
     const { user } = useAuth();
     const { offers } = useShoppingList();
     
@@ -80,11 +80,8 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     const apiKey = process.env.API_KEY as string;
 
-    // NOVO: Agregação de Leads das Receitas filtrando itens já no Inventário
     const recipeLeadsRanking = useMemo(() => {
         const counts: Record<string, number> = {};
-        
-        // Criar uma lista de termos que já temos no inventário para comparação rápida
         const existingTerms = offers.map(o => o.name.toLowerCase().trim());
         const existingTags = offers.flatMap(o => o.tags || []).map(t => t.toLowerCase().trim());
 
@@ -93,10 +90,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                 recipe.suggestedLeads.forEach(lead => {
                     const cleanLead = lead.trim().toLowerCase();
                     if (cleanLead && cleanLead !== 'nenhum') {
-                        // VERIFICAÇÃO DE DUPLICIDADE:
-                        // 1. O termo do lead é EXATAMENTE igual a algum nome de produto?
-                        // 2. O termo do lead está contido em algum nome de produto?
-                        // 3. O termo do lead é uma tag de algum produto?
                         const alreadyExists = 
                             existingTerms.some(t => t.includes(cleanLead)) || 
                             existingTags.includes(cleanLead);
@@ -288,11 +281,17 @@ export const AdminContentFactoryModal: React.FC = () => {
                         break;
                     }
                 }
+
+                // Geração aprimorada de keywords incluindo as tags
+                const nameKeywords = generateKeywords(details.name || title);
+                const tagKeywords = (details.tags || []).flatMap((t: string) => generateKeywords(t));
+                const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
+
                 const finalData = { 
                     ...details, 
                     imageUrl: finalImageUrl, 
                     imageSource: 'genai', 
-                    keywords: generateKeywords(details.name || title),
+                    keywords: finalKeywords,
                     createdAt: serverTimestamp() 
                 };
                 await setDoc(doc(db!, 'global_recipes', docId), finalData, { merge: true });
@@ -400,6 +399,12 @@ export const AdminContentFactoryModal: React.FC = () => {
             const instructionsArray = editInstructions.split('\n').filter(l => l.trim());
             const tagsArray = editTags.split(',').map(t => t.trim()).filter(t => t);
             const leadsArray = editLeads.split(',').map(l => l.trim()).filter(l => l);
+            
+            // Recalcular keywords na edição também
+            const nameKeywords = generateKeywords(editName);
+            const tagKeywords = tagsArray.flatMap(t => generateKeywords(t));
+            const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
+
             await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { 
                 name: editName, 
                 ingredients: ingredientsArray, 
@@ -407,7 +412,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                 tags: tagsArray, 
                 suggestedLeads: leadsArray, 
                 imageUrl: editImage,
-                keywords: generateKeywords(editName), 
+                keywords: finalKeywords, 
                 updatedAt: serverTimestamp() 
             });
             showToast("Atualizado!");
@@ -599,7 +604,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                             </div>
                             
                             <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-10 scrollbar-hide">
-                                {/* COLUNA ESQUERDA: FOTO (AMPLIADA), TAGS, LEADS */}
                                 <div className="space-y-8 flex flex-col">
                                     <div className="w-full">
                                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4 ml-1">NOME DA RECEITA</label>
@@ -632,7 +636,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* COLUNA DIREITA: INGREDIENTES, INSTRUÇÕES */}
                                 <div className="space-y-8">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 ml-1">Ingredientes (Um por linha)</label>

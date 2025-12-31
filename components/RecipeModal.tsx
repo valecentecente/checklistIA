@@ -33,15 +33,28 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   const isFromCache = recipe.imageSource === 'cache';
   const isSaved = isFavorite(recipe.name);
   
+  // Lógica de Detecção +18 Aprimorada (Tequila e Cachaça incluídas)
   const isAdultContent = useMemo(() => {
       if (recipe.isAlcoholic) return true;
+
+      // 1. Verificação de Tags
       if (recipe.tags && recipe.tags.length > 0) {
-          const adultTags = ['drinks', 'drink', 'alcool', 'álcool', 'bebida alcoólica', 'coquetel', 'vodka', 'gin', 'whisky', 'cerveja'];
-          return recipe.tags.some(t => adultTags.includes(t.toLowerCase()));
+          const adultTags = [
+            'drinks', 'drink', 'alcool', 'álcool', 'bebida alcoólica', 'coquetel', 'coquetéis', 
+            'cocktail', 'cocktails', 'vodka', 'gin', 'whisky', 'cerveja', 'vinho', 'vinhos', 'espumante', 'tequila', 'cachaça', 'cachaca'
+          ];
+          if (recipe.tags.some(t => adultTags.includes(t.toLowerCase()))) return true;
       }
+
+      // 2. Verificação de Palavras-Chave no Título (Nome da Receita)
       const nameLower = recipe.name.toLowerCase();
-      if (nameLower.includes('caipirinha') || nameLower.includes('gin tônica') || nameLower.includes('mojito')) return true;
-      return false;
+      const adultKeywords = [
+        'caipirinha', 'gin tônica', 'mojito', 'margarita', 'negroni', 'aperol', 
+        'drink', 'coquetel', 'cocktail', 'batida alcoólica', 'cerveja', 'vinho', 
+        'vodka', 'whisky', 'cachaça', 'cachaca', 'espumante', 'chopp', 'tequila'
+      ];
+      
+      return adultKeywords.some(keyword => nameLower.includes(keyword));
   }, [recipe]);
   
   const randomChefImage = useMemo(() => {
