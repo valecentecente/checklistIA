@@ -49,7 +49,7 @@ interface ShoppingListContextType {
     shareListWithPartner: (identifier: string, listToShareId: string) => Promise<{ success: boolean; message: string; inviteId?: string }>;
     markReceivedListAsRead: (id: string) => Promise<void>;
     unreadReceivedCount: number;
-    toggleFavorite: (recipe: FullRecipe) => Promise<void>;
+    toggleFavorite: (recipe: FullRecipe) => Promise<{ success: boolean; action: 'added' | 'removed' }>;
     isFavorite: (recipeName: string) => boolean;
     toggleOfferSaved: (offer: Offer) => Promise<void>; 
     isOfferSaved: (offerId: string) => boolean; 
@@ -69,6 +69,17 @@ const ignorePermissionError = (err: any) => {
         return true;
     }
     return false;
+};
+
+// Helper to sanitize object for Firestore (remove undefined fields)
+const sanitizeForFirestore = (obj: any) => {
+    const sanitized: any = {};
+    Object.keys(obj).forEach(key => {
+        if (obj[key] !== undefined) {
+            sanitized[key] = obj[key];
+        }
+    });
+    return sanitized;
 };
 
 export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -571,27 +582,36 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
     };
 
-    const toggleFavorite = async (recipe: FullRecipe) => {
-        if (!user || !db) return;
-        const recipeId = recipe.name.toLowerCase().replace(/\s+/g, '-');
+    const toggleFavorite = async (recipe: FullRecipe): Promise<{ success: boolean; action: 'added' | 'removed' }> => {
+        if (!user || !db || user.uid.startsWith('offline-user-')) return { success: false, action: 'removed' };
+        
+        const recipeId = recipe.name.toLowerCase().trim().replace(/\s+/g, '-');
         const favRef = doc(db, `users/${user.uid}/favorites`, recipeId);
+        
         try {
             const snap = await getDoc(favRef);
             if (snap.exists()) {
                 await deleteDoc(favRef);
+                return { success: true, action: 'removed' };
             } else {
+                // Sanitize before saving to avoid undefined field error
+                const sanitizedRecipe = sanitizeForFirestore(recipe);
                 await setDoc(favRef, {
-                    ...recipe,
+                    ...sanitizedRecipe,
                     savedAt: serverTimestamp()
                 });
+                return { success: true, action: 'added' };
             }
         } catch (e) {
             if (!ignorePermissionError(e)) console.error(e);
+            return { success: false, action: 'removed' };
         }
     };
 
     const isFavorite = (name: string) => {
-        return favorites.some(f => f.name === name);
+        if (!name) return false;
+        const cleanName = name.toLowerCase().trim();
+        return favorites.some(f => f.name.toLowerCase().trim() === cleanName);
     };
 
     const toggleOfferSaved = async (offer: Offer) => {

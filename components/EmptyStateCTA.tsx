@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { FullRecipe } from '../types';
 
@@ -108,15 +108,15 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return () => clearInterval(interval);
     }, [displayRecipes.length]);
 
-    // Lógica para definir a animação baseada no index
+    // Animações ultra suaves e longas para evitar o "pulinho" de reinício
     const getKenBurnsClass = (index: number) => {
         const animations = [
-            'animate-ken-zoom-in',
-            'animate-ken-zoom-out',
-            'animate-ken-pan-right',
-            'animate-ken-pan-left',
-            'animate-ken-pan-up',
-            'animate-ken-diagonal'
+            'animate-smooth-zoom-in',
+            'animate-smooth-zoom-out',
+            'animate-smooth-pan-right',
+            'animate-smooth-pan-left',
+            'animate-smooth-pan-up',
+            'animate-smooth-diagonal'
         ];
         return animations[index % animations.length];
     };
@@ -124,36 +124,37 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     return (
         <div className="flex flex-col gap-5 animate-fadeIn">
             <style>{`
-                @keyframes ken-zoom-in {
+                @keyframes smooth-zoom-in {
                     0% { transform: scale(1); }
-                    100% { transform: scale(1.15); }
+                    100% { transform: scale(1.3); }
                 }
-                @keyframes ken-zoom-out {
-                    0% { transform: scale(1.15); }
+                @keyframes smooth-zoom-out {
+                    0% { transform: scale(1.3); }
                     100% { transform: scale(1); }
                 }
-                @keyframes ken-pan-right {
-                    0% { transform: scale(1.1) translateX(-5%); }
-                    100% { transform: scale(1.1) translateX(5%); }
+                @keyframes smooth-pan-right {
+                    0% { transform: scale(1.2) translateX(-5%); }
+                    100% { transform: scale(1.2) translateX(5%); }
                 }
-                @keyframes ken-pan-left {
-                    0% { transform: scale(1.1) translateX(5%); }
-                    100% { transform: scale(1.1) translateX(-5%); }
+                @keyframes smooth-pan-left {
+                    0% { transform: scale(1.2) translateX(5%); }
+                    100% { transform: scale(1.2) translateX(-5%); }
                 }
-                @keyframes ken-pan-up {
-                    0% { transform: scale(1.1) translateY(5%); }
-                    100% { transform: scale(1.1) translateY(-5%); }
+                @keyframes smooth-pan-up {
+                    0% { transform: scale(1.2) translateY(5%); }
+                    100% { transform: scale(1.2) translateY(-5%); }
                 }
-                @keyframes ken-diagonal {
-                    0% { transform: scale(1.1) translate(-3%, -3%); }
-                    100% { transform: scale(1.1) translate(3%, 3%); }
+                @keyframes smooth-diagonal {
+                    0% { transform: scale(1.2) translate(-4%, -4%); }
+                    100% { transform: scale(1.2) translate(4%, 4%); }
                 }
-                .animate-ken-zoom-in { animation: ken-zoom-in 8.5s linear infinite alternate; }
-                .animate-ken-zoom-out { animation: ken-zoom-out 8.5s linear infinite alternate; }
-                .animate-ken-pan-right { animation: ken-pan-right 8.5s linear infinite alternate; }
-                .animate-ken-pan-left { animation: ken-pan-left 8.5s linear infinite alternate; }
-                .animate-ken-pan-up { animation: ken-pan-up 8.5s linear infinite alternate; }
-                .animate-ken-diagonal { animation: ken-diagonal 8.5s linear infinite alternate; }
+                /* Duração de 20s linear: o slide troca antes da animação chegar ao fim, evitando saltos */
+                .animate-smooth-zoom-in { animation: smooth-zoom-in 20s linear infinite; }
+                .animate-smooth-zoom-out { animation: smooth-zoom-out 20s linear infinite; }
+                .animate-smooth-pan-right { animation: smooth-pan-right 20s linear infinite; }
+                .animate-smooth-pan-left { animation: smooth-pan-left 20s linear infinite; }
+                .animate-smooth-pan-up { animation: smooth-pan-up 20s linear infinite; }
+                .animate-smooth-diagonal { animation: smooth-diagonal 20s linear infinite; }
             `}</style>
             
             <div className="px-1 flex items-center justify-start mt-2">
@@ -168,37 +169,34 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             </div>
 
-            <div className="relative w-full h-[62dvh] lg:h-[540px] group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]">
+            <div 
+                className="relative w-full h-[62dvh] lg:h-[540px] group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]"
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+            >
                 {displayRecipes.length > 0 ? (
-                    <div 
-                        className="relative w-full h-full flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1)"
-                        style={{ transform: `translateX(-${activeIndex * 100}%)` }}
-                        onTouchStart={onTouchStart}
-                        onTouchMove={onTouchMove}
-                        onTouchEnd={onTouchEnd}
-                    >
+                    <div className="relative w-full h-full">
                         {displayRecipes.map((recipe, index) => {
-                            const isVisible = Math.abs(index - activeIndex) <= 1 || 
-                                              (activeIndex === 0 && index === displayRecipes.length - 1) || 
-                                              (activeIndex === displayRecipes.length - 1 && index === 0);
-
-                            if (!isVisible) return <div key={recipe.name} className="flex-shrink-0 w-full h-full bg-[#0a0a0a]"></div>;
+                            const isActive = index === activeIndex;
+                            // Mantemos a animação rodando mesmo em quem está em fade-out para não dar o pulinho
+                            const isVisible = isActive || Math.abs(index - activeIndex) <= 1;
 
                             return (
                                 <div 
                                     key={recipe.name}
                                     onClick={() => showRecipe(recipe)}
-                                    className={`relative flex-shrink-0 w-full h-full cursor-pointer overflow-hidden transition-all duration-700 ${index === activeIndex ? 'opacity-100 scale-100' : 'opacity-40 scale-95 blur-[4px]'}`}
+                                    className={`absolute inset-0 w-full h-full cursor-pointer transition-all duration-[1500ms] ease-in-out ${isActive ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-10 pointer-events-none'}`}
                                 >
-                                    {/* Imagem de Fundo com Animação Ken Burns Dinâmica */}
+                                    {/* Imagem de Fundo com Animação Persistente (previne o pulo no fade-out) */}
                                     <div 
-                                        className={`absolute inset-0 bg-cover bg-center bg-no-repeat ${index === activeIndex ? getKenBurnsClass(index) : ''}`} 
+                                        className={`absolute inset-0 bg-cover bg-center bg-no-repeat ${isVisible ? getKenBurnsClass(index) : ''}`} 
                                         style={{ backgroundImage: `url(${recipe.imageUrl})` }}
                                     ></div>
                                     
                                     <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90"></div>
                                     
-                                    <div className="absolute inset-0 p-7 lg:p-9 pt-10 lg:pt-14 flex flex-col items-start justify-between z-20">
+                                    <div className="absolute inset-0 p-7 lg:p-9 pt-10 lg:pt-14 flex flex-col items-start justify-between z-30">
                                         <div className="flex flex-col items-start w-full">
                                             <div className="flex items-center gap-2.5 mb-3 lg:mb-5">
                                                 <span className="bg-white text-black text-[8px] lg:text-[9px] font-black px-3 py-1 rounded-sm uppercase tracking-widest">
@@ -248,14 +246,14 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
 
                 <div className="hidden lg:block">
                     <button 
-                        onClick={handlePrev}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-95"
+                        onClick={(e) => { e.stopPropagation(); handlePrev(); }}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-95"
                     >
                         <span className="material-symbols-outlined !text-3xl">chevron_left</span>
                     </button>
                     <button 
-                        onClick={handleNext}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-95"
+                        onClick={(e) => { e.stopPropagation(); handleNext(); }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-95"
                     >
                         <span className="material-symbols-outlined !text-3xl">chevron_right</span>
                     </button>
