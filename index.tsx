@@ -592,4 +592,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 21/05/2025 - Estabilidade Garantida V2.9
+// Checkpoint de Segurança: 22/05/2025 - Estabilidade Garantida V3.0

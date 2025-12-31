@@ -13,6 +13,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     const [activeIndex, setActiveIndex] = useState(0);
     const [touchStart, setTouchStart] = useState<number | null>(null);
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
+    const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
     
     const slotKeywords = useMemo(() => {
         const hour = new Date().getHours();
@@ -62,11 +63,17 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             return { recipe, score };
         });
 
+        // Limitamos a exibição no banner para 15 itens apenas, para não sobrecarregar o DOM no mobile
         return scoredRecipes
             .sort((a, b) => b.score - a.score)
+            .slice(0, 15)
             .map(item => item.recipe);
             
     }, [allRecipesPool, slotKeywords]);
+
+    const handleImageLoad = (recipeName: string) => {
+        setLoadedImages(prev => ({ ...prev, [recipeName]: true }));
+    };
 
     const minSwipeDistance = 50;
 
@@ -108,7 +115,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return () => clearInterval(interval);
     }, [displayRecipes.length]);
 
-    // Animações ultra suaves e longas para evitar o "pulinho" de reinício
     const getKenBurnsClass = (index: number) => {
         const animations = [
             'animate-smooth-zoom-in',
@@ -148,7 +154,15 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     0% { transform: scale(1.2) translate(-4%, -4%); }
                     100% { transform: scale(1.2) translate(4%, 4%); }
                 }
-                /* Duração de 20s linear: o slide troca antes da animação chegar ao fim, evitando saltos */
+                @keyframes shimmer {
+                    0% { background-position: -200% 0; }
+                    100% { background-position: 200% 0; }
+                }
+                .shimmer-placeholder {
+                    background: linear-gradient(90deg, #121212 25%, #1a1a1a 50%, #121212 75%);
+                    background-size: 200% 100%;
+                    animation: shimmer 2s infinite linear;
+                }
                 .animate-smooth-zoom-in { animation: smooth-zoom-in 20s linear infinite; }
                 .animate-smooth-zoom-out { animation: smooth-zoom-out 20s linear infinite; }
                 .animate-smooth-pan-right { animation: smooth-pan-right 20s linear infinite; }
@@ -179,22 +193,36 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     <div className="relative w-full h-full">
                         {displayRecipes.map((recipe, index) => {
                             const isActive = index === activeIndex;
-                            // Mantemos a animação rodando mesmo em quem está em fade-out para não dar o pulinho
-                            const isVisible = isActive || Math.abs(index - activeIndex) <= 1;
+                            // PERFORMANCE: Somente renderiza o DOM se for o slide atual ou os vizinhos imediatos
+                            const isNear = Math.abs(index - activeIndex) <= 1 || 
+                                          (activeIndex === 0 && index === displayRecipes.length - 1) ||
+                                          (activeIndex === displayRecipes.length - 1 && index === 0);
+
+                            if (!isNear) return null;
+
+                            const imageIsLoaded = loadedImages[recipe.name];
 
                             return (
                                 <div 
                                     key={recipe.name}
                                     onClick={() => showRecipe(recipe)}
-                                    className={`absolute inset-0 w-full h-full cursor-pointer transition-all duration-[1500ms] ease-in-out ${isActive ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-10 pointer-events-none'}`}
+                                    className={`absolute inset-0 w-full h-full cursor-pointer transition-opacity duration-[1000ms] ease-in-out ${isActive ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-10 pointer-events-none'}`}
                                 >
-                                    {/* Imagem de Fundo com Animação Persistente (previne o pulo no fade-out) */}
-                                    <div 
-                                        className={`absolute inset-0 bg-cover bg-center bg-no-repeat ${isVisible ? getKenBurnsClass(index) : ''}`} 
-                                        style={{ backgroundImage: `url(${recipe.imageUrl})` }}
-                                    ></div>
+                                    {/* Placeholder enquanto a foto carrega */}
+                                    {!imageIsLoaded && (
+                                        <div className="absolute inset-0 shimmer-placeholder"></div>
+                                    )}
+
+                                    {/* Imagem Real com Carregamento Preguiçoso Nativo */}
+                                    <img 
+                                        src={recipe.imageUrl} 
+                                        alt={recipe.name}
+                                        onLoad={() => handleImageLoad(recipe.name)}
+                                        loading={isActive ? "eager" : "lazy"}
+                                        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${getKenBurnsClass(index)} ${imageIsLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                    />
                                     
-                                    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90"></div>
+                                    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/95"></div>
                                     
                                     <div className="absolute inset-0 p-7 lg:p-9 pt-10 lg:pt-14 flex flex-col items-start justify-between z-30">
                                         <div className="flex flex-col items-start w-full">
@@ -273,13 +301,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     </div>
                     <span className="text-[9px] lg:text-[10px] font-black text-gray-800 dark:text-gray-100 uppercase tracking-widest">Conversor</span>
                 </button>
-            </div>
-            
-            <div className="hidden lg:flex flex-col items-center gap-1 opacity-20">
-                <span className="material-symbols-outlined animate-bounce text-gray-400 text-xs">swipe</span>
-                <p className="text-[7px] lg:text-[8px] font-black text-gray-400 dark:text-gray-600 uppercase tracking-[0.3em]">
-                    Use as setas ou deslize para explorar
-                </p>
             </div>
         </div>
     );

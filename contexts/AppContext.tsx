@@ -446,7 +446,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             try {
                 const networkPromise = (async () => {
-                    const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
+                    // PERFORMANCE: Reduzido de 100 para 30 para carregar muito mais rápido no celular
+                    const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(30));
                     const snapshotFetch = await getDocs(qFetch);
                     const fetchedRaw: any[] = [];
                     snapshotFetch.forEach(docSnap => {
@@ -787,7 +788,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             
             const finalName = details.name || recipeName;
             
-            // Gerar palavras-chave combinando nome e tags para melhor busca
             const nameKeywords = generateKeywords(finalName);
             const tagKeywords = (details.tags || []).flatMap((t: string) => generateKeywords(t));
             const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
