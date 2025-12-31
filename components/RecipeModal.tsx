@@ -24,7 +24,7 @@ const CHEF_PLACEHOLDERS = [
 ];
 
 export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => {
-  const { addRecipeToShoppingList, setHomeViewActive, currentMarketName, fetchRecipeDetails, isRecipeLoading, showToast, openModal } = useApp();
+  const { addRecipeToShoppingList, setHomeViewActive, currentMarketName, fetchRecipeDetails, isRecipeLoading } = useApp();
   const { user } = useAuth();
   const { toggleFavorite, isFavorite, offers, items } = useShoppingList();
   
@@ -114,15 +114,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
   };
   
   const handleToggleFavorite = async () => {
-      if (!user || user.uid.startsWith('offline-user-')) {
-          showToast("Faça login para salvar nos favoritos!");
-          openModal('auth');
+      if (!user) {
+          onClose();
           return;
       }
-      const result = await toggleFavorite(recipe);
-      if (result.success) {
-          showToast(result.action === 'added' ? "Adicionado aos favoritos!" : "Removido dos favoritos.");
-      }
+      await toggleFavorite(recipe);
   };
 
   const handleRegenerateDetails = async () => {
