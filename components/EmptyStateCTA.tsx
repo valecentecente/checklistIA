@@ -129,7 +129,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             </div>
 
-            {/* VITRINE COM TRANSIÇÃO SLIDE INFINITA - Altura ajustada para h-[62dvh] para alinhar com o menu */}
+            {/* VITRINE COM TRANSIÇÃO SLIDE INFINITA - Altura ajustada dinamicamente */}
             <div className="relative w-full h-[62dvh] lg:h-[540px] group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]">
                 {displayRecipes.length > 0 ? (
                     <div 
@@ -140,7 +140,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                         onTouchEnd={onTouchEnd}
                     >
                         {displayRecipes.map((recipe, index) => {
-                            // PERFORMANCE: Só renderiza o conteúdo se for o item ativo ou o vizinho imediato
                             const isVisible = Math.abs(index - activeIndex) <= 1 || 
                                               (activeIndex === 0 && index === displayRecipes.length - 1) || 
                                               (activeIndex === displayRecipes.length - 1 && index === 0);
@@ -198,10 +197,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                                     </div>
                                                 </div>
                                             </div>
-                                            
-                                            <div className="bg-white text-black h-11 w-11 lg:h-14 lg:w-14 rounded-full flex items-center justify-center shadow-2xl transform transition-transform hover:scale-110 active:scale-90 duration-300">
-                                                <span className="material-symbols-outlined font-black text-lg lg:text-xl">arrow_outward</span>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -219,39 +214,17 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 <div className="hidden lg:block">
                     <button 
                         onClick={handlePrev}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-90"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-95"
                     >
                         <span className="material-symbols-outlined !text-3xl">chevron_left</span>
                     </button>
                     <button 
                         onClick={handleNext}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-90"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-md border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover/banner:opacity-100 active:scale-95"
                     >
                         <span className="material-symbols-outlined !text-3xl">chevron_right</span>
                     </button>
                 </div>
-
-                {/* INDICADORES DE PAGINAÇÃO (PONTINHOS) - APENAS SE FOR UMA LISTA CURTA */}
-                {displayRecipes.length > 1 && displayRecipes.length <= 15 && (
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-30 lg:bottom-6">
-                        {displayRecipes.map((_, i) => (
-                            <div 
-                                key={i} 
-                                onClick={() => setActiveIndex(i)}
-                                className={`h-1 rounded-full transition-all cursor-pointer ${i === activeIndex ? 'w-6 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'w-1.5 bg-white/30 hover:bg-white/50'}`}
-                            ></div>
-                        ))}
-                    </div>
-                )}
-                
-                {/* CONTADOR PARA LISTAS LONGAS (ESTILO EDITORIAL) */}
-                {displayRecipes.length > 15 && (
-                    <div className="absolute bottom-4 right-6 z-30 lg:bottom-6 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
-                        <p className="text-[9px] font-black text-white uppercase tracking-widest">
-                            {activeIndex + 1} <span className="text-white/40">/</span> {displayRecipes.length}
-                        </p>
-                    </div>
-                )}
             </div>
 
             {/* BOTÕES DE UTILITÁRIOS */}

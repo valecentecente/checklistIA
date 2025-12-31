@@ -29,21 +29,16 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
   const [quantity, setQuantity] = useState('');
   const [pricePerUnit, setPricePerUnit] = useState('');
   const [weight, setWeight] = useState('');
-  const [weightPriceMode, setWeightPriceMode] = useState<'kg' | 'total'>('kg');
-  const [priceInput, setPriceInput] = useState(''); // Genérico
+  const [priceInput, setPriceInput] = useState(''); 
   
   const [error, setError] = useState<string | null>(null);
 
-  // Cálculo em tempo real para feedback visual
+  // Cálculo em tempo real fixo para R$/Kg no modo peso
   let calculatedTotal = 0;
   if (isWeightBased) {
       const w = parseFloat(weight.replace(',', '.')) || 0;
       const p = parseFloat(priceInput.replace(/\./g, '').replace(',', '.')) || 0;
-      if (weightPriceMode === 'total') {
-          calculatedTotal = p;
-      } else {
-          calculatedTotal = (p / 1000) * w;
-      }
+      calculatedTotal = (p / 1000) * w;
   } else {
       const q = parseInt(quantity) || 1;
       const p = parseFloat(pricePerUnit.replace(/\./g, '').replace(',', '.')) || 0;
@@ -67,13 +62,14 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
       // Detecta se é baseado em peso pela string de detalhes (ex: "500g")
       if (item.details && item.details.includes('g') && !item.details.includes('un')) {
         setIsWeightBased(true);
-        setWeightPriceMode('total'); // Padrão ao editar: mostra o total já salvo
         
         const weightVal = parseFloat(item.details.replace('g', ''));
         setWeight(isNaN(weightVal) ? '' : weightVal.toString());
         
-        if (item.calculatedPrice > 0) {
-            setPriceInput(item.calculatedPrice.toFixed(2).replace('.', ','));
+        if (item.calculatedPrice > 0 && !isNaN(weightVal) && weightVal > 0) {
+            // Reconverte o total salvo para preço por Kg para exibição no campo
+            const pricePerKg = (item.calculatedPrice / weightVal) * 1000;
+            setPriceInput(pricePerKg.toFixed(2).replace('.', ','));
         } else {
             setPriceInput('');
         }
@@ -120,16 +116,11 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
           return;
         }
 
-        let finalTotal = 0;
-        if (weightPriceMode === 'total') {
-            finalTotal = priceNum;
-        } else {
-            finalTotal = (priceNum / 1000) * weightNum;
-        }
+        const finalTotal = (priceNum / 1000) * weightNum;
 
         updatedItem.calculatedPrice = finalTotal;
         updatedItem.details = `${weightNum}g`;
-        if (finalTotal > 0) updatedItem.isPurchased = true; // AUTO TICK
+        if (finalTotal > 0) updatedItem.isPurchased = true; 
       } else {
         const quantityNum = parseInt(quantity, 10) || 1;
         const pricePerUnitNum = parseFloat(pricePerUnit.replace(/\./g, '').replace(',', '.'));
@@ -142,7 +133,7 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
         const finalTotal = quantityNum * pricePerUnitNum;
         updatedItem.calculatedPrice = finalTotal;
         updatedItem.details = `${quantityNum} un.`;
-        if (finalTotal > 0) updatedItem.isPurchased = true; // AUTO TICK
+        if (finalTotal > 0) updatedItem.isPurchased = true; 
       }
     } else {
         updatedItem.calculatedPrice = 0;
@@ -153,36 +144,14 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
     onClose();
   };
 
-  const handleModeSwitch = (mode: 'kg' | 'total') => {
-      setWeightPriceMode(mode);
-      // Lógica de conversão ao trocar o botão para facilitar
-      const currentVal = parseFloat(priceInput.replace(/\./g, '').replace(',', '.'));
-      const w = parseFloat(weight.replace(',', '.'));
-      
-      if (!isNaN(currentVal) && !isNaN(w) && w > 0) {
-          if (mode === 'kg') {
-              // Estava em Total, agora quer Kg. Preço/Kg = (Total / Peso) * 1000
-              const perKg = (currentVal / w) * 1000;
-              setPriceInput(perKg.toFixed(2).replace('.', ','));
-          } else {
-              // Estava em Kg, agora quer Total. Total = (PreçoKg / 1000) * Peso
-              const total = (currentVal / 1000) * w;
-              setPriceInput(total.toFixed(2).replace('.', ','));
-          }
-      } else {
-          setPriceInput('');
-      }
-  };
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[130] bg-black/50 dark:bg-black/60 transition-opacity animate-fadeIn" onClick={onClose} aria-modal="true" role="dialog">
         <div className="absolute inset-x-0 bottom-0" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-col items-stretch bg-surface-light dark:bg-surface-dark rounded-t-xl animate-slideUp">
-                <div className="flex h-5 w-full items-center justify-center pt-3 pb-1">
-                    <div className="h-1 w-9 rounded-full bg-border-light dark:bg-border-dark"></div>
-                </div>
+                <div className="h-1 w-9 rounded-full bg-border-light dark:bg-border-dark mx-auto mt-3"></div>
+                
                 <div className="flex items-center justify-between px-4 pt-4 pb-2">
                     <h3 className="text-text-primary-light dark:text-text-primary-dark tracking-light text-xl font-bold leading-tight">Editar Item</h3>
                     <button onClick={onClose} className="flex items-center justify-center h-8 w-8 rounded-full text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-white/10">
@@ -244,35 +213,17 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
                                 />
                             </label>
                             
-                            <div className="flex flex-col min-w-40 flex-[1.5]">
-                                <div className="flex justify-between items-center pb-2">
-                                    <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Preço</p>
-                                    <div className="flex bg-gray-100 dark:bg-white/10 rounded-md p-0.5">
-                                        <button 
-                                            type="button"
-                                            onClick={() => handleModeSwitch('kg')}
-                                            className={`text-[10px] px-2 py-0.5 rounded transition-all ${weightPriceMode === 'kg' ? 'bg-white dark:bg-surface-dark shadow-sm text-primary font-bold' : 'text-gray-500'}`}
-                                        >
-                                            R$/Kg
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => handleModeSwitch('total')}
-                                            className={`text-[10px] px-2 py-0.5 rounded transition-all ${weightPriceMode === 'total' ? 'bg-white dark:bg-surface-dark shadow-sm text-primary font-bold' : 'text-gray-500'}`}
-                                        >
-                                            Total
-                                        </button>
-                                    </div>
-                                </div>
+                            <label className="flex flex-col min-w-40 flex-[1.5]">
+                                <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal pb-2">Preço (R$/Kg)</p>
                                 <input
                                     className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-primary-light dark:text-text-primary-dark bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 py-3 text-base font-normal leading-normal"
-                                    placeholder={weightPriceMode === 'kg' ? "R$ por Kg" : "R$ Total"}
+                                    placeholder="0,00"
                                     type="text"
                                     inputMode="numeric"
                                     value={priceInput}
                                     onChange={(e) => setPriceInput(formatPriceInput(e.target.value))}
                                 />
-                            </div>
+                            </label>
                         </div>
                     ) : (
                         <div className="flex w-full flex-wrap items-end gap-4 animate-fadeIn">
@@ -307,10 +258,10 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
                         <button type="button" onClick={onClose} className="flex-1 h-14 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/10 text-text-secondary-light dark:text-text-secondary-dark text-base font-bold hover:bg-gray-200 dark:hover:bg-white/20">Cancelar</button>
                         <button 
                             type="submit" 
-                            className="flex-1 h-14 flex items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg transition-all duration-200 hover:bg-blue-700 active:scale-95"
-                            aria-label="Salvar"
+                            className="flex-1 h-14 flex items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg transition-all duration-200 hover:bg-blue-700 active:scale-95 gap-2"
                         >
-                            <span className="material-symbols-outlined !text-4xl">check</span>
+                            <span className="material-symbols-outlined">check</span>
+                            <span className="font-bold uppercase">Salvar</span>
                         </button>
                     </div>
                 </form>
