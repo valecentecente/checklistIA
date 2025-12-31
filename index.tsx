@@ -13,7 +13,6 @@ import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
 import { AppModals } from './components/modals/AppModals';
 
 const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
-    // Fix: Removed double assignment to setSliderX
     const [sliderX, setSliderX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -237,7 +236,6 @@ const AppContent: React.FC = () => {
 
     const editingItem = useMemo(() => items.find(item => item.id === app.editingItemId) || null, [items, app.editingItemId]);
     
-    // Soma apenas do que está marcado como comprado para o Total e o Budget
     const purchasedTotal = useMemo(() => {
         return items
             .filter(i => i.isPurchased)
@@ -247,7 +245,6 @@ const AppContent: React.FC = () => {
             }, 0);
     }, [items]);
 
-    // Soma geral da lista para o orçamento (Previsto)
     const listTotal = useMemo(() => {
         return items.reduce((acc, item) => {
             const val = parseFloat(String(item.calculatedPrice)) || 0;
@@ -302,7 +299,7 @@ const AppContent: React.FC = () => {
         app.setCurrentMarketName(null);
         app.setIsSharedSession(false);
         app.setFocusMode(false); 
-        app.clearBudget(); // Zera o orçamento ao finalizar
+        app.clearBudget(); 
         app.closeModal('savePurchase');
         app.setHomeViewActive(true);
         app.showToast("Sua compra foi salva!");
@@ -313,7 +310,7 @@ const AppContent: React.FC = () => {
         app.setCurrentMarketName(null);
         app.setIsSharedSession(false);
         app.setFocusMode(false); 
-        app.clearBudget(); // Zera o orçamento ao limpar a lista
+        app.clearBudget(); 
         app.closeModal('savePurchase');
         app.setHomeViewActive(true);
         app.showToast("Lista limpa.");
@@ -473,7 +470,6 @@ const AppContent: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            {/* BOTÃO ADMIN HUB MOBILE - AO LADO DA FOTO */}
                             {app.isAdmin && (
                                 <button 
                                     onClick={() => app.openModal('adminHub')}
@@ -549,9 +545,14 @@ const AppContent: React.FC = () => {
                 <main className={`flex-1 ${showHomeView ? 'lg:overflow-y-auto overflow-hidden' : 'overflow-y-auto'} p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`} style={globalPatternStyle}>
                     <div className="flex flex-col gap-4 relative z-10">
                         {app.budget !== null && !showHomeView && (
-                            <div className="flex flex-col gap-4 rounded-xl bg-white/5 p-5 border border-white/10">
-                                <div className="flex items-center justify-between text-white"><p className="text-base font-semibold">Resumo Gasto</p><span>{formattedTotal} / {formatCurrency(app.budget)}</span></div>
-                                <div className="h-2.5 rounded-full bg-white/10"><div className={`h-2.5 rounded-full transition-all duration-500 ${purchasedTotal > app.budget ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${budgetProgress}%` }}></div></div>
+                            <div className="flex flex-col gap-4 rounded-2xl bg-white dark:bg-white/5 p-5 border border-gray-100 dark:border-white/10 shadow-sm animate-fadeIn">
+                                <div className="flex items-center justify-between text-slate-800 dark:text-white">
+                                    <p className="text-base font-bold font-display uppercase tracking-tight">Resumo Gasto</p>
+                                    <span className="font-black text-sm">{formattedTotal} / {formatCurrency(app.budget)}</span>
+                                </div>
+                                <div className="h-3 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden shadow-inner">
+                                    <div className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${purchasedTotal > app.budget ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${budgetProgress}%` }}></div>
+                                </div>
                             </div>
                         )}
                         {showHomeView ? <EmptyStateCTA onShowRecipeAssistant={() => app.openModal('recipeAssistant')} onShowBudget={() => app.openModal('budget')} /> : <ShoppingList groupedItems={groupedItems} onDeleteItem={deleteItem} onDeleteGroup={deleteRecipeGroup} onStartEdit={app.startEdit} onShowRecipe={app.showRecipe} onTogglePurchased={toggleItemPurchased} />}
@@ -591,4 +592,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 24/05/2024 - Estabilidade Garantida V2.6
+// Checkpoint de Segurança: 24/05/2024 - Estabilidade Garantida V2.7
