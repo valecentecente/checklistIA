@@ -170,7 +170,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             </div>
 
             <div 
-                className="relative w-full h-[62dvh] lg:h-[540px] group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]"
+                className="relative w-full h-[72dvh] lg:h-[540px] group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
