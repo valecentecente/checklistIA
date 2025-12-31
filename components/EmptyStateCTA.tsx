@@ -14,7 +14,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     const [touchStart, setTouchStart] = useState<number | null>(null);
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
     
-    // Configuração de palavras-chave por momento do dia para o algoritmo de peso
     const slotKeywords = useMemo(() => {
         const hour = new Date().getHours();
         if (hour >= 6 && hour < 11) return ['café', 'pão', 'fruta', 'suco', 'tapioca', 'ovo', 'omelete', 'vitamina', 'bolo', 'amanhã'];
@@ -24,7 +23,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return ['hambúrguer', 'pizza', 'doce', 'snack', 'rápido', 'miojo', 'madrugada', 'lanche'];
     }, []);
 
-    // Identificador dinâmico do momento para o rótulo do MODO
     const currentModeName = useMemo(() => {
         const hour = new Date().getHours();
         if (hour >= 6 && hour < 11) return "CAFÉ";
@@ -34,7 +32,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return "CORUJÃO";
     }, []);
 
-    // Rótulo textual do momento
     const timeBasedLabel = useMemo(() => {
         const hour = new Date().getHours();
         if (hour >= 6 && hour < 11) return "Bom dia • Seu café da manhã";
@@ -44,7 +41,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return "Corujão • Lanche da madrugada";
     }, []);
 
-    // Lógica de Curadoria Inteligente (USANDO TODO O ACERVO)
     const displayRecipes = useMemo(() => {
         if (!allRecipesPool || allRecipesPool.length === 0) return [] as FullRecipe[];
         
@@ -55,7 +51,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         });
 
         const scoredRecipes = completeRecipes.map(recipe => {
-            let score = Math.random() * 5; // Base aleatória para variação
+            let score = Math.random() * 5;
             const recipeText = (recipe.name + ' ' + (recipe.tags?.join(' ') || '')).toLowerCase();
             
             const matches = slotKeywords.filter(kw => recipeText.includes(kw.toLowerCase()));
@@ -66,14 +62,12 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             return { recipe, score };
         });
 
-        // Retorna a lista completa ordenada por relevância
         return scoredRecipes
             .sort((a, b) => b.score - a.score)
             .map(item => item.recipe);
             
     }, [allRecipesPool, slotKeywords]);
 
-    // Navegação do carrossel
     const minSwipeDistance = 50;
 
     const onTouchStart = (e: React.TouchEvent) => {
@@ -114,8 +108,53 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
         return () => clearInterval(interval);
     }, [displayRecipes.length]);
 
+    // Lógica para definir a animação baseada no index
+    const getKenBurnsClass = (index: number) => {
+        const animations = [
+            'animate-ken-zoom-in',
+            'animate-ken-zoom-out',
+            'animate-ken-pan-right',
+            'animate-ken-pan-left',
+            'animate-ken-pan-up',
+            'animate-ken-diagonal'
+        ];
+        return animations[index % animations.length];
+    };
+
     return (
         <div className="flex flex-col gap-5 animate-fadeIn">
+            <style>{`
+                @keyframes ken-zoom-in {
+                    0% { transform: scale(1); }
+                    100% { transform: scale(1.15); }
+                }
+                @keyframes ken-zoom-out {
+                    0% { transform: scale(1.15); }
+                    100% { transform: scale(1); }
+                }
+                @keyframes ken-pan-right {
+                    0% { transform: scale(1.1) translateX(-5%); }
+                    100% { transform: scale(1.1) translateX(5%); }
+                }
+                @keyframes ken-pan-left {
+                    0% { transform: scale(1.1) translateX(5%); }
+                    100% { transform: scale(1.1) translateX(-5%); }
+                }
+                @keyframes ken-pan-up {
+                    0% { transform: scale(1.1) translateY(5%); }
+                    100% { transform: scale(1.1) translateY(-5%); }
+                }
+                @keyframes ken-diagonal {
+                    0% { transform: scale(1.1) translate(-3%, -3%); }
+                    100% { transform: scale(1.1) translate(3%, 3%); }
+                }
+                .animate-ken-zoom-in { animation: ken-zoom-in 8.5s linear infinite alternate; }
+                .animate-ken-zoom-out { animation: ken-zoom-out 8.5s linear infinite alternate; }
+                .animate-ken-pan-right { animation: ken-pan-right 8.5s linear infinite alternate; }
+                .animate-ken-pan-left { animation: ken-pan-left 8.5s linear infinite alternate; }
+                .animate-ken-pan-up { animation: ken-pan-up 8.5s linear infinite alternate; }
+                .animate-ken-diagonal { animation: ken-diagonal 8.5s linear infinite alternate; }
+            `}</style>
             
             <div className="px-1 flex items-center justify-start mt-2">
                 <div className="flex items-center gap-2 overflow-hidden">
@@ -129,7 +168,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             </div>
 
-            {/* VITRINE COM TRANSIÇÃO SLIDE INFINITA - Altura ajustada dinamicamente */}
             <div className="relative w-full h-[62dvh] lg:h-[540px] group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]">
                 {displayRecipes.length > 0 ? (
                     <div 
@@ -152,16 +190,14 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                     onClick={() => showRecipe(recipe)}
                                     className={`relative flex-shrink-0 w-full h-full cursor-pointer overflow-hidden transition-all duration-700 ${index === activeIndex ? 'opacity-100 scale-100' : 'opacity-40 scale-95 blur-[4px]'}`}
                                 >
-                                    {/* Imagem de Fundo */}
+                                    {/* Imagem de Fundo com Animação Ken Burns Dinâmica */}
                                     <div 
-                                        className="absolute inset-0 bg-cover bg-center bg-no-repeat" 
+                                        className={`absolute inset-0 bg-cover bg-center bg-no-repeat ${index === activeIndex ? getKenBurnsClass(index) : ''}`} 
                                         style={{ backgroundImage: `url(${recipe.imageUrl})` }}
                                     ></div>
                                     
-                                    {/* Gradientes */}
                                     <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90"></div>
                                     
-                                    {/* Conteúdo */}
                                     <div className="absolute inset-0 p-7 lg:p-9 pt-10 lg:pt-14 flex flex-col items-start justify-between z-20">
                                         <div className="flex flex-col items-start w-full">
                                             <div className="flex items-center gap-2.5 mb-3 lg:mb-5">
@@ -210,7 +246,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     </div>
                 )}
 
-                {/* BOTÕES DE NAVEGAÇÃO WEB */}
                 <div className="hidden lg:block">
                     <button 
                         onClick={handlePrev}
@@ -227,7 +262,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             </div>
 
-            {/* BOTÕES DE UTILITÁRIOS */}
             <div className="hidden lg:grid grid-cols-2 gap-3 lg:gap-4">
                 <button onClick={() => openModal('calculator')} className="group flex flex-col items-center gap-2 p-5 lg:p-7 rounded-[2rem] lg:rounded-[2.5rem] bg-white dark:bg-[#18181b] border border-gray-100 dark:border-white/5 text-center active:scale-95 transition-all shadow-sm">
                     <div className="h-9 w-9 lg:h-12 lg:w-12 rounded-[1rem] lg:rounded-[1.2rem] bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 group-hover:rotate-12 transition-transform duration-300">
