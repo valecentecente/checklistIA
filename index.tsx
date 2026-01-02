@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -246,19 +245,11 @@ const AppContent: React.FC = () => {
             }, 0);
     }, [items]);
 
-    const listTotal = useMemo(() => {
-        return items.reduce((acc, item) => {
-            const val = parseFloat(String(item.calculatedPrice)) || 0;
-            return acc + val;
-        }, 0);
-    }, [items]);
-
     const purchasedItemsCount = useMemo(() => items.filter(item => item.isPurchased).length, [items]);
     const formattedTotal = useMemo(() => formatCurrency(purchasedTotal), [purchasedTotal, formatCurrency]);
     const budgetProgress = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.min((purchasedTotal / app.budget) * 100, 100), [purchasedTotal, app.budget]);
     const rawPercentage = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.round((purchasedTotal / app.budget) * 100), [purchasedTotal, app.budget]);
 
-    // LÓGICA DE CORES UNIFICADA (ÍCONE, BARRA E PORCENTAGEM)
     const budgetStatus = useMemo(() => {
         if (!app.budget) return { color: 'text-gray-600', bg: 'bg-green-500', piggy: 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300', pulse: false };
         const percent = (purchasedTotal / app.budget) * 100;
@@ -621,10 +612,9 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 h-full"><NavButton icon={<span className="material-symbols-outlined text-[28px] animate-color-pulse">auto_awesome</span>} label="Menu" onClick={handleBottomMenuClick} /></div>
                     </div>
                 </footer>
-
-                <AppModals sharedListData={sharedListData} isImportingShare={isImportingShare} isDistributionModalOpen={app.isDistributionModalOpen} closeDistributionModal={closeDistributionModal} handleShare={handleShare} handleAddItem={handleAddItem} editingItem={editingItem} handleSavePurchase={handleSavePurchase} handleFinishWithoutSaving={handleFinishWithoutSaving} handleRepeatPurchase={handleRepeatPurchase} handleAddHistoricItem={handleAddHistoricItem} handleImportSharedList={handleImportSharedList} handleShareAndStart={handleShareAndStart} handleAddToCurrentList={handleAddToCurrentList} handleStartNewListForRecipe={handleStartNewListForRecipe} />
             </div>
             <WebSidebarRight />
+            <AppModals sharedListData={sharedListData} isImportingShare={isImportingShare} isDistributionModalOpen={app.isDistributionModalOpen} closeDistributionModal={closeDistributionModal} handleShare={handleShare} handleAddItem={handleAddItem} editingItem={editingItem} handleSavePurchase={handleSavePurchase} handleFinishWithoutSaving={handleFinishWithoutSaving} handleRepeatPurchase={handleRepeatPurchase} handleAddHistoricItem={handleAddHistoricItem} handleImportSharedList={handleImportSharedList} handleShareAndStart={handleShareAndStart} handleAddToCurrentList={handleAddToCurrentList} handleStartNewListForRecipe={handleStartNewListForRecipe} />
         </div>
     );
 };
@@ -633,4 +623,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 26/10/2025 - Estabilidade Garantida V3.2
+// Checkpoint de Segurança: 24/05/2025 - Estabilidade Garantida V3.4

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, deleteDoc, updateDoc, where, addDoc } from 'firebase/firestore';
@@ -29,9 +28,11 @@ const FACTORY_CATEGORIES = [
     "🍝 Massas/Pizzas", "🍹 Drinks/Coquetéis"
 ];
 
-const ignorePermissionError = (err: any) => {
-    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
-};
+const REFINEMENT_LEVELS = [
+    { id: 'simple', label: 'Simples', sub: 'Econômica & Rápida', color: 'bg-green-600', text: 'Receitas populares, com ingredientes baratos de mercado de bairro.' },
+    { id: 'daily', label: 'Dia a Dia', sub: 'Prática & Comum', color: 'bg-blue-600', text: 'O padrão das famílias brasileiras. Pratos caseiros bem temperados.' },
+    { id: 'gourmet', label: 'Gourmet', sub: 'Premium & Elaborada', color: 'bg-purple-600', text: 'Pratos de restaurante, ingredientes caros e técnicas avançadas.' }
+];
 
 const getRecipeDocId = (name: string) => {
     if (!name) return 'recipe-' + Date.now();
@@ -48,12 +49,13 @@ export const AdminContentFactoryModal: React.FC = () => {
     const { user } = useAuth();
     const { offers } = useShoppingList();
     
-    // Estados de UI
     const [activeTab, setActiveTab] = useState<'producao' | 'acervo' | 'leads'>('producao');
     const [searchTerm, setSearchTerm] = useState('');
     const [leadsSearchTerm, setLeadsSearchTerm] = useState('');
     
-    // Estados de Produção
+    // Produção
+    const [refinementLevel, setRefinementLevel] = useState('daily');
+    const [customNiche, setCustomNiche] = useState('');
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [qtyPerCategory, setQtyPerCategory] = useState(1);
     const [manualTitles, setManualTitles] = useState('');
@@ -62,13 +64,16 @@ export const AdminContentFactoryModal: React.FC = () => {
     const [shouldStop, setShouldStop] = useState(false);
     const stopSignalRef = useRef(false);
     
-    // Estados do Acervo
+    // Acervo e Leads
     const [recipes, setRecipes] = useState<RecipeWithId[]>([]);
     const [isLoadingAcervo, setIsLoadingAcervo] = useState(true);
     const [ignoredLeads, setIgnoredLeads] = useState<string[]>([]);
     const logEndRef = useRef<HTMLDivElement>(null);
 
-    // Estados do Editor
+    // Fix: Calculate brokenCount using useMemo
+    const brokenCount = useMemo(() => recipes.filter(r => r.isBroken).length, [recipes]);
+
+    // Editor
     const [editingRecipe, setEditingRecipe] = useState<RecipeWithId | null>(null);
     const [editName, setEditName] = useState('');
     const [editIngredients, setEditIngredients] = useState('');
@@ -82,20 +87,19 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     const apiKey = process.env.API_KEY as string;
 
-    // Efeito para carregar termos ignorados (Blacklist)
+    // Monitorar termos ignorados
     useEffect(() => {
         if (!isContentFactoryModalOpen || !db || !isAdmin) return;
-        
         const unsubscribe = onSnapshot(collection(db, 'ignored_leads'), (snap) => {
             const list = snap.docs.map(d => d.data().term as string);
             setIgnoredLeads(list);
         }, (error) => {
-            console.warn("[Factory] Ignored leads listener failed:", error.message);
+            console.warn("[Factory] Ignored leads failed:", error.message);
         });
-        
         return () => unsubscribe();
     }, [isContentFactoryModalOpen, isAdmin]);
 
+    // Ranking de Leads
     const recipeLeadsRanking = useMemo(() => {
         const counts: Record<string, number> = {};
         const existingTerms = offers.map(o => o.name.toLowerCase().trim());
@@ -105,13 +109,8 @@ export const AdminContentFactoryModal: React.FC = () => {
             if (recipe.suggestedLeads && Array.isArray(recipe.suggestedLeads)) {
                 recipe.suggestedLeads.forEach(lead => {
                     const cleanLead = lead.trim().toLowerCase();
-                    
-                    // Validação de segurança e filtro de ignorados
                     if (cleanLead && cleanLead !== 'nenhum' && !ignoredLeads.includes(cleanLead)) {
-                        const alreadyExists = 
-                            existingTerms.some(t => t.includes(cleanLead)) || 
-                            existingTags.includes(cleanLead);
-
+                        const alreadyExists = existingTerms.some(t => t.includes(cleanLead)) || existingTags.includes(cleanLead);
                         if (!alreadyExists) {
                             counts[cleanLead] = (counts[cleanLead] || 0) + 1;
                         }
@@ -126,19 +125,27 @@ export const AdminContentFactoryModal: React.FC = () => {
     }, [recipes, offers, ignoredLeads]);
 
     const filteredLeads = useMemo(() => {
-        if (!leadsSearchTerm.trim()) return recipeLeadsRanking;
-        const lowTerm = leadsSearchTerm.toLowerCase();
+        const lowTerm = leadsSearchTerm.toLowerCase().trim();
+        if (!lowTerm) return recipeLeadsRanking;
         return recipeLeadsRanking.filter(l => l.term.includes(lowTerm));
     }, [recipeLeadsRanking, leadsSearchTerm]);
 
+    const handleIgnoreLead = async (term: string) => {
+        if (!db || !isAdmin) return;
+        try {
+            await setDoc(doc(db, 'ignored_leads', term.replace(/\s+/g, '-')), {
+                term,
+                ignoredBy: user?.displayName || 'Admin',
+                createdAt: serverTimestamp()
+            });
+            showToast(`Termo "${term}" ocultado.`);
+        } catch (e) {
+            showToast("Erro ao ignorar.");
+        }
+    };
+
     const checkRecipeIntegrity = (r: FullRecipe): boolean => {
-        return !!(
-            r.imageUrl && r.imageUrl.length > 50 &&
-            r.ingredients && r.ingredients.length > 0 &&
-            r.instructions && r.instructions.length > 0 &&
-            r.tags && r.tags.length > 0 &&
-            r.suggestedLeads && r.suggestedLeads.length > 0
-        );
+        return !!(r.imageUrl && r.imageUrl.length > 50 && r.ingredients?.length > 0 && r.instructions?.length > 0 && r.tags?.length > 0 && r.suggestedLeads?.length > 0);
     };
 
     const addLog = (text: string, type: FactoryLog['type'] = 'info') => {
@@ -156,14 +163,9 @@ export const AdminContentFactoryModal: React.FC = () => {
             img.src = base64Str;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                if (width > maxWidth) {
-                    height = Math.round((height * maxWidth) / width);
-                    width = maxWidth;
-                }
-                canvas.width = width;
-                canvas.height = height;
+                let width = img.width; let height = img.height;
+                if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
+                canvas.width = width; canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 if (!ctx) return reject(new Error("Canvas context failed"));
                 ctx.drawImage(img, 0, 0, width, height);
@@ -173,55 +175,56 @@ export const AdminContentFactoryModal: React.FC = () => {
         });
     };
 
-    useEffect(() => {
-        logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [logs]);
+    useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
 
     useEffect(() => {
         if (!isContentFactoryModalOpen || !db || !isAdmin) return;
         setIsLoadingAcervo(true);
         const qRecipes = query(collection(db, 'global_recipes'), limit(2000));
-        const unsubRecipes = onSnapshot(qRecipes, 
-            (snap) => {
-                const data = snap.docs.map(d => {
-                    const rData = d.data() as FullRecipe;
-                    return { ...rData, id: d.id, isBroken: !checkRecipeIntegrity(rData) } as RecipeWithId;
-                });
-                data.sort((a,b) => {
-                    if (a.isBroken && !b.isBroken) return 1;
-                    if (!a.isBroken && b.isBroken) return -1;
-                    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
-                });
-                setRecipes(data);
-                setIsLoadingAcervo(false);
-            }, 
-            (error) => {
-                if (!ignorePermissionError(error)) console.warn("[Factory] Erro Acervo:", error.message);
-                setIsLoadingAcervo(false);
-            }
-        );
+        const unsubRecipes = onSnapshot(qRecipes, (snap) => {
+            const data = snap.docs.map(d => {
+                const rData = d.data() as FullRecipe;
+                return { ...rData, id: d.id, isBroken: !checkRecipeIntegrity(rData) } as RecipeWithId;
+            });
+            data.sort((a,b) => {
+                if (a.isBroken && !b.isBroken) return 1;
+                if (!a.isBroken && b.isBroken) return -1;
+                return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+            });
+            setRecipes(data);
+            setIsLoadingAcervo(false);
+        });
         return () => unsubRecipes();
     }, [isContentFactoryModalOpen, isAdmin]);
 
     const runBatchProduction = async () => {
-        const manualList = manualTitles.split('\n').map(t => t.trim()).filter(t => t);
-        if (manualList.length === 0 && selectedCategories.length === 0) {
-            showToast("Selecione categorias ou digite títulos.");
+        const manualList = manualTitles.split(/[\n,]/).map(t => t.trim()).filter(t => t);
+        const categoriesToProcess = [...selectedCategories];
+        if (customNiche.trim()) categoriesToProcess.push(`Personalizado: ${customNiche.trim()}`);
+
+        if (manualList.length === 0 && categoriesToProcess.length === 0) {
+            showToast("Selecione itens para produzir.");
             return;
         }
+
         setIsGenerating(true);
         setShouldStop(false);
         stopSignalRef.current = false;
-        setLogs([{ text: "🛡️ MODO BLINDAGEM HUMANA ATIVO", type: 'warning' }]);
-        addLog("Iniciando produção com padrões de tráfego orgânico...");
+        setLogs([{ text: "⚙️ MÁQUINA DE CONTEÚDO TROPICALIZADA INICIADA", type: 'warning' }]);
+        
+        const refinement = REFINEMENT_LEVELS.find(r => r.id === refinementLevel);
+        addLog(`MODALIDADE: ${refinement?.label.toUpperCase()}`, 'info');
+
         const ai = new GoogleGenAI({ apiKey });
         let masterQueue: string[] = [...manualList];
-        if (selectedCategories.length > 0) {
-            addLog(`[IA] Planejando ${qtyPerCategory} pratos para cada nicho selecionado...`, 'info');
-            for (const cat of selectedCategories) {
+
+        if (categoriesToProcess.length > 0) {
+            addLog(`[IA] Planejando curadoria para ${categoriesToProcess.length} nichos...`, 'info');
+            for (const cat of categoriesToProcess) {
                 if (stopSignalRef.current) break;
                 try {
-                    const promptNames = `Você é um curador gastronômico. Gere uma lista com EXATAMENTE ${qtyPerCategory} nomes de receitas famosas, deliciosas e gourmet para a categoria de mercado: "${cat}". Retorne apenas um JSON array de strings. Ex: ["Nome 1", "Nome 2"]`;
+                    const promptNames = `Gere ${qtyPerCategory} nomes de receitas para a categoria brasileira: "${cat}". 
+                    ESTILO: ${refinement?.label} (${refinement?.text}). Retorne JSON array de strings.`;
                     const res = await callGenAIWithRetry(() => ai.models.generateContent({
                         model: 'gemini-3-flash-preview',
                         contents: promptNames,
@@ -230,53 +233,51 @@ export const AdminContentFactoryModal: React.FC = () => {
                     const categoryTitles = JSON.parse(res.text || "[]") as string[];
                     masterQueue = [...masterQueue, ...categoryTitles];
                     addLog(`Curadoria ${cat}: ${categoryTitles.length} itens encontrados.`, 'success');
-                    await waitRandom(2000, 5000);
+                    await waitRandom(1500, 3000);
                 } catch (e: any) {
                     addLog(`Erro na curadoria de ${cat}: ${e.message}`, 'error');
                 }
             }
         }
+
         masterQueue = Array.from(new Set(masterQueue));
         addLog(`📋 FILA TOTAL: ${masterQueue.length} RECEITAS`, 'info');
+
         for (let i = 0; i < masterQueue.length; i++) {
-            if (stopSignalRef.current) {
-                addLog("⚠️ Produção interrompida manualmente.", 'warning');
-                break;
-            }
+            if (stopSignalRef.current) break;
             const title = masterQueue[i];
             const docId = getRecipeDocId(title);
-            addLog(`[${i + 1}/${masterQueue.length}] Verificando acervo: ${title.toUpperCase()}`, 'info');
+            addLog(`[${i + 1}/${masterQueue.length}] Processando: ${title.toUpperCase()}`, 'info');
+            
             try {
                 const existingDoc = await getDoc(doc(db!, 'global_recipes', docId));
-                if (existingDoc.exists()) {
-                    const data = existingDoc.data() as FullRecipe;
-                    if (checkRecipeIntegrity(data)) {
-                        addLog(`✨ "${title}" já está impecável no acervo. Pulando...`, 'success');
-                        continue;
-                    } else {
-                        addLog(`⚠️ "${title}" existe mas está incompleta. Reconstruindo...`, 'warning');
-                    }
+                if (existingDoc.exists() && checkRecipeIntegrity(existingDoc.data() as FullRecipe)) {
+                    addLog(`✨ "${title}" já está pronta. Pulando...`, 'success');
+                    continue;
                 }
-            } catch (e) {
-                addLog(`Erro ao consultar banco: ${title}. Tentando gerar...`, 'warning');
-            }
+            } catch (e) {}
+
             try {
+                const refinementInstruction = refinement?.id === 'simple' 
+                    ? 'Use ingredientes básicos de cesta básica, substitutos baratos e linguagem popular.' 
+                    : refinement?.id === 'daily' 
+                        ? 'Receita prática para o dia a dia brasileiro. Ingredientes acessíveis.'
+                        : 'Ingredientes premium, técnicas avançadas e nível gourmet.';
+
                 const systemPrompt = `Gere uma receita brasileira completa para: "${title}".
+                FORMA: ${refinement?.label}. INSTRUÇÃO: ${refinementInstruction}.
                 Formato JSON: {
                     "name": "${title}",
                     "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz"}],
                     "instructions": ["Passo 1..."],
-                    "imageQuery": "Apetizing food photography of ${title}, studio light",
+                    "imageQuery": "Apetizing food photography of ${title}",
                     "servings": "4 porções",
                     "prepTimeInMinutes": 45,
-                    "difficulty": "Médio",
-                    "cost": "Médio",
-                    "tags": ["Almoço", "Forno", "Barato", "Caseiro"],
-                    "suggestedLeads": ["panela", "faca"]
-                }
-                REGRAS CRÍTICAS:
-                1. Campo 'tags': PROIBIDO repetir palavras do título "${title}". Use Momento, Perfil, Técnica.
-                2. Campo 'suggestedLeads': Deve conter APENAS nomes de UTENSÍLIOS ou ELETRODOMÉSTICOS (ex: batedeira, airfryer, liquidificador, forma de bolo). PROIBIDO copiar as tags ou o nome da receita para este campo.`;
+                    "difficulty": "${refinement?.label === 'Simples' ? 'Fácil' : 'Médio'}",
+                    "cost": "${refinement?.id === 'simple' ? 'Baixo' : refinement?.id === 'daily' ? 'Médio' : 'Alto'}",
+                    "tags": ["Nível ${refinement?.label}"],
+                    "suggestedLeads": ["utensílio relevante"]
+                }`;
                 
                 const textRes = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-3-flash-preview',
@@ -284,51 +285,31 @@ export const AdminContentFactoryModal: React.FC = () => {
                     config: { responseMimeType: "application/json" }
                 }));
                 const details = JSON.parse(textRes.text || "{}");
-                addLog("Revisando ingredientes e passos...");
-                await waitRandom(3000, 6000);
-                addLog("Preparando estúdio fotográfico IA...");
+                
                 const imgRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-2.5-flash-image',
-                    contents: { parts: [{ text: details.imageQuery || `High-end food photography of ${title}, ultra-realistic, 4k.` }] }
+                    contents: { parts: [{ text: details.imageQuery || `High-end food photography of ${title}` }] }
                 }));
+                
                 let finalImageUrl = "";
                 for (const part of imgRes.candidates[0].content.parts) {
                     if (part.inlineData) {
-                        addLog("[IA] Otimizando fotografia para o banco...");
-                        const rawBase64 = `data:image/jpeg;base64,${part.inlineData.data}`;
-                        finalImageUrl = await compressBase64Image(rawBase64);
+                        finalImageUrl = await compressBase64Image(`data:image/jpeg;base64,${part.inlineData.data}`);
                         break;
                     }
                 }
 
-                const nameKeywords = generateKeywords(details.name || title);
-                const tagKeywords = (details.tags || []).flatMap((t: string) => generateKeywords(t));
-                const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
-
-                const finalData = { 
-                    ...details, 
-                    imageUrl: finalImageUrl, 
-                    imageSource: 'genai', 
-                    keywords: finalKeywords,
-                    createdAt: serverTimestamp() 
-                };
+                const finalData = { ...details, imageUrl: finalImageUrl, imageSource: 'genai', keywords: generateKeywords(details.name || title), createdAt: serverTimestamp() };
                 await setDoc(doc(db!, 'global_recipes', docId), finalData, { merge: true });
                 addLog(`✅ [${i+1}/${masterQueue.length}] "${title}" finalizada!`, 'success');
-                if (i < masterQueue.length - 1) {
-                    addLog("Aguardando próximo pedido (Padrão Humano)...");
-                    await waitRandom(8000, 15000);
-                }
+                await waitRandom(5000, 8000);
             } catch (err: any) {
                 addLog(`❌ Falha em "${title}": ${err.message}`, 'error');
-                await waitRandom(5000, 10000);
+                await waitRandom(3000, 5000);
             }
         }
-        addLog("🏁 PROCESSO FINALIZADO COM SEGURANÇA", 'success');
+        addLog("🏁 PROCESSO FINALIZADO", 'success');
         setIsGenerating(false);
-        setShouldStop(false);
-        stopSignalRef.current = false;
-        setSelectedCategories([]);
-        setManualTitles("");
     };
 
     const handleOpenEditor = (recipe: RecipeWithId) => {
@@ -343,9 +324,21 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     const handleCopyAll = () => {
         const fullText = `RECEITA: ${editName}\n\nINGREDIENTES:\n${editIngredients}\n\nPREPARO:\n${editInstructions}\n\nTAGS: ${editTags}\nLEADS: ${editLeads}`;
-        navigator.clipboard.writeText(fullText).then(() => {
-            showToast("Texto copiado!");
-        });
+        navigator.clipboard.writeText(fullText).then(() => showToast("Texto copiado!"));
+    };
+
+    const handlePreviewRecipe = () => {
+        if (!editingRecipe) return;
+        const previewData: FullRecipe = {
+            ...editingRecipe,
+            name: editName,
+            ingredients: editIngredients.split('\n').filter(l => l).map(line => ({ simplifiedName: line.split(' ')[0], detailedName: line })),
+            instructions: editInstructions.split('\n').filter(l => l),
+            tags: editTags.split(',').map(t => t.trim()).filter(t => t),
+            suggestedLeads: editLeads.split(',').map(l => l.trim()).filter(l => l),
+            imageUrl: editImage,
+        };
+        app.showRecipe(previewData);
     };
 
     const handleRegenerateText = async () => {
@@ -353,18 +346,7 @@ export const AdminContentFactoryModal: React.FC = () => {
         setIsRegeneratingText(true);
         try {
             const ai = new GoogleGenAI({ apiKey });
-            const prompt = `Gere uma receita brasileira COMPLETA para: "${editName}". Retorne EXCLUSIVAMENTE um JSON.
-            Estrutura:
-            {
-              "ingredients": [{"simplifiedName": "...", "detailedName": "..."}],
-              "instructions": ["passo 1", "passo 2"],
-              "tags": ["contextuais aqui"],
-              "suggestedLeads": ["equipamentos de cozinha aqui"]
-            }
-            REGRAS OBRIGATÓRIAS:
-            1. tags: Momento, Perfil, Técnica. PROIBIDO repetir o nome da receita "${editName}".
-            2. suggestedLeads: Identifique apenas utensílios ou eletrodomésticos necessários (ex: batedeira, airfryer, liquidificador, forma de silicone). JAMAIS repita o modo de preparo ou tags neste campo. Deve ser uma lista de PRODUTOS.`;
-
+            const prompt = `Gere uma receita brasileira COMPLETA para: "${editName}". JSON ONLY. Nível: ${refinementLevel}.`;
             const textRes = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: prompt,
@@ -375,12 +357,8 @@ export const AdminContentFactoryModal: React.FC = () => {
             if (details.instructions) setEditInstructions(details.instructions.join('\n'));
             if (details.tags) setEditTags(details.tags.join(', '));
             if (details.suggestedLeads) setEditLeads(details.suggestedLeads.join(', '));
-            showToast("Receita e dados atualizados via IA!");
-        } catch (e) {
-            showToast("Erro ao regenerar texto.");
-        } finally {
-            setIsRegeneratingText(false);
-        }
+            showToast("Dados atualizados via IA!");
+        } catch (e) { showToast("Erro."); } finally { setIsRegeneratingText(false); }
     };
 
     const handleRegenerateImage = async () => {
@@ -388,101 +366,47 @@ export const AdminContentFactoryModal: React.FC = () => {
         setIsRegeneratingImage(true);
         try {
             const ai = new GoogleGenAI({ apiKey });
-            const prompt = `High-end food photography of ${editName}, ultra-realistic, 4k, studio lighting, appetizing.`;
             const imgRes: any = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash-image',
-                contents: { parts: [{ text: prompt }] }
+                contents: { parts: [{ text: `High resolution food photography of ${editName}` }] }
             }));
             for (const part of imgRes.candidates[0].content.parts) {
                 if (part.inlineData) {
-                    const rawBase64 = `data:image/jpeg;base64,${part.inlineData.data}`;
-                    const compressed = await compressBase64Image(rawBase64);
-                    setEditImage(compressed);
-                    showToast("Nova foto gerada!");
-                    break;
+                    setEditImage(await compressBase64Image(`data:image/jpeg;base64,${part.inlineData.data}`));
+                    showToast("Nova foto gerada!"); break;
                 }
             }
-        } catch (e) {
-            showToast("Erro ao gerar foto.");
-        } finally {
-            setIsRegeneratingImage(false);
-        }
+        } catch (e) { showToast("Erro."); } finally { setIsRegeneratingImage(false); }
     };
 
     const handleSaveRecipe = async () => {
         if (!editingRecipe || isSaving) return;
         setIsSaving(true);
         try {
-            const ingredientsArray = editIngredients.split('\n').filter(l => l.trim()).map(line => ({ simplifiedName: line.split(' ').slice(0, 2).join(' '), detailedName: line.trim() }));
-            const instructionsArray = editInstructions.split('\n').filter(l => l.trim());
-            const tagsArray = editTags.split(',').map(t => t.trim()).filter(t => t);
-            const leadsArray = editLeads.split(',').map(l => l.trim()).filter(l => l);
-            
-            const nameKeywords = generateKeywords(editName);
-            const tagKeywords = tagsArray.flatMap(t => generateKeywords(t));
-            const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
-
             await updateDoc(doc(db!, 'global_recipes', editingRecipe.id), { 
-                name: editName, 
-                ingredients: ingredientsArray, 
-                instructions: instructionsArray, 
-                tags: tagsArray, 
-                suggestedLeads: leadsArray, 
-                imageUrl: editImage,
-                keywords: finalKeywords, 
-                updatedAt: serverTimestamp() 
+                name: editName, ingredients: editIngredients.split('\n').filter(l => l).map(line => ({ simplifiedName: line.split(' ')[0], detailedName: line })),
+                instructions: editInstructions.split('\n').filter(l => l), tags: editTags.split(',').map(t => t.trim()).filter(t => t), 
+                suggestedLeads: editLeads.split(',').map(l => l.trim()).filter(l => l), 
+                imageUrl: editImage, updatedAt: serverTimestamp() 
             });
-            showToast("Atualizado!");
-            setEditingRecipe(null);
+            showToast("Salvo!"); setEditingRecipe(null);
         } catch (e) { showToast("Erro."); } finally { setIsSaving(false); }
     };
 
-    const toggleCategory = (cat: string) => {
-        setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
-    };
-
-    const handleGerarOfertaAction = (term: string) => {
-        app.setPendingInventoryItem({ 
-            name: term.charAt(0).toUpperCase() + term.slice(1), 
-            tags: term.toLowerCase() 
-        });
-        closeModal('contentFactory');
-        setTimeout(() => app.openModal('admin'), 300);
-    };
-
-    const handleIgnoreLead = async (term: string) => {
-        if (!window.confirm(`Deseja remover "${term}" permanentemente do ranking?`)) return;
-        try {
-            await addDoc(collection(db!, 'ignored_leads'), {
-                term: term.toLowerCase(),
-                ignoredAt: serverTimestamp(),
-                ignoredBy: user?.uid
-            });
-            showToast("Item removido do ranking!");
-        } catch (e) {
-            showToast("Erro ao processar.");
-        }
-    };
-
-    const filteredRecipes = useMemo(() => {
-        const term = searchTerm.toLowerCase().trim();
-        return recipes.filter(r => (r.name?.toLowerCase().includes(term)) || (r.tags?.some(t => t.toLowerCase().includes(term))));
-    }, [recipes, searchTerm]);
-
-    const brokenCount = useMemo(() => recipes.filter(r => r.isBroken).length, [recipes]);
+    const toggleCategory = (cat: string) => setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
 
     if (!isContentFactoryModalOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[250] bg-black/95 flex items-center justify-center p-4 animate-fadeIn" onClick={() => closeModal('contentFactory')}>
-            <div className="bg-[#0f172a] w-[96vw] h-[96vh] max-w-none rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-[#0f172a] w-[96vw] h-[96vh] rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
                 
                 <div className="p-6 bg-slate-800 border-b border-white/5 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400"><span className="material-symbols-outlined">factory</span></div>
                         <h2 className="text-white font-black text-xl uppercase italic tracking-tighter">Fábrica de Conteúdo</h2>
                     </div>
-                    <button onClick={() => closeModal('contentFactory')} className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"><span className="material-symbols-outlined">close</span></button>
+                    <button onClick={() => closeModal('contentFactory')} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors"><span className="material-symbols-outlined">close</span></button>
                 </div>
 
                 <div className="flex bg-slate-900 shrink-0 border-b border-white/5 px-4">
@@ -495,37 +419,66 @@ export const AdminContentFactoryModal: React.FC = () => {
                     {activeTab === 'producao' && (
                         <div className="flex-1 flex gap-6 p-8 animate-fadeIn overflow-hidden">
                             <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-hide">
+                                
                                 <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">1. Selecionar Nichos de Corredor</label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                        {FACTORY_CATEGORIES.map(cat => (
-                                            <button key={cat} onClick={() => toggleCategory(cat)} className={`py-3 px-4 rounded-xl text-[10px] font-black uppercase transition-all border ${selectedCategories.includes(cat) ? 'bg-green-600 border-green-400 text-white shadow-lg scale-95' : 'bg-slate-900 border-white/5 text-slate-400 hover:border-white/20'}`}>{cat}</button>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">1. Nível de Refinamento (Público-Alvo)</label>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {REFINEMENT_LEVELS.map(level => (
+                                            <button 
+                                                key={level.id}
+                                                onClick={() => setRefinementLevel(level.id)}
+                                                className={`flex flex-col p-4 rounded-2xl border-2 transition-all text-left group ${refinementLevel === level.id ? `border-white ${level.color} shadow-lg scale-[0.98]` : 'border-white/5 bg-slate-900 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+                                            >
+                                                <span className="font-black text-white uppercase italic tracking-tighter text-lg">{level.label}</span>
+                                                <span className="text-[9px] font-bold text-white/70 uppercase tracking-widest">{level.sub}</span>
+                                            </button>
                                         ))}
                                     </div>
                                 </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">2. Selecionar Nichos</label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                        {FACTORY_CATEGORIES.map(cat => (
+                                            <button key={cat} onClick={() => toggleCategory(cat)} className={`py-3 px-4 rounded-xl text-[10px] font-black uppercase transition-all border ${selectedCategories.includes(cat) ? 'bg-green-600 border-green-400 text-white shadow-lg' : 'bg-slate-900 border-white/5 text-slate-400 hover:border-white/20'}`}>{cat}</button>
+                                        ))}
+                                    </div>
+                                    <div className="relative mt-2">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Ou digite um nicho personalizado (Ex: Comida Baiana, Comida Mineira...)" 
+                                            value={customNiche}
+                                            onChange={e => setCustomNiche(e.target.value)}
+                                            className="w-full h-12 bg-slate-900 border border-white/10 rounded-xl px-5 text-sm text-white focus:border-green-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">2. Qtd por Categoria</label>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">3. Qtd por Nicho</label>
                                         <input type="number" min="1" max="50" value={qtyPerCategory} onChange={e => setQtyPerCategory(Number(e.target.value))} className="w-full h-14 bg-slate-900 border-white/5 rounded-2xl px-6 text-white font-black text-xl outline-none focus:ring-2 focus:ring-green-500" />
                                     </div>
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">3. Produzir agora?</label>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">4. Iniciar Motores</label>
                                         {isGenerating ? (
-                                            <button onClick={() => { setShouldStop(true); stopSignalRef.current = true; }} className="w-full h-14 bg-red-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl animate-pulse">Interromper Lote</button>
+                                            <button onClick={() => { setShouldStop(true); stopSignalRef.current = true; }} className="w-full h-14 bg-red-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl animate-pulse">Parar Produção</button>
                                         ) : (
                                             <button onClick={runBatchProduction} className="w-full h-14 bg-green-600 hover:bg-green-500 text-white font-black uppercase text-xs rounded-2xl shadow-xl active:scale-95 transition-all">Ligar Máquina IA</button>
                                         )}
                                     </div>
                                 </div>
+
                                 <div className="space-y-2 flex-1 flex flex-col min-h-[150px]">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">4. Pedidos Manuais (Opcional)</label>
-                                    <textarea className="flex-1 w-full bg-slate-900 border-white/5 rounded-2xl p-6 text-white font-bold resize-none focus:ring-2 focus:ring-green-500 outline-none placeholder:text-slate-700" placeholder="Ex: Torta Holandesa de Nutella..." value={manualTitles} onChange={e => setManualTitles(e.target.value)} disabled={isGenerating} />
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">5. Pedidos Manuais (Use vírgula para várias receitas)</label>
+                                    <textarea className="flex-1 w-full bg-slate-900 border-white/5 rounded-2xl p-6 text-white font-bold resize-none focus:ring-2 focus:ring-green-500 outline-none placeholder:text-slate-700" placeholder="Ex: Bolo de Fubá, Torta de Frango, Lasanha..." value={manualTitles} onChange={e => setManualTitles(e.target.value)} disabled={isGenerating} />
                                 </div>
                             </div>
+
                             <div className="w-96 bg-black/40 rounded-[2.5rem] border border-white/5 flex flex-col overflow-hidden">
-                                <div className="p-4 bg-slate-800/50 border-b border-white/5 flex justify-between items-center"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IA Console v4.2</span><span className={`h-2 w-2 rounded-full ${isGenerating ? 'bg-green-500 animate-pulse shadow-[0_0_10px_green]' : 'bg-slate-600'}`}></span></div>
+                                <div className="p-4 bg-slate-800/50 border-b border-white/5 flex justify-between items-center"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IA Console v5.1</span><span className={`h-2 w-2 rounded-full ${isGenerating ? 'bg-green-500 animate-pulse' : 'bg-slate-600'}`}></span></div>
                                 <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-[10px] scrollbar-hide bg-slate-950/50">
-                                    {logs.length === 0 && <p className="text-slate-700 italic">Aguardando comando de produção...</p>}
+                                    {logs.length === 0 && <p className="text-slate-700 italic text-center py-10">Aguardando comando...</p>}
                                     {logs.map((log, i) => (<div key={i} className={`p-2 rounded-lg ${ log.type === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : log.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : log.type === 'warning' ? 'bg-yellow-500/10 text-yellow-400' : 'text-slate-400' }`}>{log.text}</div>))}
                                     <div ref={logEndRef} />
                                 </div>
@@ -541,20 +494,12 @@ export const AdminContentFactoryModal: React.FC = () => {
                             </div>
                             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6 scrollbar-hide">
                                 {isLoadingAcervo ? (
-                                    <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 opacity-50"><div className="h-10 w-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div><p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Sincronizando Banco...</p></div>
-                                ) : filteredRecipes.map(r => (
-                                    <div key={r.id} onClick={() => handleOpenEditor(r)} className={`rounded-3xl border overflow-hidden cursor-pointer group transition-all shadow-xl min-h-[180px] w-full flex flex-col relative ${r.isBroken ? 'bg-red-900/20 border-red-500 shadow-red-900/20 grayscale' : 'bg-slate-800 border-white/5 hover:border-blue-500/50'}`}>
-                                        <div className="aspect-square w-full bg-slate-900 relative shrink-0 overflow-hidden">
-                                            {r.imageUrl ? (
-                                                <div className="absolute inset-0">
-                                                    <img src={r.imageUrl} className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${r.isBroken ? 'sepia-[.3] hue-rotate-[-30deg]' : ''}`} />
-                                                    {r.isBroken && <div className="absolute inset-0 bg-red-600/20 pointer-events-none"></div>}
-                                                </div>
-                                            ) : (
-                                                <div className="absolute inset-0 flex items-center justify-center text-slate-700 bg-red-950/20"><span className="material-symbols-outlined text-4xl">no_photography</span></div>
-                                            )}
-                                            {r.isBroken && <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase shadow-lg">Pendente</div>}
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><span className="material-symbols-outlined text-white text-3xl">edit</span></div>
+                                    <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 opacity-50"><div className="h-10 w-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div><p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Carregando...</p></div>
+                                ) : recipes.filter(r => r.name?.toLowerCase().includes(searchTerm.toLowerCase())).map(r => (
+                                    <div key={r.id} onClick={() => handleOpenEditor(r)} className={`rounded-3xl border overflow-hidden cursor-pointer group transition-all min-h-[180px] flex flex-col relative ${r.isBroken ? 'bg-red-900/20 border-red-500 shadow-red-900/20 grayscale' : 'bg-slate-800 border-white/5 hover:border-blue-500/50'}`}>
+                                        <div className="aspect-square w-full bg-slate-900 shrink-0 overflow-hidden relative">
+                                            <img src={r.imageUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                            {r.isBroken && <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase">Pendente</div>}
                                         </div>
                                         <div className="p-4 flex-1 flex items-center"><h3 className={`font-black uppercase text-[10px] truncate ${r.isBroken ? 'text-red-300' : 'text-white'}`}>{r.name}</h3></div>
                                     </div>
@@ -564,76 +509,44 @@ export const AdminContentFactoryModal: React.FC = () => {
                     )}
 
                     {activeTab === 'leads' && (
-                        <div className="flex flex-col h-full animate-fadeIn">
-                            <div className="p-6 bg-slate-900 border-b border-white/5 flex flex-col gap-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-12 w-12 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-400"><span className="material-symbols-outlined">analytics</span></div>
-                                        <div>
-                                            <h3 className="text-white font-black text-lg italic uppercase">Ranking de Necessidades</h3>
-                                            <p className="text-orange-300/60 text-[10px] font-black uppercase tracking-widest">Filtrado por Inventário ({recipes.length} receitas)</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-orange-500 font-black text-2xl tracking-tighter leading-none">{filteredLeads.length}</p>
-                                        <p className="text-[8px] text-orange-300/40 font-black uppercase tracking-widest">Oportunidades Inéditas</p>
-                                    </div>
-                                </div>
-                                
+                        <div className="flex-1 overflow-y-auto p-8 animate-fadeIn scrollbar-hide">
+                             <div className="p-6 bg-slate-900 border-b border-white/5 flex flex-col gap-4 mb-6 rounded-3xl">
                                 <div className="relative">
                                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">search</span>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Procurar termos nos leads..." 
-                                        value={leadsSearchTerm} 
-                                        onChange={e => setLeadsSearchTerm(e.target.value)} 
-                                        className="w-full h-12 bg-slate-800 border-0 rounded-xl pl-12 text-white outline-none focus:ring-2 focus:ring-orange-500 transition-all" 
-                                    />
+                                    <input type="text" placeholder="Procurar termos nos leads..." value={leadsSearchTerm} onChange={e => setLeadsSearchTerm(e.target.value)} className="w-full h-12 bg-slate-800 border-0 rounded-xl pl-12 text-white outline-none focus:ring-2 focus:ring-orange-500" />
                                 </div>
                             </div>
-
-                            <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
-                                {filteredLeads.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-64 text-slate-600">
-                                        <span className="material-symbols-outlined text-6xl mb-4 opacity-20">search_off</span>
-                                        <p className="font-bold">Nenhum lead encontrado.</p>
-                                        <p className="text-xs">Tente outro termo de busca.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid gap-3">
-                                        {filteredLeads.map((lead, idx) => (
-                                            <div key={idx} className="bg-slate-800 p-5 rounded-3xl border border-white/5 flex items-center justify-between group hover:border-orange-500/30 transition-colors">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="h-10 w-10 rounded-xl bg-slate-700 flex items-center justify-center text-slate-400 font-black text-xs">#{idx + 1}</div>
-                                                    <div>
-                                                        <h3 className="text-white font-black text-lg italic uppercase">{lead.term}</h3>
-                                                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Requisitado em {lead.count} receitas</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <div className="h-10 px-4 rounded-xl bg-slate-900 border border-white/5 hidden md:flex items-center gap-2">
-                                                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Conversão Estimada {Math.round((lead.count / recipes.length) * 100)}%</span>
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => handleGerarOfertaAction(lead.term)} 
-                                                        className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">shopping_cart_checkout</span>
-                                                        Gerar Oferta
-                                                    </button>
-                                                    {/* BOTÃO LIXEIRA (Remover Leads) */}
-                                                    <button 
-                                                        onClick={() => handleIgnoreLead(lead.term)} 
-                                                        className="h-10 w-10 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 flex items-center justify-center"
-                                                        title="Remover permanentemente do ranking"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">delete</span>
-                                                    </button>
-                                                </div>
-                                            </div> 
-                                        ))}
-                                    </div>
+                            <div className="grid gap-3">
+                                {filteredLeads.map((lead, idx) => (
+                                    <div key={idx} className="bg-slate-800 p-5 rounded-3xl border border-white/5 flex items-center justify-between group animate-fadeIn">
+                                        <div className="flex items-center gap-4">
+                                            <div className="h-10 w-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-500 font-black text-xs shadow-inner">
+                                                {lead.count}
+                                            </div>
+                                            <div>
+                                                <h3 className="text-white font-black text-lg italic uppercase">{lead.term}</h3>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Sugerido em {lead.count} receitas</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => app.setPendingInventoryItem({ name: lead.term.charAt(0).toUpperCase() + lead.term.slice(1), tags: lead.term.toLowerCase() })} 
+                                                className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg"
+                                            >
+                                                Gerar Oferta
+                                            </button>
+                                            <button 
+                                                onClick={() => handleIgnoreLead(lead.term)}
+                                                className="h-10 w-10 rounded-xl bg-red-600/20 text-red-500 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                                title="Ignorar termo permanentemente"
+                                            >
+                                                <span className="material-symbols-outlined">delete</span>
+                                            </button>
+                                        </div>
+                                    </div> 
+                                ))}
+                                {filteredLeads.length === 0 && (
+                                    <div className="text-center py-20 opacity-30 italic text-white">Nenhum lead pendente de curadoria.</div>
                                 )}
                             </div>
                         </div>
@@ -644,60 +557,38 @@ export const AdminContentFactoryModal: React.FC = () => {
                             <div className="p-6 bg-slate-900 border-b border-white/10 flex justify-between items-center shrink-0">
                                 <button onClick={() => setEditingRecipe(null)} className="h-10 w-10 rounded-full hover:bg-white/5 flex items-center justify-center text-slate-400 transition-all active:scale-90"><span className="material-symbols-outlined">arrow_back</span></button>
                                 <div className="flex gap-3">
-                                    <button 
-                                        onClick={handleRegenerateText}
-                                        disabled={isRegeneratingText}
-                                        className="h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10 transition-all active:scale-95 disabled:opacity-50"
-                                    >
-                                        {isRegeneratingText ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">auto_fix_high</span>}
-                                        REFAZER TODO O TXT
-                                    </button>
-                                    <button onClick={handleCopyAll} className="h-12 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10 transition-all active:scale-95"><span className="material-symbols-outlined text-base">content_copy</span> COPIAR TEXTO</button>
-                                    <button onClick={handleSaveRecipe} disabled={isSaving} className="h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">{isSaving ? 'Salvando...' : 'Confirmar Alterações'}</button>
+                                    <button onClick={handlePreviewRecipe} className="h-12 px-6 rounded-xl bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all border border-white/10 hover:bg-slate-700"><span className="material-symbols-outlined">visibility</span> VER RECEITA</button>
+                                    <button onClick={handleCopyAll} className="h-12 px-6 rounded-xl bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all border border-white/10 hover:bg-slate-700"><span className="material-symbols-outlined">content_copy</span> COPIAR TUDO</button>
+                                    <button onClick={handleRegenerateText} disabled={isRegeneratingText} className="h-12 px-6 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50">{isRegeneratingText ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">auto_fix_high</span>} REFAZER TXT</button>
+                                    <button onClick={handleSaveRecipe} disabled={isSaving} className="h-12 px-8 rounded-xl bg-blue-600 text-white font-black uppercase tracking-widest shadow-lg flex items-center gap-2 transition-all disabled:opacity-50">SALVAR</button>
                                 </div>
                             </div>
-                            
                             <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-10 scrollbar-hide">
-                                <div className="space-y-8 flex flex-col">
-                                    <div className="w-full">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4 ml-1">NOME DA RECEITA</label>
-                                        <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full h-16 bg-slate-900 border-white/10 border-2 rounded-2xl px-6 text-white font-black text-2xl uppercase italic tracking-tighter outline-none focus:ring-1 focus:ring-blue-500 shadow-xl" />
-                                    </div>
-
-                                    <div className="relative group/photo">
-                                        <img src={editImage} className="w-full aspect-[16/10] rounded-[3rem] object-cover border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]" />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center rounded-[3rem]">
-                                            <button 
-                                                onClick={handleRegenerateImage} 
-                                                disabled={isRegeneratingImage}
-                                                className="h-16 px-10 bg-white text-slate-950 font-black uppercase italic rounded-2xl shadow-2xl flex items-center gap-3 transition-transform active:scale-90 disabled:opacity-50"
-                                            >
-                                                {isRegeneratingImage ? <span className="material-symbols-outlined animate-spin text-2xl">sync</span> : <span className="material-symbols-outlined text-2xl">photo_camera</span>}
-                                                GERAR NOVA FOTO
-                                            </button>
+                                <div className="space-y-6">
+                                    <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full h-16 bg-slate-900 border-white/10 border-2 rounded-2xl px-6 text-white font-black text-2xl uppercase italic tracking-tighter" />
+                                    <div className="relative w-full aspect-[16/10] rounded-[2rem] overflow-hidden group border border-white/10">
+                                        <img src={editImage} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <button onClick={handleRegenerateImage} disabled={isRegeneratingImage} className="h-12 px-6 rounded-xl bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-2xl active:scale-95 disabled:opacity-50">{isRegeneratingImage ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">photo_camera</span>} REFAZER FOTO</button>
                                         </div>
                                     </div>
-
-                                    <div className="grid grid-cols-1 gap-6">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 ml-1">Tags (vírgula)</label>
-                                            <textarea value={editTags} onChange={e => setEditTags(e.target.value)} className="w-full h-28 bg-slate-900 border-white/10 border rounded-2xl p-5 text-white text-[12px] font-bold resize-none outline-none focus:ring-1 focus:ring-blue-500" placeholder="tag1, tag2..." />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 ml-1">Leads (Produtos Parceiros)</label>
-                                            <textarea value={editLeads} onChange={e => setEditLeads(e.target.value)} className="w-full h-28 bg-slate-900 border-white/10 border rounded-2xl p-5 text-white text-[12px] font-bold resize-none outline-none focus:ring-1 focus:ring-blue-500" placeholder="panela, batedeira..." />
-                                        </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest ml-2 mb-1">TAGS:</p>
+                                        <textarea value={editTags} onChange={e => setEditTags(e.target.value)} className="w-full h-24 bg-slate-900 border-white/10 border rounded-2xl p-5 text-white text-[12px] font-bold resize-none" placeholder="tags, separadas por virgula..." />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest ml-2 mb-1">LEADS:</p>
+                                        <textarea value={editLeads} onChange={e => setEditLeads(e.target.value)} className="w-full h-24 bg-slate-900 border-white/10 border rounded-2xl p-5 text-white text-[12px] font-bold resize-none" placeholder="leads, separadas por virgula..." />
                                     </div>
                                 </div>
-
-                                <div className="space-y-8">
+                                <div className="space-y-6">
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 ml-1">Ingredientes (Um por linha)</label>
-                                        <textarea value={editIngredients} onChange={e => setEditIngredients(e.target.value)} className="w-full h-[320px] bg-slate-900 border-white/10 border rounded-3xl p-6 text-slate-200 font-medium text-base resize-none outline-none focus:ring-1 focus:ring-blue-500" />
+                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest ml-2 mb-1">INGREDIENTES:</p>
+                                        <textarea value={editIngredients} onChange={e => setEditIngredients(e.target.value)} className="w-full h-[300px] bg-slate-900 border-white/10 border rounded-3xl p-6 text-slate-200 font-medium text-base" />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 ml-1">Modo de Preparo (Um por linha)</label>
-                                        <textarea value={editInstructions} onChange={e => setEditInstructions(e.target.value)} className="w-full h-[320px] bg-slate-900 border-white/10 border rounded-3xl p-6 text-slate-200 font-medium text-base resize-none outline-none focus:ring-1 focus:ring-blue-500" />
+                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest ml-2 mb-1">MODO DE PREPARO:</p>
+                                        <textarea value={editInstructions} onChange={e => setEditInstructions(e.target.value)} className="w-full h-[300px] bg-slate-900 border-white/10 border rounded-3xl p-6 text-slate-200 font-medium text-base" />
                                     </div>
                                 </div>
                             </div>
