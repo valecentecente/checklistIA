@@ -1,5 +1,4 @@
 
-
 import * as firebaseApp from 'firebase/app';
 import * as firebaseAuth from 'firebase/auth';
 import { 
@@ -7,6 +6,7 @@ import {
   persistentLocalCache, 
   persistentMultipleTabManager 
 } from 'firebase/firestore';
+import { getAnalytics, logEvent as firebaseLogEvent } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA5JGHsJUjJhoxeShn2282rQ0yfeGJ4-OA",
@@ -22,6 +22,7 @@ const isConfigured = firebaseConfig.apiKey !== "" && firebaseConfig.projectId !=
 
 const app = isConfigured ? firebaseApp.initializeApp(firebaseConfig) : undefined;
 const auth = app ? firebaseAuth.getAuth(app) : undefined;
+const analytics = (app && typeof window !== 'undefined') ? getAnalytics(app) : undefined;
 
 const db = app ? initializeFirestore(app, {
   localCache: persistentLocalCache({
@@ -35,4 +36,11 @@ if (auth) {
     });
 }
 
-export { auth, db, isConfigured as isFirebaseConfigured };
+// Helper centralizado para Analytics para evitar erros de undefined
+export const logEvent = (eventName: string, params?: Record<string, any>) => {
+    if (analytics) {
+        firebaseLogEvent(analytics, eventName, params);
+    }
+};
+
+export { auth, db, analytics, isConfigured as isFirebaseConfigured };

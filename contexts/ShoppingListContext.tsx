@@ -17,7 +17,7 @@ import {
     setDoc,
     limit
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, logEvent } from '../firebase';
 import { useAuth } from './AuthContext';
 import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog } from '../types';
 
@@ -253,6 +253,8 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
         const isPurchased = item.isPurchased ?? (numericPrice > 0);
         
+        logEvent('add_item', { item_name: item.name, has_price: numericPrice > 0 });
+
         if (!user || user.uid.startsWith('offline-user-')) {
             const newItem = {
                 id: Date.now().toString(),
@@ -367,6 +369,13 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (purchasedItems.length === 0) return;
 
         const total = purchasedItems.reduce((acc, i) => acc + (parseFloat(String(i.calculatedPrice)) || 0), 0);
+        
+        logEvent('purchase_complete', { 
+            market_name: marketName, 
+            total_value: total, 
+            item_count: purchasedItems.length 
+        });
+
         const record: Omit<PurchaseRecord, 'id'> = {
             date: new Date().toISOString(),
             marketName,
@@ -390,13 +399,12 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const historyRef = doc(collection(db!, `users/${listId}/history`));
         batch.set(historyRef, record);
 
-        // LIMPEZA TOTAL: Deleta absolutamente todos os itens associados à lista ativa
         items.forEach(i => {
             batch.delete(doc(db!, `users/${listId}/items`, i.id));
         });
 
         await batch.commit();
-        setItems([]); // Limpa localmente imediatamente
+        setItems([]); 
     };
 
     const deleteHistoryRecord = async (id: string) => {
@@ -409,6 +417,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const finishWithoutSaving = async () => {
+        logEvent('purchase_abandoned', { item_count: items.length });
         if (!user || user.uid.startsWith('offline-user-')) {
             setItems([]);
             return;
@@ -416,17 +425,15 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const listId = user.activeListId || user.uid;
         const batch = writeBatch(db!);
         
-        // Remove todos os itens da lista ativa atual do Firestore
         items.forEach(i => {
             batch.delete(doc(db!, `users/${listId}/items`, i.id));
         });
         
         await batch.commit();
-        setItems([]); // Limpa estado local imediatamente
+        setItems([]); 
     };
 
     const addHistoricItem = async (item: HistoricItem, marketName?: string) => {
-        // CORREÇÃO: Força o preço a ser 0 e coloca no grupo de histórico
         await addItem({
             name: item.name,
             calculatedPrice: 0,
@@ -437,7 +444,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const repeatPurchase = async (purchase: PurchaseRecord) => {
-        // CORREÇÃO: Define um recipeName especial para criar uma aba separada de histórico
+        logEvent('repeat_purchase', { market_name: purchase.marketName });
         const groupName = `Histórico: ${purchase.marketName || 'Compra Sem Nome'}`;
         const itemsToRepeat = purchase.items.map(i => {
             return {
@@ -462,7 +469,9 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         try {
             const snap = await getDoc(doc(db, 'shared_lists', shareId));
             if (snap.exists()) {
-                return snap.data() as { marketName: string; items: any[]; author?: any };
+                const data = snap.data();
+                logEvent('shared_list_view', { share_id: shareId, author_name: data.author?.displayName });
+                return data as { marketName: string; items: any[]; author?: any };
             }
         } catch (e) {
             if (!ignorePermissionError(e)) console.warn("Erro ao importar lista:", e);
@@ -543,6 +552,8 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 createdAt: serverTimestamp()
             });
 
+            logEvent('share_list', { type: recipient ? 'direct' : 'link' });
+
             if (recipient) {
                 await addDoc(collection(db, `users/${recipient.uid}/received_lists`), {
                     shareId: shareRef.id,
@@ -599,6 +610,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             const snap = await getDoc(favRef);
             if (snap.exists()) {
                 await deleteDoc(favRef);
+                logEvent('recipe_unfavorited', { recipe_name: recipe.name });
                 return { success: true, action: 'removed' };
             } else {
                 const sanitizedRecipe = sanitizeForFirestore(recipe);
@@ -606,6 +618,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                     ...sanitizedRecipe,
                     savedAt: serverTimestamp()
                 });
+                logEvent('recipe_favorited', { recipe_name: recipe.name });
                 return { success: true, action: 'added' };
             }
         } catch (e) {
@@ -627,11 +640,13 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             const snap = await getDoc(ref);
             if (snap.exists()) {
                 await deleteDoc(ref);
+                logEvent('offer_unsaved', { offer_name: offer.name });
             } else {
                 await setDoc(ref, {
                     ...offer,
                     savedAt: serverTimestamp()
                 });
+                logEvent('offer_saved', { offer_name: offer.name });
             }
         } catch (e) {
             if (!ignorePermissionError(e)) console.error(e);
@@ -654,6 +669,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 createdAt: serverTimestamp()
             };
             await addDoc(collection(db, 'reviews'), reviewData);
+            logEvent('offer_review_added', { offer_id: offerId, rating });
         } catch (e) {
             if (!ignorePermissionError(e)) console.error(e);
         }
@@ -728,6 +744,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
         if (isRecord) {
             setArcadeStats(prev => ({ ...prev, [gameId]: score }));
+            logEvent('arcade_new_record', { game_id: gameId, score });
             if (user && !user.uid.startsWith('offline-user-')) {
                 try {
                     await setDoc(doc(db!, `users/${user.uid}/stats`, gameId), {

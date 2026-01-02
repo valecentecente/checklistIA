@@ -256,14 +256,37 @@ const AppContent: React.FC = () => {
     const purchasedItemsCount = useMemo(() => items.filter(item => item.isPurchased).length, [items]);
     const formattedTotal = useMemo(() => formatCurrency(purchasedTotal), [purchasedTotal, formatCurrency]);
     const budgetProgress = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.min((purchasedTotal / app.budget) * 100, 100), [purchasedTotal, app.budget]);
+    const rawPercentage = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.round((purchasedTotal / app.budget) * 100), [purchasedTotal, app.budget]);
 
-    const piggyStyle = useMemo(() => {
-        if (app.budget === null) return 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/10';
+    // LÓGICA DE CORES UNIFICADA (ÍCONE, BARRA E PORCENTAGEM)
+    const budgetStatus = useMemo(() => {
+        if (!app.budget) return { color: 'text-gray-600', bg: 'bg-green-500', piggy: 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300', pulse: false };
         const percent = (purchasedTotal / app.budget) * 100;
-        if (percent > 100) return 'bg-red-600 text-white animate-pulse shadow-[0_8px_32px_rgba(220,38,38,0.5)] border-red-700';
-        else if (percent >= 95) return 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800';
-        else if (percent >= 80) return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800';
-        else return 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800';
+        
+        if (percent > 100) return { 
+            color: 'text-red-600', 
+            bg: 'bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]', 
+            piggy: 'bg-red-600 text-white animate-pulse shadow-[0_8px_32px_rgba(220,38,38,0.5)] border-red-700', 
+            pulse: true 
+        };
+        else if (percent >= 95) return { 
+            color: 'text-red-600', 
+            bg: 'bg-red-600', 
+            piggy: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800', 
+            pulse: false 
+        };
+        else if (percent >= 80) return { 
+            color: 'text-yellow-600 dark:text-yellow-400', 
+            bg: 'bg-yellow-500', 
+            piggy: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800', 
+            pulse: false 
+        };
+        else return { 
+            color: 'text-green-600 dark:text-green-400', 
+            bg: 'bg-green-600', 
+            piggy: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800', 
+            pulse: false 
+        };
     }, [app.budget, purchasedTotal]);
 
     const groupedItems = useMemo(() => {
@@ -527,7 +550,7 @@ const AppContent: React.FC = () => {
                                 </div>
                             )}
 
-                            <button onClick={handleBudgetClick} className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${piggyStyle}`} title="Definir Orçamento">
+                            <button onClick={handleBudgetClick} className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${budgetStatus.piggy}`} title="Definir Orçamento">
                                 <span className={`material-symbols-outlined text-xl ${app.budget !== null ? 'font-variation-FILL-1' : ''}`} style={ app.budget !== null ? { fontVariationSettings: "'FILL' 1" } : {} }>savings</span>
                             </button>
 
@@ -546,23 +569,30 @@ const AppContent: React.FC = () => {
                 <main className={`flex-1 ${showHomeView ? 'lg:overflow-y-auto overflow-hidden' : 'overflow-y-auto'} p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`} style={globalPatternStyle}>
                     <div className="flex flex-col gap-4 relative z-10">
                         {app.budget !== null && !showHomeView && (
-                            <div className="flex flex-col gap-4 rounded-2xl bg-white dark:bg-white/5 p-5 border border-gray-100 dark:border-white/10 shadow-sm animate-fadeIn">
+                            <div className="flex flex-col gap-3 rounded-2xl bg-white dark:bg-white/5 p-5 border border-gray-100 dark:border-white/10 shadow-sm animate-fadeIn">
                                 <div className="flex items-center justify-between text-slate-800 dark:text-white">
-                                    <div className="flex flex-col">
-                                        <p className="text-base font-bold font-display uppercase tracking-tight">Resumo Gasto</p>
-                                        {purchasedTotal > app.budget && (
-                                            <div className="mt-1 flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 px-2 py-1 rounded-lg animate-pulse">
-                                                <span className="material-symbols-outlined text-red-500 text-sm font-bold">error</span>
-                                                <p className="text-xs text-red-600 dark:text-red-400 font-black uppercase tracking-widest">
-                                                    ESTOUROU: {formatCurrency(purchasedTotal - app.budget)}
-                                                </p>
-                                            </div>
-                                        )}
+                                    <p className="text-base font-bold font-display uppercase tracking-tight">Resumo Gasto</p>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-black text-sm">{formattedTotal} / {formatCurrency(app.budget)}</span>
                                     </div>
-                                    <span className="font-black text-sm">{formattedTotal} / {formatCurrency(app.budget)}</span>
                                 </div>
-                                <div className="h-3 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden shadow-inner">
-                                    <div className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${purchasedTotal > app.budget ? 'bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'bg-primary'}`} style={{ width: `${budgetProgress}%` }}></div>
+
+                                {purchasedTotal > app.budget && (
+                                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-black text-xl uppercase tracking-tighter animate-pulse whitespace-nowrap">
+                                        <span className="material-symbols-outlined !text-2xl font-bold">error</span>
+                                        <span>ESTOUROU: {formatCurrency(purchasedTotal - app.budget)}</span>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-1 h-3 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden shadow-inner">
+                                        <div className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${budgetStatus.bg} ${budgetStatus.pulse ? 'animate-pulse' : ''}`} style={{ width: `${budgetProgress}%` }}></div>
+                                    </div>
+                                    <div className="shrink-0 min-w-[50px] text-right">
+                                        <span className={`text-2xl font-black italic tracking-tighter leading-none transition-colors duration-300 ${budgetStatus.color} ${budgetStatus.pulse ? 'animate-pulse' : ''}`}>
+                                            {rawPercentage}%
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -603,4 +633,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 26/10/2025 - Estabilidade Garantida V3.1
+// Checkpoint de Segurança: 26/10/2025 - Estabilidade Garantida V3.2

@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, logEvent } from '../firebase';
 import type { DuplicateInfo, FullRecipe, ShoppingItem, ReceivedListRecord, Offer, ScheduleRule, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
@@ -12,33 +12,24 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; 
 
-// Dicionário Local de Itens Comuns para Organização Instantânea
 const LOCAL_AISLE_DICTIONARY: Record<string, string> = {
-    // Hortifruti
     "alface": "🍎 Hortifruti", "tomate": "🍎 Hortifruti", "cebola": "🍎 Hortifruti", "alho": "🍎 Hortifruti", "batata": "🍎 Hortifruti",
     "maçã": "🍎 Hortifruti", "banana": "🍎 Hortifruti", "laranja": "🍎 Hortifruti", "uva": "🍎 Hortifruti", "limão": "🍎 Hortifruti",
     "cenoura": "🍎 Hortifruti", "brócolis": "🍎 Hortifruti", "abacate": "🍎 Hortifruti", "melancia": "🍎 Hortifruti", "manga": "🍎 Hortifruti",
-    // Açougue
     "carne": "🥩 Açougue", "frango": "🥩 Açougue", "peixe": "🥩 Açougue", "picanha": "🥩 Açougue", "alcatra": "🥩 Açougue",
     "maminha": "🥩 Açougue", "fraldinha": "🥩 Açougue", "coxa": "🥩 Açougue", "sobrecoxa": "🥩 Açougue", "filé": "🥩 Açougue",
     "linguiça": "🥩 Açougue", "bacon": "🥩 Açougue", "costela": "🥩 Açougue", "moída": "🥩 Açougue",
-    // Laticínios
     "leite": "🥛 Laticínios", "queijo": "🥛 Laticínios", "manteiga": "🥛 Laticínios", "iogurte": "🥛 Laticínios", "requeijão": "🥛 Laticínios",
     "creme de leite": "🥛 Laticínios", "leite condensado": "🥛 Laticínios", "margarina": "🥛 Laticínios", "muçarela": "🥛 Laticínios",
-    // Padaria
     "pão": "🍞 Padaria", "baguete": "🍞 Padaria", "bisnaga": "🍞 Padaria", "bolo": "🍞 Padaria", "torta": "🍞 Padaria",
     "sonho": "🍞 Padaria", "salgado": "🍞 Padaria", "pão de queijo": "🍞 Padaria", "croissant": "🍞 Padaria",
-    // Mercearia
     "arroz": "🛒 Mercearia", "feijão": "🛒 Mercearia", "macarrão": "🛒 Mercearia", "óleo": "🛒 Mercearia", "azeite": "🛒 Mercearia",
     "açúcar": "🛒 Mercearia", "sal": "🛒 Mercearia", "café": "🛒 Mercearia", "farinha": "🛒 Mercearia", "molho": "🛒 Mercearia",
     "biscoito": "🛒 Mercearia", "bolacha": "🛒 Mercearia", "chocolate": "🛒 Mercearia", "pipoca": "🛒 Mercearia", "milho": "🛒 Mercearia",
-    // Bebidas
     "água": "💧 Bebidas", "suco": "💧 Bebidas", "refrigerante": "💧 Bebidas", "cerveja": "💧 Bebidas", "vinho": "💧 Bebidas",
     "chá": "💧 Bebidas", "energético": "💧 Bebidas", "vodka": "💧 Bebidas", "whisky": "💧 Bebidas", "coca": "💧 Bebidas",
-    // Limpeza
-    "detergente": "🧼 Limpeza", "sabão": "🧼 Limpeza", "amaciante": "🧼 Limpeza", "desinfetante": "🧼 Limpeza", "água sanitária": "🧼 Limpeza",
-    "esponja": "🧼 Limpeza", "veja": "🧼 Limpeza", "lustra móveis": "🧼 Limpeza", "saco de lixo": "🧼 Limpeza",
-    // Higiene
+    "detergente": "🧼 Limpeza", "sabão": "🧼 Limpeza", "amaciante": "🧼 Limpeza", "desinfetante": "🧼 Limpeza", "agua sanitaria": "🧼 Limpeza",
+    "esponja": "🧼 Limpeza", "veja": "🧼 Limpeza", "lustra moveis": "🧼 Limpeza", "saco de lixo": "🧼 Limpeza",
     "shampoo": "🧴 Higiene", "condicionador": "🧴 Higiene", "sabonete": "🧴 Higiene", "creme dental": "🧴 Higiene", "pasta de dente": "🧴 Higiene",
     "desodorante": "🧴 Higiene", "papel higiênico": "🧴 Higiene", "absorvente": "🧴 Higiene", "fio dental": "🧴 Higiene",
 };
@@ -118,7 +109,8 @@ const INITIAL_MODAL_STATES = {
     isAdminHubModalOpen: false,
     isSmartNudgeModalOpen: false,
     isAdminScheduleModalOpen: false,
-    isPreferencesModalOpen: false
+    isPreferencesModalOpen: false,
+    isAdminDashboardModalOpen: false
 };
 
 interface AppContextType {
@@ -163,6 +155,7 @@ interface AppContextType {
     isSmartNudgeModalOpen: boolean;
     isAdminScheduleModalOpen: boolean;
     isPreferencesModalOpen: boolean;
+    isAdminDashboardModalOpen: boolean;
     smartNudgeItemName: string | null;
     scheduleRules: ScheduleRule[];
     saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
@@ -272,6 +265,7 @@ interface AppContextType {
     selectedProduct: Offer | null; 
     openProductDetails: (product: Offer) => void; 
     isOffline: boolean;
+    trackEvent: (name: string, params?: Record<string, any>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -368,6 +362,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const apiKey = process.env.API_KEY as string;
     const isAdmin = user?.role === 'admin_l1' || user?.role === 'admin_l2';
     const isSuperAdmin = user?.role === 'admin_l1';
+
+    const trackEvent = useCallback((name: string, params?: Record<string, any>) => {
+        logEvent(name, {
+            user_id: user?.uid || 'guest',
+            ...params
+        });
+    }, [user]);
 
     useEffect(() => {
         const handleOnline = () => setIsOffline(false);
@@ -511,8 +512,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'smartNudge') modalKey = 'isSmartNudgeModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'preferences') modalKey = 'isPreferencesModalOpen';
+        if (modal === 'adminDashboard') modalKey = 'isAdminDashboardModalOpen';
 
         setModalStates(prev => ({...prev, [modalKey]: true}));
+        trackEvent('modal_open', { modal });
     };
 
     const closeModal = (modal: string) => {
@@ -538,13 +541,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'smartNudge') modalKey = 'isSmartNudgeModalOpen';
         if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'preferences') modalKey = 'isPreferencesModalOpen';
+        if (modal === 'adminDashboard') modalKey = 'isAdminDashboardModalOpen';
 
         setModalStates(prev => ({ ...prev, [modalKey]: false }));
     }
     const toggleAppOptionsMenu = () => setModalStates(prev => ({ ...prev, isAppOptionsMenuOpen: !prev.isAppOptionsMenuOpen }));
     const toggleOptionsMenu = () => setModalStates(prev => ({ ...prev, isOptionsMenuOpen: !prev.isOptionsMenuOpen }));
 
-    const setTheme = (newTheme: Theme) => setThemeState(newTheme);
+    const setTheme = (newTheme: Theme) => {
+        setThemeState(newTheme);
+        trackEvent('change_theme', { theme: newTheme });
+    };
 
     const handleInstall = async () => {
         if (!installPromptEvent) return false;
@@ -552,10 +559,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const { outcome } = await installPromptEvent.userChoice;
         setInstallPromptEvent(null);
         setIsPWAInstallVisible(false);
+        trackEvent('pwa_install_attempt', { outcome });
         return outcome === 'accepted';
     };
 
-    const setBudget = (b: number) => { setBudgetState(b); closeModal('budget'); };
+    const setBudget = (b: number) => { 
+        setBudgetState(b); 
+        closeModal('budget'); 
+        trackEvent('set_budget', { amount: b });
+    };
     const clearBudget = () => { setBudgetState(null); closeModal('budget'); };
     const showToast = (msg: string) => setToastMessage(msg);
     const showCartTooltip = () => setIsCartTooltipVisible(true);
@@ -587,6 +599,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (r && Array.isArray(r.ingredients) && r.ingredients.length > 0) {
             if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
             setSelectedRecipe(r);
+            trackEvent('view_recipe', { recipe_name: r.name });
         } else { showToast("Receita em manutenção."); }
     };
 
@@ -613,6 +626,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const handleRecipeSearch = async (term: string) => {
         setIsSearchingAcervo(true); 
+        trackEvent('search_recipe', { term });
         try {
             const results = await searchGlobalRecipes(term);
             setRecipeSearchResults(results);
@@ -629,6 +643,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
         if (isOffline) { showToast("IA offline."); return; }
         setIsRecipeLoading(true);
+        trackEvent('generate_recipe_ia', { recipe_name: recipeName });
         try {
             const ai = new GoogleGenAI({ apiKey });
             const prompt = `Gere receita brasileira completa JSON para: "${recipeName}". REGRAS: ingredients min 5, tags (Momento, Perfil, Técnica), suggestedLeads (utensílios).`;
@@ -659,6 +674,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (itemsToAdd.length > 0) {
             await addIngredientsBatch(itemsToAdd);
             showToast(`${itemsToAdd.length} itens adicionados!`);
+            trackEvent('add_recipe_to_list', { recipe_name: recipe.name, item_count: itemsToAdd.length });
         }
     };
 
@@ -666,6 +682,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (isOffline) { showToast("Organização por corredores requer internet."); return; }
         
         if (groupingMode === 'recipe') {
+            trackEvent('organize_list_aisle');
             if (items.length === 0) {
                 showToast("Adicione itens à lista para organizar!");
                 return;
@@ -745,6 +762,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setRecipeSuggestions([] as FullRecipe[]);
         openModal('themeRecipes');
         setIsSuggestionsLoading(true);
+        trackEvent('view_category', { category: key });
         try { setRecipeSuggestions(getCategoryRecipes(key)); } finally { setIsSuggestionsLoading(false); }
     };
 
@@ -761,7 +779,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [user, items.length, currentMarketName]);
 
     const value = {
-        ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme: setThemeState,
+        ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme,
         installPromptEvent, handleInstall, handleDismissInstall: () => setIsPWAInstallVisible(false), isPWAInstallVisible,
         budget, setBudget, clearBudget, toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
         fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
@@ -781,7 +799,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isSmartNudgeModalOpen: modalStates.isSmartNudgeModalOpen,
         isAdminScheduleModalOpen: modalStates.isAdminScheduleModalOpen,
         isPreferencesModalOpen: modalStates.isPreferencesModalOpen,
-        selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline
+        isAdminDashboardModalOpen: modalStates.isAdminDashboardModalOpen,
+        selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline,
+        trackEvent
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

@@ -75,8 +75,9 @@ export const WebSidebarLeft: React.FC = () => {
 
     const hasPerm = (key: string) => {
         if (!app.isAdmin) return false;
-        if (!user?.permissions) return true; 
-        return (user.permissions as any)[key] !== false;
+        if (app.isSuperAdmin) return true; // Super Admin sempre tem permissão
+        if (!user?.permissions) return false; 
+        return (user.permissions as any)[key] === true;
     };
 
     return (
@@ -123,10 +124,18 @@ export const WebSidebarLeft: React.FC = () => {
                                     <div className="border-y border-white/5 my-1 py-1">
                                         <button onClick={() => setIsAdminExpanded(!isAdminExpanded)} className="w-full flex items-center justify-between px-3 py-2 text-yellow-500 font-bold text-sm"><div className="flex items-center gap-2"><span className="material-symbols-outlined text-base">admin_panel_settings</span> Admin</div><span className="material-symbols-outlined text-xs">{isAdminExpanded ? 'expand_less' : 'expand_more'}</span></button>
                                         {isAdminExpanded && (
-                                            <div className="flex flex-col gap-1 pl-4 mt-1">
-                                                {hasPerm('offers') && <button onClick={() => app.openModal('admin')} className="text-left text-gray-400 hover:text-white text-xs py-1">Ofertas</button>}
-                                                {hasPerm('factory') && <button onClick={() => app.openModal('contentFactory')} className="text-left text-gray-400 hover:text-white text-xs py-1">Fábrica</button>}
-                                                {hasPerm('team') && <button onClick={() => app.openModal('manageTeam')} className="text-left text-gray-400 hover:text-white text-xs py-1">Equipe</button>}
+                                            <div className="flex flex-col gap-1 pl-2 mt-1">
+                                                {/* Dashboard BI para Super Admin Web */}
+                                                {app.isSuperAdmin && (
+                                                    <button onClick={() => app.openModal('adminDashboard')} className="w-full text-left px-3 py-2.5 bg-blue-600/20 text-blue-400 rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-2 hover:bg-blue-600/30 transition-colors">
+                                                        <span className="material-symbols-outlined text-sm">monitoring</span>
+                                                        Métricas & BI
+                                                    </button>
+                                                )}
+                                                
+                                                {hasPerm('offers') && <button onClick={() => app.openModal('admin')} className="text-left text-gray-400 hover:text-white text-xs py-2 px-3">Ofertas</button>}
+                                                {hasPerm('factory') && <button onClick={() => app.openModal('contentFactory')} className="text-left text-gray-400 hover:text-white text-xs py-2 px-3">Fábrica</button>}
+                                                {hasPerm('team') && <button onClick={() => app.openModal('manageTeam')} className="text-left text-gray-400 hover:text-white text-xs py-2 px-3">Equipe</button>}
                                             </div>
                                         )}
                                     </div>

@@ -7,25 +7,21 @@ service cloud.firestore {
     }
     
     // Admin check: Prioridade total para e-mails Master via Token (Blindagem Nível 1)
-    // Adicionado ricardo029@gmail.com com suporte a case-insensitive para maior segurança
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email.matches('(?i)itensnamao@gmail.com') ||
-        request.auth.token.email.matches('(?i)admin@checklistia.com') ||
-        request.auth.token.email.matches('(?i)ricardo029@gmail.com') ||
+        (request.auth.token.email != null && (
+          request.auth.token.email.matches('(?i)itensnamao@gmail.com') ||
+          request.auth.token.email.matches('(?i)admin@checklistia.com') ||
+          request.auth.token.email.matches('(?i)ricardo029@gmail.com')
+        )) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin_l1', 'admin_l2'])
       );
     }
 
     match /users/{userId} {
-      // Permitir criar o próprio perfil se logado
       allow create: if isSignedIn() && request.auth.uid == userId;
-      
-      // Regra de Listagem: Se o e-mail estiver no token master, permite listar tudo
       allow list: if isAdmin();
-      
-      // Regras de Documento Individual
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
@@ -79,6 +75,11 @@ service cloud.firestore {
     
     match /feedbacks/{feedbackId} {
       allow create: if true;
+      allow read: if isAdmin();
+    }
+
+    match /ignored_leads/{leadId} {
+      allow read, write: if isAdmin();
     }
 
     match /settings/{settingId} {

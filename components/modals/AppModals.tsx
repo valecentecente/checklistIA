@@ -41,6 +41,7 @@ import { AdminContentFactoryModal } from '../AdminContentFactoryModal';
 import { RecipeSelectionModal } from '../RecipeSelectionModal'; 
 import { AdminUsersModal } from './AdminUsersModal';
 import { AdminHubModal } from './AdminHubModal';
+import { AdminDashboardModal } from './AdminDashboardModal';
 
 interface AppModalsProps {
     sharedListData: any;
@@ -55,8 +56,6 @@ interface AppModalsProps {
     handleRepeatPurchase: (purchase: any) => void;
     handleAddHistoricItem: (item: any) => void;
     handleImportSharedList: () => void;
-    handleStartShopping: (name: string) => void;
-    handleShareAndStart: (name: string) => void;
     handleAddToCurrentList: () => void;
     handleStartNewListForRecipe: () => void;
 }
@@ -74,7 +73,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
     handleRepeatPurchase,
     handleAddHistoricItem,
     handleImportSharedList,
-    handleShareAndStart,
     handleAddToCurrentList,
     handleStartNewListForRecipe
 }) => {
@@ -111,6 +109,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <OffersModal isOpen={app.isOffersModalOpen} onClose={() => app.closeModal('offers')} />
             
             <AdminHubModal />
+            <AdminDashboardModal />
             <AdminOffersModal isOpen={app.isAdminModalOpen} onClose={() => app.closeModal('admin')} />
             <AdminReviewsModal isOpen={app.isAdminReviewsModalOpen} onClose={() => app.closeModal('adminReviews')} />
             <AdminContentFactoryModal /> 

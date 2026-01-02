@@ -23,7 +23,6 @@ export const AdminHubModal: React.FC = () => {
         setTimeout(() => openModal(modalName), 300);
     };
 
-    // Lista simplificada conforme solicitado pelo usuário
     const adminOptions = [
         { id: 'admin', label: 'Ofertas', icon: 'shopping_bag', color: 'text-yellow-600 bg-yellow-50', perm: 'offers' },
         { id: 'contentFactory', label: 'Fábrica Inventário', icon: 'factory', color: 'text-green-600 bg-green-50', perm: 'factory' },
@@ -46,6 +45,23 @@ export const AdminHubModal: React.FC = () => {
                 </div>
 
                 <div className="p-6 grid grid-cols-1 gap-3">
+                    {/* Botão Secreto de Dashboard (Apenas Super Admin) */}
+                    {isSuperAdmin && (
+                        <button 
+                            onClick={() => handleOption('adminDashboard')}
+                            className="flex items-center p-5 rounded-3xl bg-blue-600 text-white shadow-lg shadow-blue-500/20 active:scale-95 transition-all group gap-4 mb-2"
+                        >
+                            <div className="h-12 w-12 rounded-2xl flex items-center justify-center bg-white/20 shrink-0">
+                                <span className="material-symbols-outlined text-2xl">monitoring</span>
+                            </div>
+                            <div className="flex flex-col items-start">
+                                <span className="text-xs font-black uppercase tracking-widest leading-none">Métricas & BI</span>
+                                <span className="text-[9px] opacity-70 font-bold uppercase mt-1">Dashboard de Negócio</span>
+                            </div>
+                            <span className="material-symbols-outlined ml-auto opacity-50">arrow_forward</span>
+                        </button>
+                    )}
+
                     {adminOptions.map(opt => hasPerm(opt.perm) && (
                         <button 
                             key={opt.id}

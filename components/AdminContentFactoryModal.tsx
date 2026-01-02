@@ -89,6 +89,8 @@ export const AdminContentFactoryModal: React.FC = () => {
         const unsubscribe = onSnapshot(collection(db, 'ignored_leads'), (snap) => {
             const list = snap.docs.map(d => d.data().term as string);
             setIgnoredLeads(list);
+        }, (error) => {
+            console.warn("[Factory] Ignored leads listener failed:", error.message);
         });
         
         return () => unsubscribe();
