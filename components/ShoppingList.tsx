@@ -12,10 +12,6 @@ interface ShoppingListProps {
   onTogglePurchased: (id: string) => void;
 }
 
-const RecipeBookIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-);
-
 const ShoppingListGroup: React.FC<{
     groupName: string;
     items: ShoppingItem[];
@@ -27,10 +23,12 @@ const ShoppingListGroup: React.FC<{
 }> = ({ groupName, items, onDeleteItem, onDeleteGroup, onStartEdit, onShowRecipe, onTogglePurchased }) => {
     const [isOpen, setIsOpen] = useState(true);
     const isRecipeGroup = groupName.startsWith('Receita: ');
+    const isHistoryGroup = groupName.startsWith('Histórico: ');
     const isResponsibleGroup = groupName.startsWith('Responsável: ');
-    const isOthersGroup = groupName === 'Não Atribuído';
+    const isOthersGroup = groupName === 'Não Atribuído' || groupName === 'Outros Itens';
     
     const recipeName = isRecipeGroup ? groupName.replace('Receita: ', '') : '';
+    const historyMarketName = isHistoryGroup ? groupName.replace('Histórico: ', '') : '';
     const responsibleName = isResponsibleGroup ? groupName.replace('Responsável: ', '') : '';
 
     const handleActionClick = (e: React.MouseEvent, action: () => void) => {
@@ -42,10 +40,29 @@ const ShoppingListGroup: React.FC<{
     return (
         <div className="flex flex-col rounded-2xl shadow-sm overflow-hidden bg-white dark:bg-surface-dark border border-gray-100 dark:border-gray-800 transition-all relative z-10">
             <div 
-                className="cursor-pointer select-none p-5 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors border-b border-gray-100 dark:border-gray-800"
+                className={`cursor-pointer select-none p-5 transition-colors border-b border-gray-100 dark:border-gray-800 ${
+                    isHistoryGroup 
+                    ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
+                    : 'bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30'
+                }`}
                 onClick={() => setIsOpen(!isOpen)}
             >
-                {isResponsibleGroup || isOthersGroup ? (
+                {isHistoryGroup ? (
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600/60 dark:text-blue-400/60 mb-1">
+                                Registro Anterior
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-blue-500 text-lg">history</span>
+                                <h3 className="text-lg font-bold text-blue-900 dark:text-blue-200 leading-tight truncate font-display">
+                                    {historyMarketName}
+                                </h3>
+                            </div>
+                        </div>
+                        <span className={`material-symbols-outlined text-blue-900/40 dark:text-blue-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                    </div>
+                ) : isResponsibleGroup || isOthersGroup ? (
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex-1 min-w-0">
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600/60 dark:text-orange-400/60 mb-1">
@@ -55,9 +72,7 @@ const ShoppingListGroup: React.FC<{
                                 {isOthersGroup ? 'Itens Avulsos' : responsibleName}
                             </h3>
                         </div>
-                        <div className="flex items-center gap-2">
-                             <span className={`material-symbols-outlined text-orange-900/40 dark:text-orange-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
-                        </div>
+                        <span className={`material-symbols-outlined text-orange-900/40 dark:text-orange-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
                     </div>
                 ) : isRecipeGroup ? (
                     <div className="flex flex-col gap-1">
@@ -73,11 +88,9 @@ const ShoppingListGroup: React.FC<{
                                 >
                                     <span>Ver Receita</span>
                                 </button>
-                                
                                 <span className={`material-symbols-outlined text-orange-900/40 dark:text-orange-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
                             </div>
                         </div>
-                        
                         <h3 className="text-xl font-bold text-orange-900 dark:text-orange-200 leading-tight break-words pr-2 font-display capitalize">
                             {recipeName}
                         </h3>
@@ -85,10 +98,7 @@ const ShoppingListGroup: React.FC<{
                 ) : (
                     <div className="flex items-center justify-between gap-4">
                         <p className="text-lg font-bold leading-normal text-orange-900 dark:text-orange-300 flex-1 truncate font-display">{groupName}</p>
-                        
-                        <div className="flex items-center gap-2">
-                            <span className={`material-symbols-outlined text-orange-900/40 dark:text-orange-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
-                        </div>
+                        <span className={`material-symbols-outlined text-orange-900/40 dark:text-orange-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
                     </div>
                 )}
             </div>

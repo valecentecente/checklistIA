@@ -5,24 +5,15 @@ export interface ArcadeStats {
   updatedAt: any;
 }
 
-export interface ScheduleRule {
-  id: string;
-  label: string;
-  startHour: number;
-  endHour: number;
-  tags: string[];
-  startDate?: string | null; 
-  endDate?: string | null;   
-}
-
 export interface AdminPermissions {
     offers: boolean;
-    schedule: boolean;
     factory: boolean;
     recipes: boolean;
     reviews: boolean;
     team: boolean;
     reports: boolean;
+    // Fix: Added schedule permission
+    schedule: boolean;
 }
 
 export interface ShoppingItem {
@@ -49,27 +40,6 @@ export interface DuplicateInfo {
   onCancel: () => void;
 }
 
-export interface RecipeDetails {
-  ingredients: {
-    simplifiedName: string;
-    detailedName: string;
-  }[];
-  instructions: string[];
-  imageQuery: string;
-  servings: string;
-  prepTimeInMinutes: number;
-  difficulty: 'Fácil' | 'Médio' | 'Difícil';
-  cost: 'Baixo' | 'Médio' | 'Alto';
-}
-
-export interface SalesOpportunity {
-    id: string;
-    term: string;
-    recipeName: string;
-    status: 'pending' | 'converted' | 'dismissed';
-    createdAt: any;
-}
-
 export interface FullRecipe {
   name: string;
   ingredients: {
@@ -89,17 +59,34 @@ export interface FullRecipe {
   tags?: string[]; 
   isAlcoholic?: boolean; 
   suggestedLeads?: string[]; 
-  // Fix: Added createdAt and updatedAt to resolve property missing errors in Admin components
   createdAt?: any;
   updatedAt?: any;
 }
 
-export interface RecipeSuggestion {
-  name: string;
-  description: string;
-  imageQuery: string;
+export interface User {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+  username: string | null;
+  usernameChangeHistory?: string[]; 
+  activeListId?: string; 
+  role?: 'user' | 'admin_l1' | 'admin_l2';
+  status?: 'active' | 'banned';
+  permissions?: AdminPermissions;
+  // Fix: Added missing properties for User
+  dietaryPreferences?: string[];
+  birthDate?: string;
 }
 
+export interface AuthorMetadata {
+  uid: string;
+  displayName: string;
+  photoURL: string | null;
+  username: string | null;
+}
+
+// Fix: Added missing HistoricItem interface
 export interface HistoricItem {
   name: string;
   displayPrice: string;
@@ -115,28 +102,6 @@ export interface PurchaseRecord {
   items: HistoricItem[];
 }
 
-export interface User {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
-  username: string | null;
-  usernameChangeHistory?: string[]; 
-  activeListId?: string; 
-  dietaryPreferences?: string[]; 
-  birthDate?: string; 
-  role?: 'user' | 'admin_l1' | 'admin_l2';
-  status?: 'active' | 'banned';
-  permissions?: AdminPermissions;
-}
-
-export interface AuthorMetadata {
-  uid: string;
-  displayName: string;
-  photoURL: string | null;
-  username: string | null;
-}
-
 export interface ReceivedListRecord {
   id: string;
   date: string;
@@ -146,11 +111,6 @@ export interface ReceivedListRecord {
   author: AuthorMetadata;
   items?: HistoricItem[];
   read?: boolean; 
-}
-
-export interface StartShoppingData {
-  marketName: string;
-  isShared: boolean;
 }
 
 export interface Offer {
@@ -184,14 +144,22 @@ export interface Review {
     createdAt: any;
 }
 
-export interface AdminInvite {
+export interface HomeCategory {
     id: string;
-    fromUid: string;
-    fromName: string;
-    toIdentifier: string; 
-    permissions: AdminPermissions;
-    status: 'pending' | 'accepted' | 'rejected';
-    createdAt: any;
+    label: string;
+    tags: string[];
+    order: number;
+    icon?: string;
+}
+
+export interface AdminInvite {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  toIdentifier: string;
+  permissions: AdminPermissions;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: any;
 }
 
 export interface ActivityLog {
@@ -200,15 +168,25 @@ export interface ActivityLog {
     userName: string;
     userPhoto: string | null;
     actionType: 'create' | 'update' | 'delete' | 'login';
-    targetName: string; 
+    targetName: string;
     details?: string;
     timestamp: any;
 }
 
-export interface HomeCategory {
+export interface SalesOpportunity {
+    id: string;
+    term: string;
+    status: 'pending' | 'resolved';
+    createdAt: any;
+}
+
+// Fix: Added missing ScheduleRule interface
+export interface ScheduleRule {
     id: string;
     label: string;
+    startHour: number;
+    endHour: number;
     tags: string[];
-    order: number;
-    icon?: string;
+    startDate?: string;
+    endDate?: string;
 }

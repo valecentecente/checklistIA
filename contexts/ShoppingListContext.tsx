@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, useCallback, ReactNode, useMemo } from 'react';
 import { 
     collection, 
@@ -38,7 +39,7 @@ interface ShoppingListContextType {
     savePurchase: (marketName: string) => Promise<void>;
     deleteHistoryRecord: (id: string) => Promise<void>;
     finishWithoutSaving: () => Promise<void>;
-    addHistoricItem: (item: HistoricItem) => Promise<void>;
+    addHistoricItem: (item: HistoricItem, marketName?: string) => Promise<void>;
     repeatPurchase: (purchase: PurchaseRecord) => Promise<{ message: string }>;
     findDuplicate: (name: string, currentItems: ShoppingItem[]) => ShoppingItem | undefined;
     importSharedList: (shareId: string) => Promise<{ marketName: string; items: any[]; author?: any } | null>;
@@ -71,7 +72,6 @@ const ignorePermissionError = (err: any) => {
     return false;
 };
 
-// Helper to sanitize object for Firestore (remove undefined fields)
 const sanitizeForFirestore = (obj: any) => {
     const sanitized: any = {};
     Object.keys(obj).forEach(key => {
@@ -241,7 +241,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         };
     }, [user]);
 
-    // Persistence helper
     useEffect(() => {
         if (!user || user.uid.startsWith('offline-user-')) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -382,21 +381,22 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
 
         if (!user || user.uid.startsWith('offline-user-')) {
             setHistory([{ id: Date.now().toString(), ...record }, ...history]);
-            setItems(items.filter(i => !i.isPurchased));
+            setItems([]);
             return;
         }
 
         const listId = user.activeListId || user.uid;
         const batch = writeBatch(db!);
-        
         const historyRef = doc(collection(db!, `users/${listId}/history`));
         batch.set(historyRef, record);
 
-        purchasedItems.forEach(i => {
+        // LIMPEZA TOTAL: Deleta absolutamente todos os itens associados à lista ativa
+        items.forEach(i => {
             batch.delete(doc(db!, `users/${listId}/items`, i.id));
         });
 
         await batch.commit();
+        setItems([]); // Limpa localmente imediatamente
     };
 
     const deleteHistoryRecord = async (id: string) => {
@@ -415,34 +415,41 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
         const listId = user.activeListId || user.uid;
         const batch = writeBatch(db!);
+        
+        // Remove todos os itens da lista ativa atual do Firestore
         items.forEach(i => {
             batch.delete(doc(db!, `users/${listId}/items`, i.id));
         });
+        
         await batch.commit();
+        setItems([]); // Limpa estado local imediatamente
     };
 
-    const addHistoricItem = async (item: HistoricItem) => {
-        const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
+    const addHistoricItem = async (item: HistoricItem, marketName?: string) => {
+        // CORREÇÃO: Força o preço a ser 0 e coloca no grupo de histórico
         await addItem({
             name: item.name,
-            calculatedPrice: numericPrice,
+            calculatedPrice: 0,
             details: item.details,
-            isPurchased: numericPrice > 0
+            isPurchased: false,
+            recipeName: marketName ? `Histórico: ${marketName}` : undefined
         });
     };
 
     const repeatPurchase = async (purchase: PurchaseRecord) => {
+        // CORREÇÃO: Define um recipeName especial para criar uma aba separada de histórico
+        const groupName = `Histórico: ${purchase.marketName || 'Compra Sem Nome'}`;
         const itemsToRepeat = purchase.items.map(i => {
-            const numericPrice = parseFloat(String(i.calculatedPrice)) || 0;
             return {
                 name: i.name,
-                calculatedPrice: numericPrice,
+                calculatedPrice: 0,
                 details: i.details,
-                isPurchased: numericPrice > 0
+                isPurchased: false,
+                recipeName: groupName
             };
         });
         await addIngredientsBatch(itemsToRepeat);
-        return { message: "Itens adicionados!" };
+        return { message: "Itens adicionados em uma nova aba de histórico!" };
     };
 
     const findDuplicate = (name: string, currentItems: ShoppingItem[]) => {
@@ -594,7 +601,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 await deleteDoc(favRef);
                 return { success: true, action: 'removed' };
             } else {
-                // Sanitize before saving to avoid undefined field error
                 const sanitizedRecipe = sanitizeForFirestore(recipe);
                 await setDoc(favRef, {
                     ...sanitizedRecipe,
@@ -685,7 +691,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                 timestamp: serverTimestamp()
             });
         } catch (e) {
-            // Silencioso para não spammar console se a permissão falhar
         }
     };
 

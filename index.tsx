@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -476,7 +477,7 @@ const AppContent: React.FC = () => {
                                     className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-800 shadow-sm transition-all active:scale-95"
                                     title="Painel Admin"
                                 >
-                                    <span className="material-symbols-outlined !text-xl font-variation-FILL-1" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
+                                    <span className="material-symbols-outlined !xl font-variation-FILL-1" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
                                 </button>
                             )}
                             
@@ -500,7 +501,7 @@ const AppContent: React.FC = () => {
                                 <input
                                     ref={marketInputRef}
                                     autoFocus
-                                    className="bg-transparent border-b border-primary/40 focus:border-primary opacity-100 opacity-100 outline-none font-black text-primary dark:text-orange-400 text-sm leading-none w-full max-w-[220px]"
+                                    className="bg-transparent border-b border-primary/40 focus:border-primary opacity-100 outline-none font-black text-primary dark:text-orange-400 text-sm leading-none w-full max-w-[220px]"
                                     value={tempMarketName}
                                     onChange={(e) => setTempMarketName(e.target.value)}
                                     onBlur={saveMarketNameChange}
@@ -547,11 +548,21 @@ const AppContent: React.FC = () => {
                         {app.budget !== null && !showHomeView && (
                             <div className="flex flex-col gap-4 rounded-2xl bg-white dark:bg-white/5 p-5 border border-gray-100 dark:border-white/10 shadow-sm animate-fadeIn">
                                 <div className="flex items-center justify-between text-slate-800 dark:text-white">
-                                    <p className="text-base font-bold font-display uppercase tracking-tight">Resumo Gasto</p>
+                                    <div className="flex flex-col">
+                                        <p className="text-base font-bold font-display uppercase tracking-tight">Resumo Gasto</p>
+                                        {purchasedTotal > app.budget && (
+                                            <div className="mt-1 flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 px-2 py-1 rounded-lg animate-pulse">
+                                                <span className="material-symbols-outlined text-red-500 text-sm font-bold">error</span>
+                                                <p className="text-xs text-red-600 dark:text-red-400 font-black uppercase tracking-widest">
+                                                    ESTOUROU: {formatCurrency(purchasedTotal - app.budget)}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
                                     <span className="font-black text-sm">{formattedTotal} / {formatCurrency(app.budget)}</span>
                                 </div>
                                 <div className="h-3 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden shadow-inner">
-                                    <div className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${purchasedTotal > app.budget ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${budgetProgress}%` }}></div>
+                                    <div className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${purchasedTotal > app.budget ? 'bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'bg-primary'}`} style={{ width: `${budgetProgress}%` }}></div>
                                 </div>
                             </div>
                         )}
@@ -592,4 +603,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 22/05/2025 - Estabilidade Garantida V3.0
+// Checkpoint de Segurança: 26/10/2025 - Estabilidade Garantida V3.1

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, deleteDoc, updateDoc, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, deleteDoc, updateDoc, where, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp, callGenAIWithRetry, generateKeywords } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -43,13 +44,14 @@ const getRecipeDocId = (name: string) => {
 
 export const AdminContentFactoryModal: React.FC = () => {
     const app = useApp();
-    const { isContentFactoryModalOpen, closeModal, showToast, isAdmin, pendingInventoryItem, setPendingInventoryItem } = app;
+    const { isContentFactoryModalOpen, closeModal, showToast, isAdmin, setPendingInventoryItem } = app;
     const { user } = useAuth();
     const { offers } = useShoppingList();
     
     // Estados de UI
     const [activeTab, setActiveTab] = useState<'producao' | 'acervo' | 'leads'>('producao');
     const [searchTerm, setSearchTerm] = useState('');
+    const [leadsSearchTerm, setLeadsSearchTerm] = useState('');
     
     // Estados de Produção
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -63,7 +65,7 @@ export const AdminContentFactoryModal: React.FC = () => {
     // Estados do Acervo
     const [recipes, setRecipes] = useState<RecipeWithId[]>([]);
     const [isLoadingAcervo, setIsLoadingAcervo] = useState(true);
-    const [pendingLeads, setPendingLeads] = useState<SalesOpportunity[]>([]);
+    const [ignoredLeads, setIgnoredLeads] = useState<string[]>([]);
     const logEndRef = useRef<HTMLDivElement>(null);
 
     // Estados do Editor
@@ -80,6 +82,18 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     const apiKey = process.env.API_KEY as string;
 
+    // Efeito para carregar termos ignorados (Blacklist)
+    useEffect(() => {
+        if (!isContentFactoryModalOpen || !db || !isAdmin) return;
+        
+        const unsubscribe = onSnapshot(collection(db, 'ignored_leads'), (snap) => {
+            const list = snap.docs.map(d => d.data().term as string);
+            setIgnoredLeads(list);
+        });
+        
+        return () => unsubscribe();
+    }, [isContentFactoryModalOpen, isAdmin]);
+
     const recipeLeadsRanking = useMemo(() => {
         const counts: Record<string, number> = {};
         const existingTerms = offers.map(o => o.name.toLowerCase().trim());
@@ -89,7 +103,9 @@ export const AdminContentFactoryModal: React.FC = () => {
             if (recipe.suggestedLeads && Array.isArray(recipe.suggestedLeads)) {
                 recipe.suggestedLeads.forEach(lead => {
                     const cleanLead = lead.trim().toLowerCase();
-                    if (cleanLead && cleanLead !== 'nenhum') {
+                    
+                    // Validação de segurança e filtro de ignorados
+                    if (cleanLead && cleanLead !== 'nenhum' && !ignoredLeads.includes(cleanLead)) {
                         const alreadyExists = 
                             existingTerms.some(t => t.includes(cleanLead)) || 
                             existingTags.includes(cleanLead);
@@ -105,7 +121,13 @@ export const AdminContentFactoryModal: React.FC = () => {
         return Object.entries(counts)
             .map(([term, count]) => ({ term, count } as AggregatedLead))
             .sort((a, b) => b.count - a.count);
-    }, [recipes, offers]);
+    }, [recipes, offers, ignoredLeads]);
+
+    const filteredLeads = useMemo(() => {
+        if (!leadsSearchTerm.trim()) return recipeLeadsRanking;
+        const lowTerm = leadsSearchTerm.toLowerCase();
+        return recipeLeadsRanking.filter(l => l.term.includes(lowTerm));
+    }, [recipeLeadsRanking, leadsSearchTerm]);
 
     const checkRecipeIntegrity = (r: FullRecipe): boolean => {
         return !!(
@@ -176,12 +198,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                 setIsLoadingAcervo(false);
             }
         );
-        const qLeads = query(collection(db, 'sales_opportunities'), where('status', '==', 'pending'), limit(100));
-        const unsubLeads = onSnapshot(qLeads, 
-            (snap) => setPendingLeads(snap.docs.map(d => ({ ...d.data(), id: d.id } as SalesOpportunity))),
-            (error) => { if (!ignorePermissionError(error)) console.warn("[Factory] Erro Leads:", error.message); }
-        );
-        return () => { unsubRecipes(); unsubLeads(); };
+        return () => unsubRecipes();
     }, [isContentFactoryModalOpen, isAdmin]);
 
     const runBatchProduction = async () => {
@@ -282,7 +299,6 @@ export const AdminContentFactoryModal: React.FC = () => {
                     }
                 }
 
-                // Geração aprimorada de keywords incluindo as tags
                 const nameKeywords = generateKeywords(details.name || title);
                 const tagKeywords = (details.tags || []).flatMap((t: string) => generateKeywords(t));
                 const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
@@ -400,7 +416,6 @@ export const AdminContentFactoryModal: React.FC = () => {
             const tagsArray = editTags.split(',').map(t => t.trim()).filter(t => t);
             const leadsArray = editLeads.split(',').map(l => l.trim()).filter(l => l);
             
-            // Recalcular keywords na edição também
             const nameKeywords = generateKeywords(editName);
             const tagKeywords = tagsArray.flatMap(t => generateKeywords(t));
             const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
@@ -431,6 +446,20 @@ export const AdminContentFactoryModal: React.FC = () => {
         });
         closeModal('contentFactory');
         setTimeout(() => app.openModal('admin'), 300);
+    };
+
+    const handleIgnoreLead = async (term: string) => {
+        if (!window.confirm(`Deseja remover "${term}" permanentemente do ranking?`)) return;
+        try {
+            await addDoc(collection(db!, 'ignored_leads'), {
+                term: term.toLowerCase(),
+                ignoredAt: serverTimestamp(),
+                ignoredBy: user?.uid
+            });
+            showToast("Item removido do ranking!");
+        } catch (e) {
+            showToast("Erro ao processar.");
+        }
     };
 
     const filteredRecipes = useMemo(() => {
@@ -533,55 +562,78 @@ export const AdminContentFactoryModal: React.FC = () => {
                     )}
 
                     {activeTab === 'leads' && (
-                        <div className="flex-1 overflow-y-auto p-8 animate-fadeIn scrollbar-hide">
-                            <div className="mb-6 flex items-center justify-between bg-orange-500/10 p-5 rounded-3xl border border-orange-500/20">
-                                <div className="flex items-center gap-4">
-                                    <div className="h-12 w-12 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-400"><span className="material-symbols-outlined">analytics</span></div>
-                                    <div>
-                                        <h3 className="text-white font-black text-lg italic uppercase">Ranking de Necessidades</h3>
-                                        <p className="text-orange-300/60 text-[10px] font-black uppercase tracking-widest">Baseado em {recipes.length} receitas catalogadas (Filtrado por Inventário)</p>
+                        <div className="flex flex-col h-full animate-fadeIn">
+                            <div className="p-6 bg-slate-900 border-b border-white/5 flex flex-col gap-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-12 w-12 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-400"><span className="material-symbols-outlined">analytics</span></div>
+                                        <div>
+                                            <h3 className="text-white font-black text-lg italic uppercase">Ranking de Necessidades</h3>
+                                            <p className="text-orange-300/60 text-[10px] font-black uppercase tracking-widest">Filtrado por Inventário ({recipes.length} receitas)</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-orange-500 font-black text-2xl tracking-tighter leading-none">{filteredLeads.length}</p>
+                                        <p className="text-[8px] text-orange-300/40 font-black uppercase tracking-widest">Oportunidades Inéditas</p>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-orange-500 font-black text-2xl tracking-tighter leading-none">{recipeLeadsRanking.length}</p>
-                                    <p className="text-[8px] text-orange-300/40 font-black uppercase tracking-widest">Oportunidades Inéditas</p>
+                                
+                                <div className="relative">
+                                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">search</span>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Procurar termos nos leads..." 
+                                        value={leadsSearchTerm} 
+                                        onChange={e => setLeadsSearchTerm(e.target.value)} 
+                                        className="w-full h-12 bg-slate-800 border-0 rounded-xl pl-12 text-white outline-none focus:ring-2 focus:ring-orange-500 transition-all" 
+                                    />
                                 </div>
                             </div>
 
-                            {recipeLeadsRanking.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-64 text-slate-600">
-                                    <span className="material-symbols-outlined text-6xl mb-4 opacity-20">inventory_2</span>
-                                    <p className="font-bold">Nenhuma nova oportunidade detectada.</p>
-                                    <p className="text-xs">Todos os termos mapeados já constam no inventário.</p>
-                                </div>
-                            ) : (
-                                <div className="grid gap-3">
-                                    {recipeLeadsRanking.map((lead, idx) => (
-                                        <div key={idx} className="bg-slate-800 p-5 rounded-3xl border border-white/5 flex items-center justify-between group hover:border-orange-500/30 transition-colors">
-                                            <div className="flex items-center gap-4">
-                                                <div className="h-10 w-10 rounded-xl bg-slate-700 flex items-center justify-center text-slate-400 font-black text-xs">#{idx + 1}</div>
-                                                <div>
-                                                    <h3 className="text-white font-black text-lg italic uppercase">{lead.term}</h3>
-                                                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Requisitado em {lead.count} receitas</p>
+                            <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+                                {filteredLeads.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-64 text-slate-600">
+                                        <span className="material-symbols-outlined text-6xl mb-4 opacity-20">search_off</span>
+                                        <p className="font-bold">Nenhum lead encontrado.</p>
+                                        <p className="text-xs">Tente outro termo de busca.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-3">
+                                        {filteredLeads.map((lead, idx) => (
+                                            <div key={idx} className="bg-slate-800 p-5 rounded-3xl border border-white/5 flex items-center justify-between group hover:border-orange-500/30 transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="h-10 w-10 rounded-xl bg-slate-700 flex items-center justify-center text-slate-400 font-black text-xs">#{idx + 1}</div>
+                                                    <div>
+                                                        <h3 className="text-white font-black text-lg italic uppercase">{lead.term}</h3>
+                                                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Requisitado em {lead.count} receitas</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <div className="h-10 px-4 rounded-xl bg-slate-900 border border-white/5 flex items-center gap-2">
-                                                    <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Conversão Estimada {Math.round((lead.count / recipes.length) * 100)}%</span>
+                                                <div className="flex gap-2">
+                                                    <div className="h-10 px-4 rounded-xl bg-slate-900 border border-white/5 hidden md:flex items-center gap-2">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Conversão Estimada {Math.round((lead.count / recipes.length) * 100)}%</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleGerarOfertaAction(lead.term)} 
+                                                        className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">shopping_cart_checkout</span>
+                                                        Gerar Oferta
+                                                    </button>
+                                                    {/* BOTÃO LIXEIRA (Remover Leads) */}
+                                                    <button 
+                                                        onClick={() => handleIgnoreLead(lead.term)} 
+                                                        className="h-10 w-10 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 flex items-center justify-center"
+                                                        title="Remover permanentemente do ranking"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                                    </button>
                                                 </div>
-                                                <button 
-                                                    onClick={() => handleGerarOfertaAction(lead.term)} 
-                                                    className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"
-                                                >
-                                                    <span className="material-symbols-outlined text-sm">shopping_cart_checkout</span>
-                                                    Gerar Oferta
-                                                </button>
-                                            </div>
-                                        </div> 
-                                    ))}
-                                </div>
-                            )}
+                                            </div> 
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 

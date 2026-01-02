@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import * as firebaseAuth from 'firebase/auth';
 import { doc, setDoc, getDoc, collection, query, where, getDocs, deleteDoc, addDoc, updateDoc, serverTimestamp, onSnapshot, or, and } from 'firebase/firestore';
@@ -11,12 +12,11 @@ interface AuthContextType {
     authErrorCode: string | null;
     login: () => Promise<void>;
     loginWithEmail: (email: string, pass: string) => Promise<void>;
-    registerWithEmail: (name: string, username: string, email: string, pass: string, birthDate: string) => Promise<void>;
+    registerWithEmail: (name: string, username: string, email: string, pass: string) => Promise<void>;
     resetPassword: (email: string) => Promise<void>;
-    updateUserProfile: (name: string, photoURL?: string, birthDate?: string) => Promise<void>;
+    updateUserProfile: (name: string, photoURL?: string) => Promise<void>;
     updateUserPassword: (currentPass: string, name: string) => Promise<void>;
     updateUsername: (newUsername: string) => Promise<void>;
-    updateDietaryPreferences: (preferences: string[]) => Promise<void>; 
     removeProfilePhoto: () => Promise<void>;
     deleteAccount: (password: string) => Promise<void>;
     logout: () => Promise<void>;
@@ -24,17 +24,17 @@ interface AuthContextType {
     clearAuthError: () => void;
     checkUsernameUniqueness: (username: string) => Promise<boolean>;
     
-    // Funções Admin
     pendingAdminInvite: AdminInvite | null;
     sendAdminInvite: (identifier: string, permissions: AdminPermissions) => Promise<{ success: boolean; message: string }>;
     cancelAdminInvite: (inviteId: string) => Promise<void>;
     respondToAdminInvite: (inviteId: string, accept: boolean) => Promise<void>;
     refreshUserProfile: () => Promise<void>; 
     
-    // Novas Funções de Gestão de Usuários
     banUser: (userId: string, status: 'active' | 'banned') => Promise<void>;
     deleteUserProfile: (userId: string, email: string) => Promise<void>;
     updateUserRole: (userId: string, role: 'user' | 'admin_l1' | 'admin_l2') => Promise<void>;
+    // FIX: Added updateDietaryPreferences to AuthContextType
+    updateDietaryPreferences: (prefs: string[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,38 +64,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             return true;
         } catch (error) {
-            console.error("Erro ao verificar username:", error);
             return true; 
-        }
-    };
-
-    const generateUniqueUsername = async (baseName: string): Promise<string> => {
-        let username = baseName.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (username.length < 3) username = username + Math.floor(Math.random() * 1000);
-        let isUnique = await checkUsernameUniqueness(username);
-        let attempts = 0;
-        while (!isUnique && attempts < 5) {
-            username = username + Math.floor(Math.random() * 10);
-            isUnique = await checkUsernameUniqueness(username);
-            attempts++;
-        }
-        return username;
-    };
-
-    const syncUserToPublicDirectory = async (currentUser: any, photoURLOverride?: string, usernameOverride?: string) => {
-        if (!db || !currentUser.email) return;
-        try {
-            const publicUserRef = doc(db, 'users_public', currentUser.email.toLowerCase());
-            const dataToSync: any = {
-                uid: currentUser.uid,
-                displayName: currentUser.displayName || 'Usuário',
-                photoURL: photoURLOverride || currentUser.photoURL || null,
-                email: currentUser.email
-            };
-            if (usernameOverride) dataToSync.username = usernameOverride.toLowerCase();
-            await setDoc(publicUserRef, dataToSync, { merge: true });
-        } catch (e) {
-            console.error("Erro ao sincronizar diretório público:", e);
         }
     };
 
@@ -104,10 +73,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let usernameToUse = null;
         let historyToUse: string[] = [];
         let activeListIdToUse: string = currentUser.uid;
-        let preferencesToUse: string[] = []; 
-        let birthDateToUse: string | undefined = undefined;
         let roleToUse: 'user' | 'admin_l1' | 'admin_l2' = 'user';
         let statusToUse: 'active' | 'banned' = 'active';
+        // FIX: placeholders for preferences and birthdate
+        let dietaryPreferences: string[] = [];
+        let birthDate: string | undefined = undefined;
 
         const userEmail = currentUser.email?.toLowerCase();
         const isOwnerEmail = userEmail === 'admin@checklistia.com' || userEmail === 'itensnamao@gmail.com' || userEmail === 'ricardo029@gmail.com';
@@ -124,10 +94,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (data.photoBase64) photoToUse = data.photoBase64;
                     if (data.usernameChangeHistory) historyToUse = data.usernameChangeHistory;
                     if (data.activeListId) activeListIdToUse = data.activeListId;
-                    if (data.dietaryPreferences) preferencesToUse = data.dietaryPreferences;
-                    if (data.birthDate) birthDateToUse = data.birthDate;
                     if (data.role) roleToUse = data.role;
                     if (data.status) statusToUse = data.status;
+                    // FIX: Extract dietaryPreferences and birthDate from firestore
+                    if (data.dietaryPreferences) dietaryPreferences = data.dietaryPreferences;
+                    if (data.birthDate) birthDate = data.birthDate;
 
                     if (isOwnerEmail && data.role !== 'admin_l1') {
                         await updateDoc(userDocRef, { role: 'admin_l1' });
@@ -135,7 +106,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 } else if (isOwnerEmail) {
                     await setDoc(userDocRef, {
-                        displayName: currentUser.displayName || 'Ricardo Admin',
+                        displayName: currentUser.displayName || 'Admin',
                         email: userEmail,
                         role: 'admin_l1',
                         status: 'active',
@@ -150,9 +121,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         usernameToUse = publicUserSnap.data().username || null;
                     }
                 }
-            } catch (e) {
-                console.error("Erro ao buscar dados do perfil:", e);
-            }
+            } catch (e) {}
         }
 
         return {
@@ -163,10 +132,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             username: usernameToUse,
             usernameChangeHistory: historyToUse,
             activeListId: activeListIdToUse,
-            dietaryPreferences: preferencesToUse,
-            birthDate: birthDateToUse,
             role: roleToUse,
-            status: statusToUse
+            status: statusToUse,
+            // FIX: Added missing properties to the user object
+            dietaryPreferences,
+            birthDate
         } as User;
     };
 
@@ -187,14 +157,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (userData.status === 'banned') {
                     firebaseAuth.signOut(auth);
                     setUser(null);
-                    setAuthError("Sua conta foi suspensa por violar nossos termos de uso.");
+                    setAuthError("Sua conta foi suspensa.");
                     setIsAuthLoading(false);
                     return;
                 }
                 setUser(userData);
-                if (userData.username) {
-                    syncUserToPublicDirectory(currentUser, userData.photoURL || undefined, userData.username);
-                }
             } else {
                 setUser(null);
             }
@@ -204,7 +171,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
-        if (!user || !db || !auth?.currentUser) {
+        if (!user || !db || !auth?.currentUser || user.uid.startsWith('offline-')) {
             setPendingAdminInvite(null);
             return;
         }
@@ -245,7 +212,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!auth) return;
         try {
             await firebaseAuth.signInWithEmailAndPassword(auth, email, pass);
-            localStorage.setItem('remembered_email', email);
         } catch (error: any) {
             const errorCode = error.code || '';
             if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
@@ -257,7 +223,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const registerWithEmail = async (name: string, username: string, email: string, pass: string, birthDate: string) => {
+    const registerWithEmail = async (name: string, username: string, email: string, pass: string) => {
         setAuthError(null);
         setAuthErrorCode(null);
         if (!auth) return;
@@ -270,17 +236,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const result = await firebaseAuth.createUserWithEmailAndPassword(auth, email, pass);
             await firebaseAuth.updateProfile(result.user, { displayName: name });
             if (db) {
-                const isOwner = email.toLowerCase() === 'admin@checklistia.com' || email.toLowerCase() === 'itensnamao@gmail.com' || email.toLowerCase() === 'ricardo029@gmail.com';
                 await setDoc(doc(db, 'users', result.user.uid), { 
                     displayName: name,
                     email: email,
-                    birthDate: birthDate,
-                    role: isOwner ? 'admin_l1' : 'user',
+                    role: 'user',
                     status: 'active',
                     createdAt: serverTimestamp()
                 }, { merge: true });
+                await setDoc(doc(db, 'users_public', email.toLowerCase()), {
+                    uid: result.user.uid,
+                    displayName: name,
+                    username: username.toLowerCase(),
+                    email: email
+                });
             }
-            await syncUserToPublicDirectory({ ...result.user, displayName: name }, undefined, username);
             await refreshUserProfile();
         } catch (error: any) {
             if (error.code === 'auth/email-already-in-use') {
@@ -307,13 +276,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             username: cleanUsername, 
             usernameChangeHistory: [...history, new Date().toISOString()] 
         });
-        await syncUserToPublicDirectory(auth.currentUser, undefined, cleanUsername);
-        await refreshUserProfile();
-    };
-
-    const updateDietaryPreferences = async (preferences: string[]) => {
-        if (!auth?.currentUser || !db) return;
-        await updateDoc(doc(db, 'users', auth.currentUser.uid), { dietaryPreferences: preferences });
+        if (user?.email) {
+            await updateDoc(doc(db, 'users_public', user.email.toLowerCase()), { username: cleanUsername });
+        }
         await refreshUserProfile();
     };
 
@@ -326,14 +291,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await firebaseAuth.deleteUser(auth.currentUser);
     };
 
-    const updateUserProfile = async (name: string, photoURL?: string, birthDate?: string) => {
+    const updateUserProfile = async (name: string, photoURL?: string) => {
         if (!auth?.currentUser || !db) return;
         await firebaseAuth.updateProfile(auth.currentUser, { displayName: name });
         const updates: any = { displayName: name };
         if (photoURL) updates.photoBase64 = photoURL;
-        if (birthDate) updates.birthDate = birthDate;
         await updateDoc(doc(db, 'users', auth.currentUser.uid), updates);
-        await syncUserToPublicDirectory(auth.currentUser, photoURL, user?.username || undefined);
+        if (user?.email) {
+            const publicUserRef = doc(db, 'users_public', user.email.toLowerCase());
+            await updateDoc(publicUserRef, { displayName: name, photoURL: photoURL || null });
+        }
         await refreshUserProfile();
     };
 
@@ -341,7 +308,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!auth?.currentUser || !db) return;
         await firebaseAuth.updateProfile(auth.currentUser, { photoURL: "" });
         await updateDoc(doc(db, 'users', auth.currentUser.uid), { photoBase64: null });
-        await syncUserToPublicDirectory(auth.currentUser, "", user?.username || undefined);
+        if (user?.email) {
+            await updateDoc(doc(db, 'users_public', user.email.toLowerCase()), { photoURL: null });
+        }
         await refreshUserProfile();
     };
 
@@ -360,23 +329,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const userDocRef = doc(db, 'users', result.user.uid);
             const userDocSnap = await getDoc(userDocRef);
             
-            const userEmail = result.user.email?.toLowerCase();
-            const isOwner = userEmail === 'admin@checklistia.com' || userEmail === 'itensnamao@gmail.com' || userEmail === 'ricardo029@gmail.com';
-
             if (!userDocSnap.exists()) {
-                const username = await generateUniqueUsername(result.user.email!.split('@')[0]);
                 await setDoc(userDocRef, {
                     displayName: result.user.displayName,
-                    email: userEmail,
-                    role: isOwner ? 'admin_l1' : 'user',
+                    email: result.user.email,
+                    role: 'user',
                     status: 'active',
                     createdAt: serverTimestamp()
-                }, { merge: true });
-                await syncUserToPublicDirectory(result.user, undefined, username);
-            } else if (isOwner) {
-                const data = userDocSnap.data();
-                if (data.role !== 'admin_l1') {
-                    await updateDoc(userDocRef, { role: 'admin_l1' });
+                });
+                if (result.user.email) {
+                    await setDoc(doc(db, 'users_public', result.user.email.toLowerCase()), {
+                        uid: result.user.uid,
+                        displayName: result.user.displayName,
+                        email: result.user.email,
+                        photoURL: result.user.photoURL
+                    });
                 }
             }
             await refreshUserProfile();
@@ -439,9 +406,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await refreshUserProfile();
     };
 
+    // FIX: Implement updateDietaryPreferences
+    const updateDietaryPreferences = async (prefs: string[]) => {
+        if (!auth?.currentUser || !db) return;
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), { dietaryPreferences: prefs });
+        await refreshUserProfile();
+    };
+
     const value = { 
-        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, updateDietaryPreferences, removeProfilePhoto, deleteAccount, logout, setAuthError, clearAuthError: () => setAuthError(null), checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, cancelAdminInvite, respondToAdminInvite, refreshUserProfile,
-        banUser, deleteUserProfile, updateUserRole
+        user, isAuthLoading, authError, authErrorCode, login, loginWithEmail, registerWithEmail, resetPassword, updateUserProfile, updateUserPassword, updateUsername, removeProfilePhoto, deleteAccount, logout, setAuthError, clearAuthError: () => setAuthError(null), checkUsernameUniqueness, pendingAdminInvite, sendAdminInvite, cancelAdminInvite, respondToAdminInvite, refreshUserProfile,
+        banUser, deleteUserProfile, updateUserRole, updateDietaryPreferences
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

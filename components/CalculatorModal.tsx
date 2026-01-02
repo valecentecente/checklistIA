@@ -144,37 +144,37 @@ export const CalculatorModal: React.FC<CalculatorModalProps> = ({ isOpen, onClos
 
     return (
         <div className="fixed inset-0 z-[130] bg-black/60 flex items-center justify-center p-4 animate-fadeIn backdrop-blur-sm" onClick={onClose} aria-modal="true" role="dialog">
-            <div className="relative w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-background-light dark:bg-surface-dark shadow-2xl animate-slideUp" onClick={(e) => e.stopPropagation()}>
+            <div className="relative w-full max-w-[340px] flex-col overflow-hidden rounded-3xl bg-background-light dark:bg-surface-dark shadow-2xl animate-slideUp" onClick={(e) => e.stopPropagation()}>
                 
-                {/* Header Tabs */}
-                <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-t-2xl">
+                {/* Header Tabs - Mais finas */}
+                <div className="flex bg-gray-100 dark:bg-white/5 p-1 shrink-0">
                     <button 
                         onClick={() => setActiveTab('calculator')}
-                        className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                        className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-2 ${
                             activeTab === 'calculator' 
-                            ? 'bg-white dark:bg-zinc-700 text-primary dark:text-orange-400 shadow-sm' 
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                            ? 'bg-white dark:bg-zinc-800 text-primary dark:text-orange-400 shadow-sm' 
+                            : 'text-gray-500 dark:text-gray-500 hover:text-gray-700'
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">calculate</span>
+                        <span className="material-symbols-outlined text-sm">calculate</span>
                         Calculadora
                     </button>
                     <button 
                         onClick={() => setActiveTab('comparator')}
-                        className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                        className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-2 ${
                             activeTab === 'comparator' 
-                            ? 'bg-white dark:bg-zinc-700 text-primary dark:text-orange-400 shadow-sm' 
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                            ? 'bg-white dark:bg-zinc-800 text-primary dark:text-orange-400 shadow-sm' 
+                            : 'text-gray-500 dark:text-gray-500 hover:text-gray-700'
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">balance</span>
+                        <span className="material-symbols-outlined text-sm">balance</span>
                         Comparar
                     </button>
                 </div>
 
                 {activeTab === 'calculator' ? (
-                    <>
-                        <div className="p-4 bg-gray-50 dark:bg-black/20 border-b border-gray-100 dark:border-gray-700">
+                    <div className="animate-fadeIn">
+                        <div className="p-4 bg-gray-50 dark:bg-black/20 border-b border-gray-100 dark:border-gray-800">
                             <input 
                                 type="text"
                                 value={displayValue}
@@ -183,20 +183,20 @@ export const CalculatorModal: React.FC<CalculatorModalProps> = ({ isOpen, onClos
                                 aria-label="Calculator display"
                             />
                         </div>
-                        <div className="grid grid-cols-4 gap-2.5 p-4 bg-background-light dark:bg-surface-dark">
-                            <CalculatorButton onClick={resetCalculator} className="col-span-2 bg-gray-200 dark:bg-gray-700 text-red-500 dark:text-red-400 hover:bg-gray-300 dark:hover:bg-gray-600">AC</CalculatorButton>
-                            <CalculatorButton onClick={() => handleOperatorClick('/')} className="bg-orange-100 text-primary dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">÷</CalculatorButton>
-                            <CalculatorButton onClick={() => handleOperatorClick('*')} className="bg-orange-100 text-primary dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">×</CalculatorButton>
+                        <div className="grid grid-cols-4 gap-2 p-4">
+                            <CalculatorButton onClick={resetCalculator} className="col-span-2 bg-gray-200 dark:bg-gray-800 text-red-500 dark:text-red-400 hover:bg-gray-300 dark:hover:bg-gray-700">AC</CalculatorButton>
+                            <CalculatorButton onClick={() => handleOperatorClick('/')} className="bg-orange-100 dark:bg-orange-900/30 text-primary dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">÷</CalculatorButton>
+                            <CalculatorButton onClick={() => handleOperatorClick('*')} className="bg-orange-100 dark:bg-orange-900/30 text-primary dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">×</CalculatorButton>
 
                             <CalculatorButton onClick={() => handleDigitClick('7')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">7</CalculatorButton>
                             <CalculatorButton onClick={() => handleDigitClick('8')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">8</CalculatorButton>
                             <CalculatorButton onClick={() => handleDigitClick('9')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">9</CalculatorButton>
-                            <CalculatorButton onClick={() => handleOperatorClick('-')} className="bg-orange-100 text-primary dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">−</CalculatorButton>
+                            <CalculatorButton onClick={() => handleOperatorClick('-')} className="bg-orange-100 dark:bg-orange-900/30 text-primary dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">−</CalculatorButton>
 
                             <CalculatorButton onClick={() => handleDigitClick('4')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">4</CalculatorButton>
                             <CalculatorButton onClick={() => handleDigitClick('5')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">5</CalculatorButton>
                             <CalculatorButton onClick={() => handleDigitClick('6')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">6</CalculatorButton>
-                            <CalculatorButton onClick={() => handleOperatorClick('+')} className="bg-orange-100 text-primary dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">+</CalculatorButton>
+                            <CalculatorButton onClick={() => handleOperatorClick('+')} className="bg-orange-100 dark:bg-orange-900/30 text-primary dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50">+</CalculatorButton>
 
                             <CalculatorButton onClick={() => handleDigitClick('1')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">1</CalculatorButton>
                             <CalculatorButton onClick={() => handleDigitClick('2')} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">2</CalculatorButton>
@@ -206,97 +206,92 @@ export const CalculatorModal: React.FC<CalculatorModalProps> = ({ isOpen, onClos
                             <CalculatorButton onClick={() => handleDigitClick('0')} className="col-span-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">0</CalculatorButton>
                             <CalculatorButton onClick={handleDecimalClick} className="bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-white">.</CalculatorButton>
                         </div>
-                    </>
+                    </div>
                 ) : (
-                    <div className="p-4 flex flex-col h-full min-h-[400px]">
-                        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mb-4">
-                            Qual produto compensa mais?
-                        </p>
+                    <div className="p-4 flex flex-col animate-fadeIn">
+                        <div className="text-center mb-4">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Duelo de Preços</p>
+                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200">Qual opção compensa mais?</h3>
+                        </div>
 
-                        <div className="grid grid-cols-2 gap-4 flex-1">
+                        <div className="grid grid-cols-2 gap-3 mb-4">
                             {/* Product A */}
-                            <div className={`flex flex-col gap-2 p-3 rounded-xl border-2 transition-all ${comparisonResult?.winner === 'A' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5'}`}>
-                                <h3 className={`font-bold text-center mb-1 ${comparisonResult?.winner === 'A' ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>Opção A</h3>
+                            <div className={`flex flex-col gap-2 p-3 rounded-2xl border-2 transition-all ${comparisonResult?.winner === 'A' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/5'}`}>
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <span className={`material-symbols-outlined text-sm ${comparisonResult?.winner === 'A' ? 'text-green-600' : 'text-gray-400'}`}>inventory_2</span>
+                                    <h3 className={`text-[10px] font-black uppercase tracking-wider ${comparisonResult?.winner === 'A' ? 'text-green-700 dark:text-green-400' : 'text-gray-500'}`}>Opção A</h3>
+                                </div>
                                 
-                                <label className="block">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Preço (R$)</span>
+                                <div className="space-y-1.5">
                                     <input 
                                         type="tel" 
                                         value={priceA} 
                                         onChange={(e) => setPriceA(formatNumberInput(e.target.value))}
-                                        placeholder="0,00"
-                                        className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-black/20 text-sm p-2 text-center font-semibold"
+                                        placeholder="R$ 0,00"
+                                        className="w-full h-11 rounded-xl border-gray-200 dark:border-gray-700 dark:bg-black/40 text-sm p-2 text-center font-bold focus:ring-2 focus:ring-primary/20"
                                     />
-                                </label>
-                                
-                                <label className="block">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Peso/Qtd</span>
                                     <input 
                                         type="tel" 
                                         value={amountA} 
                                         onChange={(e) => setAmountA(formatNumberInput(e.target.value))}
                                         placeholder="g / ml / un"
-                                        className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-black/20 text-sm p-2 text-center font-semibold"
+                                        className="w-full h-11 rounded-xl border-gray-200 dark:border-gray-700 dark:bg-black/40 text-[11px] p-2 text-center font-bold focus:ring-2 focus:ring-primary/20"
                                     />
-                                </label>
+                                </div>
 
                                 {comparisonResult?.winner === 'A' && (
-                                    <div className="mt-auto pt-2 text-center animate-slideUp">
-                                        <div className="inline-block bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm mb-1">
-                                            MELHOR OPÇÃO
-                                        </div>
-                                        <p className="text-xs text-green-700 dark:text-green-300 font-bold">
-                                            {comparisonResult.savingsPercent}% mais barato
-                                        </p>
+                                    <div className="mt-2 text-center animate-slideUp">
+                                        <div className="inline-block bg-green-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-sm mb-1 uppercase tracking-tighter">MELHOR PREÇO</div>
+                                        <p className="text-[10px] text-green-700 dark:text-green-300 font-black">-{comparisonResult.savingsPercent}%</p>
                                     </div>
                                 )}
                             </div>
 
                             {/* Product B */}
-                            <div className={`flex flex-col gap-2 p-3 rounded-xl border-2 transition-all ${comparisonResult?.winner === 'B' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5'}`}>
-                                <h3 className={`font-bold text-center mb-1 ${comparisonResult?.winner === 'B' ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>Opção B</h3>
+                            <div className={`flex flex-col gap-2 p-3 rounded-2xl border-2 transition-all ${comparisonResult?.winner === 'B' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/5'}`}>
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <span className={`material-symbols-outlined text-sm ${comparisonResult?.winner === 'B' ? 'text-green-600' : 'text-gray-400'}`}>inventory_2</span>
+                                    <h3 className={`text-[10px] font-black uppercase tracking-wider ${comparisonResult?.winner === 'B' ? 'text-green-700 dark:text-green-400' : 'text-gray-500'}`}>Opção B</h3>
+                                </div>
                                 
-                                <label className="block">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Preço (R$)</span>
+                                <div className="space-y-1.5">
                                     <input 
                                         type="tel" 
                                         value={priceB} 
                                         onChange={(e) => setPriceB(formatNumberInput(e.target.value))}
-                                        placeholder="0,00"
-                                        className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-black/20 text-sm p-2 text-center font-semibold"
+                                        placeholder="R$ 0,00"
+                                        className="w-full h-11 rounded-xl border-gray-200 dark:border-gray-700 dark:bg-black/40 text-sm p-2 text-center font-bold focus:ring-2 focus:ring-primary/20"
                                     />
-                                </label>
-                                
-                                <label className="block">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Peso/Qtd</span>
                                     <input 
                                         type="tel" 
                                         value={amountB} 
                                         onChange={(e) => setAmountB(formatNumberInput(e.target.value))}
                                         placeholder="g / ml / un"
-                                        className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-black/20 text-sm p-2 text-center font-semibold"
+                                        className="w-full h-11 rounded-xl border-gray-200 dark:border-gray-700 dark:bg-black/40 text-[11px] p-2 text-center font-bold focus:ring-2 focus:ring-primary/20"
                                     />
-                                </label>
+                                </div>
 
                                 {comparisonResult?.winner === 'B' && (
-                                    <div className="mt-auto pt-2 text-center animate-slideUp">
-                                        <div className="inline-block bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm mb-1">
-                                            MELHOR OPÇÃO
-                                        </div>
-                                        <p className="text-xs text-green-700 dark:text-green-300 font-bold">
-                                            {comparisonResult.savingsPercent}% mais barato
-                                        </p>
+                                    <div className="mt-2 text-center animate-slideUp">
+                                        <div className="inline-block bg-green-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-sm mb-1 uppercase tracking-tighter">MELHOR PREÇO</div>
+                                        <p className="text-[10px] text-green-700 dark:text-green-300 font-black">-{comparisonResult.savingsPercent}%</p>
                                     </div>
                                 )}
                             </div>
                         </div>
                         
-                        <div className="mt-6">
+                        <div className="grid grid-cols-1 gap-2 mt-2">
                              <button 
                                 onClick={() => { setPriceA(''); setAmountA(''); setPriceB(''); setAmountB(''); }}
-                                className="w-full py-3 rounded-xl bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-300 dark:hover:bg-white/20 transition-colors"
+                                className="w-full h-12 rounded-xl bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-gray-300 dark:hover:bg-white/20 transition-all active:scale-95"
                             >
-                                Limpar Comparação
+                                Limpar Dados
+                            </button>
+                            <button 
+                                onClick={onClose}
+                                className="w-full h-12 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95"
+                            >
+                                Fechar
                             </button>
                         </div>
                     </div>

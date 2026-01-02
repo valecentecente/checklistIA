@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -6,8 +7,6 @@ import { useShoppingList } from '../../contexts/ShoppingListContext';
 import { PWAInstallPrompt } from '../PWAInstallPrompt';
 import { ToolsGridModal } from './ToolsGridModal';
 import { OnboardingTourModal } from '../OnboardingTourModal';
-import { PreferencesModal } from '../PreferencesModal';
-import { SmartNudgeModal } from '../SmartNudgeModal';
 import { ProductDetailsModal } from '../ProductDetailsModal';
 import { AddItemForm } from '../AddItemForm';
 import { EditItemForm } from '../EditItemForm';
@@ -21,7 +20,6 @@ import { FavoriteRecipesModal } from '../FavoriteRecipesModal';
 import { OffersModal } from '../OffersModal';
 import { AdminOffersModal } from '../AdminOffersModal';
 import { AdminReviewsModal } from '../AdminReviewsModal';
-import { AdminScheduleModal } from '../AdminScheduleModal'; 
 import { SavePurchaseModal } from '../SavePurchaseModal';
 import { HistoryModal } from '../HistoryModal';
 import { AuthModal } from '../AuthModal';
@@ -82,15 +80,13 @@ export const AppModals: React.FC<AppModalsProps> = ({
 }) => {
     const app = useApp();
     const { user, login, authError } = useAuth();
-    const { history, formatCurrency, deleteItem, updateItem, deleteRecipeGroup, toggleItemPurchased } = useShoppingList();
+    const { history, formatCurrency, deleteItem, updateItem } = useShoppingList();
 
     return (
         <>
             {app.installPromptEvent && app.isPWAInstallVisible && <PWAInstallPrompt onInstall={app.handleInstall} onDismiss={app.handleDismissInstall} />}
             <ToolsGridModal />
             <OnboardingTourModal isOpen={app.isTourModalOpen} onClose={() => app.closeModal('Tour')} />
-            <PreferencesModal isOpen={app.isPreferencesModalOpen} onClose={() => app.closeModal('preferences')} />
-            <SmartNudgeModal />
             <ProductDetailsModal /> 
             <AddItemForm isOpen={app.isAddItemModalOpen} onClose={() => app.closeModal('addItem')} onAddItem={handleAddItem} />
             <EditItemForm isOpen={!!app.editingItemId} onClose={app.cancelEdit} onUpdate={updateItem} onDeleteItem={deleteItem} item={editingItem} />
@@ -114,11 +110,9 @@ export const AppModals: React.FC<AppModalsProps> = ({
             <FavoriteRecipesModal isOpen={app.isFavoritesModalOpen} onClose={() => app.closeModal('favorites')} />
             <OffersModal isOpen={app.isOffersModalOpen} onClose={() => app.closeModal('offers')} />
             
-            {/* ADMIN MODALS */}
             <AdminHubModal />
             <AdminOffersModal isOpen={app.isAdminModalOpen} onClose={() => app.closeModal('admin')} />
             <AdminReviewsModal isOpen={app.isAdminReviewsModalOpen} onClose={() => app.closeModal('adminReviews')} />
-            <AdminScheduleModal /> 
             <AdminContentFactoryModal /> 
             <ManageTeamModal />
             <AdminInviteModal />
@@ -141,15 +135,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
                 initialMarketName={app.currentMarketName}
             />
             <HistoryModal isOpen={app.isHistoryModalOpen} onClose={() => app.closeModal('history')} history={history} onRepeatPurchase={handleRepeatPurchase} onAddItem={handleAddHistoricItem} formatCurrency={formatCurrency} />
-            <AuthModal 
-                isOpen={app.isAuthModalOpen} 
-                onClose={() => { 
-                    app.closeModal('auth'); 
-                    if (!user) app.setPendingAction(null); 
-                }} 
-                onLogin={login} 
-                error={authError} 
-            />
+            <AuthModal isOpen={app.isAuthModalOpen} onClose={() => app.closeModal('auth')} onLogin={login} error={authError} />
             <ProfileModal isOpen={app.isProfileModalOpen} onClose={() => app.closeModal('profile')} />
             <ThemeModal isOpen={app.isThemeModalOpen} onClose={() => app.closeModal('theme')} />
             <SharedListImportModal isOpen={app.isSharedListModalOpen} onClose={() => app.closeModal('sharedList')} onImport={handleImportSharedList} listData={sharedListData} isLoading={isImportingShare} />

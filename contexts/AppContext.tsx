@@ -1,8 +1,9 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc, or } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity, HomeCategory } from '../types';
+import type { DuplicateInfo, FullRecipe, ShoppingItem, ReceivedListRecord, Offer, ScheduleRule, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
 
@@ -10,6 +11,37 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; 
+
+// Dicionário Local de Itens Comuns para Organização Instantânea
+const LOCAL_AISLE_DICTIONARY: Record<string, string> = {
+    // Hortifruti
+    "alface": "🍎 Hortifruti", "tomate": "🍎 Hortifruti", "cebola": "🍎 Hortifruti", "alho": "🍎 Hortifruti", "batata": "🍎 Hortifruti",
+    "maçã": "🍎 Hortifruti", "banana": "🍎 Hortifruti", "laranja": "🍎 Hortifruti", "uva": "🍎 Hortifruti", "limão": "🍎 Hortifruti",
+    "cenoura": "🍎 Hortifruti", "brócolis": "🍎 Hortifruti", "abacate": "🍎 Hortifruti", "melancia": "🍎 Hortifruti", "manga": "🍎 Hortifruti",
+    // Açougue
+    "carne": "🥩 Açougue", "frango": "🥩 Açougue", "peixe": "🥩 Açougue", "picanha": "🥩 Açougue", "alcatra": "🥩 Açougue",
+    "maminha": "🥩 Açougue", "fraldinha": "🥩 Açougue", "coxa": "🥩 Açougue", "sobrecoxa": "🥩 Açougue", "filé": "🥩 Açougue",
+    "linguiça": "🥩 Açougue", "bacon": "🥩 Açougue", "costela": "🥩 Açougue", "moída": "🥩 Açougue",
+    // Laticínios
+    "leite": "🥛 Laticínios", "queijo": "🥛 Laticínios", "manteiga": "🥛 Laticínios", "iogurte": "🥛 Laticínios", "requeijão": "🥛 Laticínios",
+    "creme de leite": "🥛 Laticínios", "leite condensado": "🥛 Laticínios", "margarina": "🥛 Laticínios", "muçarela": "🥛 Laticínios",
+    // Padaria
+    "pão": "🍞 Padaria", "baguete": "🍞 Padaria", "bisnaga": "🍞 Padaria", "bolo": "🍞 Padaria", "torta": "🍞 Padaria",
+    "sonho": "🍞 Padaria", "salgado": "🍞 Padaria", "pão de queijo": "🍞 Padaria", "croissant": "🍞 Padaria",
+    // Mercearia
+    "arroz": "🛒 Mercearia", "feijão": "🛒 Mercearia", "macarrão": "🛒 Mercearia", "óleo": "🛒 Mercearia", "azeite": "🛒 Mercearia",
+    "açúcar": "🛒 Mercearia", "sal": "🛒 Mercearia", "café": "🛒 Mercearia", "farinha": "🛒 Mercearia", "molho": "🛒 Mercearia",
+    "biscoito": "🛒 Mercearia", "bolacha": "🛒 Mercearia", "chocolate": "🛒 Mercearia", "pipoca": "🛒 Mercearia", "milho": "🛒 Mercearia",
+    // Bebidas
+    "água": "💧 Bebidas", "suco": "💧 Bebidas", "refrigerante": "💧 Bebidas", "cerveja": "💧 Bebidas", "vinho": "💧 Bebidas",
+    "chá": "💧 Bebidas", "energético": "💧 Bebidas", "vodka": "💧 Bebidas", "whisky": "💧 Bebidas", "coca": "💧 Bebidas",
+    // Limpeza
+    "detergente": "🧼 Limpeza", "sabão": "🧼 Limpeza", "amaciante": "🧼 Limpeza", "desinfetante": "🧼 Limpeza", "água sanitária": "🧼 Limpeza",
+    "esponja": "🧼 Limpeza", "veja": "🧼 Limpeza", "lustra móveis": "🧼 Limpeza", "saco de lixo": "🧼 Limpeza",
+    // Higiene
+    "shampoo": "🧴 Higiene", "condicionador": "🧴 Higiene", "sabonete": "🧴 Higiene", "creme dental": "🧴 Higiene", "pasta de dente": "🧴 Higiene",
+    "desodorante": "🧴 Higiene", "papel higiênico": "🧴 Higiene", "absorvente": "🧴 Higiene", "fio dental": "🧴 Higiene",
+};
 
 const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
@@ -62,15 +94,12 @@ const INITIAL_MODAL_STATES = {
     isProfileModalOpen: false, isThemeModalOpen: false,
     isSharedListModalOpen: false,
     isFeedbackModalOpen: false,
-    isPreferencesModalOpen: false,
-    isSmartNudgeModalOpen: false,
     isRecipeDecisionModalOpen: false,
     isFavoritesModalOpen: false,
     isOffersModalOpen: false,
     isAdminModalOpen: false,
     isAdminRecipesModalOpen: false,
     isAdminReviewsModalOpen: false,
-    isAdminScheduleModalOpen: false,
     isAdminUsersModalOpen: false,
     isManageTeamModalOpen: false,
     isTeamReportsModalOpen: false, 
@@ -86,7 +115,10 @@ const INITIAL_MODAL_STATES = {
     isContentFactoryModalOpen: false,
     isRecipeSelectionModalOpen: false,
     isDistributionModalOpen: false,
-    isAdminHubModalOpen: false
+    isAdminHubModalOpen: false,
+    isSmartNudgeModalOpen: false,
+    isAdminScheduleModalOpen: false,
+    isPreferencesModalOpen: false
 };
 
 interface AppContextType {
@@ -104,15 +136,12 @@ interface AppContextType {
     isThemeModalOpen: boolean;
     isSharedListModalOpen: boolean;
     isFeedbackModalOpen: boolean;
-    isPreferencesModalOpen: boolean;
-    isSmartNudgeModalOpen: boolean;
     isRecipeDecisionModalOpen: boolean;
     isFavoritesModalOpen: boolean;
     isOffersModalOpen: boolean;
     isAdminModalOpen: boolean;
     isAdminRecipesModalOpen: boolean;
     isAdminReviewsModalOpen: boolean;
-    isAdminScheduleModalOpen: boolean; 
     isAdminUsersModalOpen: boolean;
     isManageTeamModalOpen: boolean;
     isTeamReportsModalOpen: boolean; 
@@ -131,6 +160,14 @@ interface AppContextType {
     isProfileModalOpen: boolean;
     isDistributionModalOpen: boolean;
     isAdminHubModalOpen: boolean;
+    isSmartNudgeModalOpen: boolean;
+    isAdminScheduleModalOpen: boolean;
+    isPreferencesModalOpen: boolean;
+    smartNudgeItemName: string | null;
+    scheduleRules: ScheduleRule[];
+    saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
+    pendingInventoryItem: { name: string; tags: string } | null;
+    setPendingInventoryItem: (item: { name: string; tags: string } | null) => void;
     
     openModal: (modal: string) => void;
     closeModal: (modal: string) => void;
@@ -179,15 +216,12 @@ interface AppContextType {
     totalRecipeCount: number;
     searchGlobalRecipes: (queryStr: string) => Promise<FullRecipe[]>;
     getCategoryCount: (categoryLabel: string) => number;
-    getCategoryCover: (categoryLabel: string) => string | undefined; 
     getCategoryRecipes: (categoryKey: string) => FullRecipe[];
     getCategoryRecipesSync: (categoryKey: string) => FullRecipe[];
     getCachedRecipe: (name: string) => FullRecipe | undefined;
     getRandomCachedRecipe: () => FullRecipe | null;
     generateKeywords: (text: string) => string[];
 
-    scheduleRules: ScheduleRule[];
-    saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
     homeCategories: HomeCategory[];
     saveHomeCategories: (categories: HomeCategory[]) => Promise<void>;
 
@@ -223,11 +257,8 @@ interface AppContextType {
     setCurrentMarketName: (name: string | null) => void;
     isSharedSession: boolean;
     setIsSharedSession: (isShared: boolean) => void;
-    stopSharing: () => void;
     historyActiveTab: 'my' | 'received';
     setHistoryActiveTab: (tab: 'my' | 'received') => void;
-
-    smartNudgeItemName: string | null;
     
     isFocusMode: boolean;
     setFocusMode: (mode: boolean) => void;
@@ -241,9 +272,6 @@ interface AppContextType {
     selectedProduct: Offer | null; 
     openProductDetails: (product: Offer) => void; 
     isOffline: boolean;
-
-    pendingInventoryItem: { name: string; tags: string } | null;
-    setPendingInventoryItem: (item: { name: string; tags: string } | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -253,19 +281,11 @@ export const callGenAIWithRetry = async <T = GenerateContentResponse>(fn: () => 
         return await fn();
     } catch (error: any) {
         const errorStr = (JSON.stringify(error) || error?.toString() || '').toLowerCase();
-        const isQuotaError = 
-            error?.status === 429 || 
-            errorStr.includes('429') || 
-            errorStr.includes('quota') ||
-            errorStr.includes('resource_exhausted') ||
-            errorStr.includes('rate limit');
+        const isQuotaError = error?.status === 429 || errorStr.includes('429') || errorStr.includes('quota');
                              
         if (retries > 0 && isQuotaError) {
             const baseDelay = (9 - retries) * 15000; 
-            const jitter = Math.random() * 5000;
-            const finalDelay = baseDelay + jitter;
-            
-            console.warn(`[IA] Limite atingido. Aguardando ${Math.round(finalDelay/1000)}s para renovação da qota.`);
+            const finalDelay = baseDelay + Math.random() * 5000;
             await new Promise(resolve => setTimeout(resolve, finalDelay));
             return callGenAIWithRetry(fn, retries - 1);
         }
@@ -274,10 +294,7 @@ export const callGenAIWithRetry = async <T = GenerateContentResponse>(fn: () => 
 };
 
 const ignorePermissionError = (err: any) => {
-    if (err.code === 'permission-denied' || err.message?.includes('Missing or insufficient permissions')) {
-        return true;
-    }
-    return false;
+    return err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'));
 };
 
 export const generateKeywords = (text: string): string[] => {
@@ -292,7 +309,7 @@ export const generateKeywords = (text: string): string[] => {
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites, offers } = useShoppingList();
+    const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
     const { user } = useAuth();
 
     const [modalStates, setModalStates] = useState(INITIAL_MODAL_STATES);
@@ -323,6 +340,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [incomingList, setIncomingList] = useState<ReceivedListRecord | null>(null);
     
     const [smartNudgeItemName, setSmartNudgeItemName] = useState<string | null>(null);
+    const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
+    const [pendingInventoryItem, setPendingInventoryItem] = useState<{ name: string; tags: string } | null>(null);
+
     const [currentMarketName, setCurrentMarketName] = useState<string | null>(null);
     const [isSharedSession, setIsSharedSession] = useState(false);
     const [historyActiveTab, setHistoryActiveTabState] = useState<'my' | 'received'>('my');
@@ -337,7 +357,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [currentTheme, setCurrentTheme] = useState<string | null>(null);
     const [pendingExploreRecipe, setPendingExploreRecipe] = useState<string | null>(null);
     const [totalRecipeCount, setTotalRecipeCount] = useState(0);
-    const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
     const [homeCategories, setHomeCategories] = useState<HomeCategory[]>([]);
     
     const [selectedProduct, setSelectedProduct] = useState<Offer | null>(null);
@@ -346,13 +365,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [recipeSearchResults, setRecipeSearchResults] = useState<FullRecipe[]>([]);
     const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
-    const [pendingInventoryItem, setPendingInventoryItem] = useState<{ name: string; tags: string } | null>(null);
-
     const apiKey = process.env.API_KEY as string;
-    
-    const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com' || user?.email === 'ricardo029@gmail.com';
-    const isSuperAdmin = isOwner || user?.role === 'admin_l1';
-    const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
+    const isAdmin = user?.role === 'admin_l1' || user?.role === 'admin_l2';
+    const isSuperAdmin = user?.role === 'admin_l1';
 
     useEffect(() => {
         const handleOnline = () => setIsOffline(false);
@@ -369,12 +384,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const handler = (e: Event) => { 
             e.preventDefault(); 
             setInstallPromptEvent(e); 
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-            if (!isStandalone) {
-                setTimeout(() => {
-                    setModalStates(prev => ({...prev, isDistributionModalOpen: true}));
-                }, 2000);
-            }
         };
         window.addEventListener('beforeinstallprompt', handler);
         return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -395,116 +404,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
         const pool = globalRecipeCache;
         if (pool.length === 0) return [] as FullRecipe[];
-
-        switch(categoryKey) {
-            case 'top10': 
-                return pool.slice(0, 15);
-            case 'fast': 
-                return pool.filter(r => r.prepTimeInMinutes && r.prepTimeInMinutes <= 30);
-            case 'healthy':
-                return pool.filter(r => r.tags?.some(t => ['fit', 'saudável', 'salada', 'nutritivo', 'vegano', 'fruta'].includes(t.toLowerCase())));
-            case 'cheap':
-                return pool.filter(r => r.cost === 'Baixo');
-            case 'dessert':
-                return pool.filter(r => r.tags?.some(t => ['sobremesa', 'doce', 'bolo', 'torta'].includes(t.toLowerCase())));
-            case 'new':
-                return pool.slice(0, 10);
-            case 'random':
-                return shuffleArray<FullRecipe>(pool).slice(0, 5);
-            case 'sorvetes':
-                return pool.filter(r => r.tags?.some(t => t.toLowerCase().includes('sorvete') || t.toLowerCase().includes('gelato')));
-            default:
-                return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
-        }
+        return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
     }, [globalRecipeCache]);
 
     useEffect(() => {
         if (!db) return;
         const loadData = async () => {
             const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
-            let fallbackCache: any = null;
-
             if (cachedString) {
                 try {
-                    const cache = JSON.parse(cachedString) as any;
-                    fallbackCache = cache; 
-                    
-                    if (cache && Array.isArray(cache.pool)) {
-                        setAllRecipesPool(mapToFullRecipeArray(cache.pool));
-                    }
-                    if (cache && Array.isArray(cache.cache)) {
-                        setGlobalRecipeCache(mapToFullRecipeArray(cache.cache));
-                    }
-                    if (cache && typeof cache.count === 'number') {
-                        setTotalRecipeCount(cache.count);
-                    }
-                    
-                    const isExpired = (Date.now() - (cache?.timestamp || 0)) > RECIPE_CACHE_TTL;
-                    if (!isExpired) return; 
+                    const cache = JSON.parse(cachedString);
+                    setAllRecipesPool(mapToFullRecipeArray(cache.pool));
+                    setGlobalRecipeCache(mapToFullRecipeArray(cache.cache));
+                    setTotalRecipeCount(cache.count || 0);
+                    if ((Date.now() - (cache?.timestamp || 0)) < RECIPE_CACHE_TTL) return; 
                 } catch (e) { localStorage.removeItem(RECIPE_CACHE_KEY); }
             }
-
             try {
-                const networkPromise = (async () => {
-                    // PERFORMANCE: Reduzido de 100 para 30 para carregar muito mais rápido no celular
-                    const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(30));
-                    const snapshotFetch = await getDocs(qFetch);
-                    const fetchedRaw: any[] = [];
-                    snapshotFetch.forEach(docSnap => {
-                        const data = docSnap.data();
-                        if (data && data.name && data.imageUrl) {
-                            fetchedRaw.push(data);
-                        }
-                    });
-
-                    const fetched: FullRecipe[] = mapToFullRecipeArray(fetchedRaw);
-
-                    let pool: FullRecipe[];
-                    if (fetched.length > 0) {
-                        pool = shuffleArray<FullRecipe>(fetched);
-                    } else if (fallbackCache && fallbackCache.pool) {
-                        pool = mapToFullRecipeArray(fallbackCache.pool);
-                    } else {
-                        pool = [];
-                    }
-                    setAllRecipesPool(pool);
-                    
-                    let cacheToSet: FullRecipe[];
-                    if (fetched.length > 0) {
-                        cacheToSet = fetched;
-                    } else if (fallbackCache && fallbackCache.cache) {
-                        cacheToSet = mapToFullRecipeArray(fallbackCache.cache);
-                    } else {
-                        cacheToSet = [];
-                    }
-                    setGlobalRecipeCache(cacheToSet);
-                    
-                    const countSnapshot = await getCountFromServer(collection(db, 'global_recipes'));
-                    const totalCount = countSnapshot.data().count;
-                    setTotalRecipeCount(totalCount);
-
-                    localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({
-                        timestamp: Date.now(),
-                        pool, cache: fetched, count: totalCount
-                    }));
-                })();
-
-                await Promise.race([
-                    networkPromise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
-                ]);
-
-            } catch (error: any) {
-                if (fallbackCache) {
-                    const poolData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.pool);
-                    const cacheData: FullRecipe[] = mapToFullRecipeArray(fallbackCache.cache);
-                    setAllRecipesPool(poolData);
-                    setGlobalRecipeCache(cacheData);
-                    setTotalRecipeCount(fallbackCache.count || 0);
-                }
-            }
+                const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(30));
+                const snap = await getDocs(qFetch);
+                const fetched = mapToFullRecipeArray(snap.docs.map(d => d.data()));
+                setAllRecipesPool(shuffleArray(fetched));
+                setGlobalRecipeCache(fetched);
+                const countSnap = await getCountFromServer(collection(db, 'global_recipes'));
+                const count = countSnap.data().count;
+                setTotalRecipeCount(count);
+                localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), pool: fetched, cache: fetched, count }));
+            } catch (error) {}
         };
         loadData();
+    }, []);
+
+    useEffect(() => {
+        if (!db) return;
+        const unsub = onSnapshot(doc(db, 'settings', 'home_categories'), (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                setHomeCategories((data.categories || []).sort((a: any, b: any) => a.order - b.order));
+            }
+        }, (error) => {
+            if (!ignorePermissionError(error)) console.warn("[AppContext] Sem acesso a categorias.");
+        });
+        return () => unsub();
     }, []);
 
     useEffect(() => {
@@ -519,18 +460,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return () => unsub();
     }, []);
 
-    useEffect(() => {
-        if (!db) return;
-        const unsub = onSnapshot(doc(db, 'settings', 'home_categories'), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.data();
-                setHomeCategories((data.categories || []).sort((a: any, b: any) => a.order - b.order));
-            }
-        }, (error) => {
-            if (!ignorePermissionError(error)) console.error(error);
-        });
-        return () => unsub();
-    }, []);
+    const saveHomeCategories = async (categories: HomeCategory[]) => {
+        if (!db || !isAdmin) return;
+        return await setDoc(doc(db, 'settings', 'home_categories'), { categories, updatedAt: serverTimestamp() });
+    };
 
     const saveScheduleRules = async (rules: ScheduleRule[]) => {
         if (!db || !isAdmin) return;
@@ -538,30 +471,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         showToast("Grade de horários atualizada!");
     };
 
-    const saveHomeCategories = async (categories: HomeCategory[]) => {
-        if (!db || !isAdmin) return;
-        return await setDoc(doc(db, 'settings', 'home_categories'), { categories, updatedAt: serverTimestamp() });
-    };
-
-    const getContextualRecipes = useCallback((pool: FullRecipe[]): FullRecipe[] => {
-        if (pool.length === 0) return [] as FullRecipe[];
-        const now = new Date();
-        const hour = now.getHours();
-        let activeRules = scheduleRules.filter(r => hour >= r.startHour && hour < r.endHour);
-        const scored = pool.map(recipe => {
-            let score = Math.random() * 10;
-            const text = (recipe.name + ' ' + (recipe.tags?.join(' ') || '')).toLowerCase();
-            activeRules.forEach(rule => {
-                if (rule.tags.some(tag => text.includes(tag.toLowerCase()))) score += 30;
-            });
-            return { recipe, score };
-        });
-        return scored.sort((a, b) => b.score - a.score).map(s => s.recipe);
-    }, [scheduleRules]);
-
     const featuredRecipes = useMemo((): FullRecipe[] => {
-        return getContextualRecipes(allRecipesPool).slice(0, 10);
-    }, [allRecipesPool, getContextualRecipes]);
+        return allRecipesPool.slice(0, 10);
+    }, [allRecipesPool]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -577,12 +489,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [toastMessage]);
 
     const openModal = (modal: string) => {
-        if (modal === 'addItem' && showStartHerePrompt) setShowStartHerePrompt(false);
         let modalKey = `is${modal.charAt(0).toUpperCase() + modal.slice(1)}ModalOpen`;
         if (modal === 'admin') modalKey = 'isAdminModalOpen';
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
-        if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
@@ -598,6 +508,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
         if (modal === 'distribution') modalKey = 'isDistributionModalOpen';
         if (modal === 'adminHub') modalKey = 'isAdminHubModalOpen';
+        if (modal === 'smartNudge') modalKey = 'isSmartNudgeModalOpen';
+        if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        if (modal === 'preferences') modalKey = 'isPreferencesModalOpen';
+
         setModalStates(prev => ({...prev, [modalKey]: true}));
     };
 
@@ -606,7 +520,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'admin') modalKey = 'isAdminModalOpen';
         if (modal === 'adminRecipes') modalKey = 'isAdminRecipesModalOpen';
         if (modal === 'adminReviews') modalKey = 'isAdminReviewsModalOpen';
-        if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
         if (modal === 'adminUsers') modalKey = 'isAdminUsersModalOpen';
         if (modal === 'manageTeam') modalKey = 'isManageTeamModalOpen';
         if (modal === 'teamReports') modalKey = 'isTeamReportsModalOpen';
@@ -622,10 +535,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'recipeSelection') modalKey = 'isRecipeSelectionModalOpen';
         if (modal === 'distribution') modalKey = 'isDistributionModalOpen';
         if (modal === 'adminHub') modalKey = 'isAdminHubModalOpen';
-         if (modal.toLowerCase() === 'tour') {
-            localStorage.setItem('hasSeenOnboardingTour', 'true');
-            setShowStartHerePrompt(true);
-         }
+        if (modal === 'smartNudge') modalKey = 'isSmartNudgeModalOpen';
+        if (modal === 'adminSchedule') modalKey = 'isAdminScheduleModalOpen';
+        if (modal === 'preferences') modalKey = 'isPreferencesModalOpen';
+
         setModalStates(prev => ({ ...prev, [modalKey]: false }));
     }
     const toggleAppOptionsMenu = () => setModalStates(prev => ({ ...prev, isAppOptionsMenuOpen: !prev.isAppOptionsMenuOpen }));
@@ -641,8 +554,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsPWAInstallVisible(false);
         return outcome === 'accepted';
     };
-    const handleDismissInstall = () => { setIsPWAInstallVisible(false); };
-    const showPWAInstallPromptIfAvailable = () => { if (installPromptEvent) setIsPWAInstallVisible(true); };
 
     const setBudget = (b: number) => { setBudgetState(b); closeModal('budget'); };
     const clearBudget = () => { setBudgetState(null); closeModal('budget'); };
@@ -653,10 +564,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const getCachedRecipe = (name: string): FullRecipe | undefined => {
         const target = name.trim().toLowerCase();
-        const allCaches: (Record<string, FullRecipe> | FullRecipe[])[] = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, recipeSearchResults, globalRecipeCache];
+        const allCaches = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, recipeSearchResults, globalRecipeCache];
         for (const cache of allCaches) {
             if (Array.isArray(cache)) {
-                const found = (cache as FullRecipe[]).find(r => r.name.toLowerCase() === target);
+                const found = cache.find(r => r.name.toLowerCase() === target);
                 if (found) return found;
             } else {
                 const foundKey = Object.keys(cache).find(k => k.toLowerCase() === target);
@@ -685,53 +596,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
         setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
         setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
-        
         if (db) {
             const docId = getRecipeDocId(recipeName);
-            updateDoc(doc(db, 'global_recipes', docId), {
-                imageUrl,
-                imageSource: source,
-                updatedAt: serverTimestamp()
-            }).catch(() => console.warn("Erro ao atualizar imagem no acervo."));
+            updateDoc(doc(db, 'global_recipes', docId), { imageUrl, imageSource: source, updatedAt: serverTimestamp() });
         }
     };
 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
         if (!db || !queryStr || queryStr.length < 2) return [] as FullRecipe[];
-        try {
-            const keywords: string[] = generateKeywords(queryStr);
-            if (keywords.length === 0) return [] as FullRecipe[];
-            
-            const capitalizedKeywords = keywords.map(k => k.charAt(0).toUpperCase() + k.slice(1));
-            const searchTerms = Array.from(new Set([...keywords, ...capitalizedKeywords]));
-
-            const q = query(
-                collection(db, 'global_recipes'), 
-                or(
-                    where('keywords', 'array-contains-any', searchTerms.slice(0, 10)),
-                    where('tags', 'array-contains-any', searchTerms.slice(0, 10))
-                ),
-                limit(20)
-            );
-            
-            const snap = await getDocs(q);
-            const rawResults: any[] = [];
-            snap.forEach(docSnap => {
-                const data = docSnap.data();
-                if (data && data.name) {
-                    rawResults.push(data);
-                }
-            });
-            return mapToFullRecipeArray(rawResults);
-        } catch (error) { 
-            return [] as FullRecipe[]; 
-        }
+        const keywords = generateKeywords(queryStr);
+        if (keywords.length === 0) return [] as FullRecipe[];
+        const q = query(collection(db, 'global_recipes'), where('keywords', 'array-contains-any', keywords.slice(0, 10)), limit(20));
+        const snap = await getDocs(q);
+        return mapToFullRecipeArray(snap.docs.map(d => d.data()));
     }, []);
 
     const handleRecipeSearch = async (term: string) => {
         setIsSearchingAcervo(true); 
         try {
-            const results: FullRecipe[] = await searchGlobalRecipes(term);
+            const results = await searchGlobalRecipes(term);
             setRecipeSearchResults(results);
             setCurrentSearchTerm(term);
             closeModal('recipeAssistant'); 
@@ -744,95 +627,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
-        if (isOffline) { showToast("Geração de IA requer conexão com a internet."); return; }
-        if (!apiKey) return;
+        if (isOffline) { showToast("IA offline."); return; }
         setIsRecipeLoading(true);
-        setRecipeError(null);
         try {
             const ai = new GoogleGenAI({ apiKey });
-            
-            let systemPrompt = `Você é o Chef IA do ChecklistIA. Gere uma receita completa, deliciosa e detalhada para: "${recipeName}".
-            REGRAS OBRIGATÓRIAS:
-            1. O campo 'ingredients' NÃO PODE ser vazio. Liste no mínimo 5 ingredientes reais.
-            2. O campo 'instructions' NÃO PODE ser vazio. Descreva o passo a passo completo.
-            3. Identifique se o preparo exige equipamentos específicos (ex: batedeira, airfryer, forma, liquidificador, colher de pau, etc) para venda direcionada.
-            4. PROIBIDO repetir palavras contidas no nome da receita dentro do campo 'tags'.
-            5. Foque em tags contextuais como: Momento (Almoço, Jantar, Café), Perfil (Fit, Vegano, Kids, Barato, Gourmet), Técnica (Airfryer, Forno, Uma Panela Só, Rápido) e Categoria (Massa, Doce, Salgado).
-            6. Retorne APENAS o JSON puro seguindo este formato:
-            {
-                "name": "${recipeName}",
-                "ingredients": [{"simplifiedName": "Arroz", "detailedName": "2 xícaras de arroz agulhinha"}],
-                "instructions": ["Passo 1...", "Passo 2..."],
-                "imageQuery": "Foto close-up apetitosa de ${recipeName}, luz de estúdio",
-                "servings": "2 porções",
-                "prepTimeInMinutes": 30,
-                "difficulty": "Médio",
-                "cost": "Médio",
-                "isAlcoholic": false,
-                "tags": ["Almoço", "Rápido", "Barato", "Massa"],
-                "suggestedLeads": ["batedeira", "forma de bolo"]
-            }`;
-
-            const parts: any[] = [];
-            if (imageBase64) parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64.split(',')[1] } });
-            parts.push({ text: systemPrompt });
-
-            const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
+            const prompt = `Gere receita brasileira completa JSON para: "${recipeName}". REGRAS: ingredients min 5, tags (Momento, Perfil, Técnica), suggestedLeads (utensílios).`;
+            const textRes = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview', 
-                contents: { parts },
+                contents: prompt,
                 config: { responseMimeType: "application/json" }
             }));
-
-            const rawText = sanitizeJsonString(response.text || "{}");
-            const details = JSON.parse(rawText) as any;
-            
-            const finalName = details.name || recipeName;
-            
-            const nameKeywords = generateKeywords(finalName);
-            const tagKeywords = (details.tags || []).flatMap((t: string) => generateKeywords(t));
-            const finalKeywords = Array.from(new Set([...nameKeywords, ...tagKeywords]));
-
+            const details = JSON.parse(textRes.text?.replace(/```json/gi, '').replace(/```/gi, '').trim() || "{}");
             const fullData: FullRecipe = { 
-                name: finalName,
-                ingredients: Array.isArray(details.ingredients) ? details.ingredients.map((i: any) => ({
-                    simplifiedName: String(i.simplifiedName || ''),
-                    detailedName: String(i.detailedName || '')
-                })) : [] as { simplifiedName: string; detailedName: string; }[],
-                instructions: Array.isArray(details.instructions) ? details.instructions.map(String) : [] as string[],
-                imageQuery: details.imageQuery || finalName,
-                servings: details.servings || '2 porções',
-                prepTimeInMinutes: details.prepTimeInMinutes || 30,
-                difficulty: (details.difficulty === 'Fácil' || details.difficulty === 'Médio' || details.difficulty === 'Difícil' ? details.difficulty : 'Médio') as 'Fácil' | 'Médio' | 'Difícil',
-                cost: (details.cost === 'Baixo' || details.cost === 'Médio' || details.cost === 'Alto' ? details.cost : 'Médio') as 'Baixo' | 'Médio' | 'Alto',
-                imageUrl: details.imageUrl,
-                imageSource: details.imageSource || 'cache',
-                description: details.description,
-                keywords: finalKeywords,
-                tags: Array.isArray(details.tags) ? details.tags.map(String) : [] as string[],
-                isAlcoholic: !!details.isAlcoholic,
-                suggestedLeads: Array.isArray(details.suggestedLeads) ? details.suggestedLeads.map(String) : [] as string[],
+                ...details, 
+                keywords: generateKeywords(details.name || recipeName),
                 createdAt: serverTimestamp() 
             };
-            
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
-            closeModal('recipeAssistant');
-
-            if (db) {
-                const docId = getRecipeDocId(fullData.name);
-                await setDoc(doc(db, 'global_recipes', docId), {
-                    ...fullData,
-                    tags: [...(fullData.tags || []), 'gerada_pelo_usuario'],
-                    createdAt: serverTimestamp()
-                }, { merge: true }).catch(() => console.warn("Acervo offline ao salvar texto."));
-            }
-
             if (autoAdd) await addRecipeToShoppingList(fullData);
-        } catch (e: any) { 
-            setRecipeError("O Chef está ocupado ou a conexão falhou. Tente em instantes."); 
-        } finally { 
-            setIsRecipeLoading(false); 
-        }
+        } catch (e) { setRecipeError("O Chef falhou."); } finally { setIsRecipeLoading(false); }
     }, [apiKey, isOffline]); 
 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
@@ -850,89 +664,124 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const toggleGrouping = useCallback(async () => {
         if (isOffline) { showToast("Organização por corredores requer internet."); return; }
+        
         if (groupingMode === 'recipe') {
-            const itemsToCategorize = items.filter(item => !itemCategories[item.id]);
-            if (itemsToCategorize.length === 0) { setGroupingMode('aisle'); closeModal('options'); return; }
+            if (items.length === 0) {
+                showToast("Adicione itens à lista para organizar!");
+                return;
+            }
+
+            const newCategoryMap = { ...itemCategories };
+            const itemsToCategorizeViaIA: typeof items = [];
+
+            // ETAPA 1: Tentar dicionário local primeiro (Instantâneo)
+            items.forEach(item => {
+                if (newCategoryMap[item.id]) return; // Já categorizado
+
+                const cleanName = item.name.toLowerCase().trim();
+                // Tenta busca exata ou contida no dicionário
+                const dictMatch = Object.keys(LOCAL_AISLE_DICTIONARY).find(key => 
+                    cleanName === key || cleanName.includes(key)
+                );
+
+                if (dictMatch) {
+                    newCategoryMap[item.id] = LOCAL_AISLE_DICTIONARY[dictMatch];
+                } else {
+                    itemsToCategorizeViaIA.push(item);
+                }
+            });
+
+            // Se o dicionário resolveu tudo, encerra aqui
+            if (itemsToCategorizeViaIA.length === 0) {
+                setItemCategories(newCategoryMap);
+                setGroupingMode('aisle');
+                showToast("Lista organizada!");
+                return;
+            }
+
+            // ETAPA 2: Usar IA apenas para o que sobrou
             setIsOrganizing(true);
             try {
                 if (!apiKey) throw new Error("API Key missing");
                 const ai = new GoogleGenAI({ apiKey });
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue", "🥛 Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene", "❓ Outros" ];
+                
                 const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-3-flash-preview',
-                    contents: `Categorize estes itens: [${itemsToCategorize.map(i => `"${i.name}"`).join(', ')}]. Categorias: ${categories.join(', ')}. Return JSON array.`,
+                    contents: `Categorize estes itens: [${itemsToCategorizeViaIA.map(i => `"${i.name}"`).join(', ')}]. Categorias permitidas: ${categories.join(', ')}. Retorne um JSON array de objetos: [{"itemName": "nome_exato_do_item", "category": "categoria_escolhida"}].`,
                     config: { responseMimeType: "application/json" }
                 }));
-                const categorizedItems = JSON.parse(sanitizeJsonString(response.text || "[]")) as any[];
-                const newCategoryMap = { ...itemCategories };
-                (categorizedItems).forEach(ci => {
-                    const item = itemsToCategorize.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
-                    if (item) newCategoryMap[item.id] = ci.category;
+
+                const jsonStr = sanitizeJsonString(response.text || "[]");
+                const categorizedItems = JSON.parse(jsonStr) as any[];
+                
+                categorizedItems.forEach(ci => {
+                    const itemNameLower = ci.itemName?.toLowerCase().trim();
+                    const item = itemsToCategorizeViaIA.find(i => i.name.toLowerCase().trim() === itemNameLower);
+                    if (item) {
+                        newCategoryMap[item.id] = ci.category;
+                    }
                 });
+
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
-            } catch (error: any) { showToast("Muitas tentativas."); }
-            finally { setIsOrganizing(false); }
-        } else { setGroupingMode('recipe'); }
-        closeModal('options');
+                showToast("Lista organizada!");
+            } catch (error: any) { 
+                console.error("Erro organização:", error);
+                // Mesmo com erro na IA, aplica o que o dicionário local conseguiu
+                setItemCategories(newCategoryMap);
+                setGroupingMode('aisle');
+                showToast("Organização parcial concluída."); 
+            } finally { 
+                setIsOrganizing(false); 
+            }
+        } else { 
+            setGroupingMode('recipe'); 
+        }
     }, [groupingMode, items, itemCategories, apiKey, isOffline]);
 
-    const fetchThemeSuggestions = async (key: string, priorityRecipeName?: string) => {
-        setCurrentTheme(key.charAt(0).toUpperCase() + key.slice(1));
+    const fetchThemeSuggestions = async (key: string) => {
+        setCurrentTheme(key);
         setRecipeSuggestions([] as FullRecipe[]);
-        setModalStates(prev => ({...prev, isThemeRecipesModalOpen: true}));
+        openModal('themeRecipes');
         setIsSuggestionsLoading(true);
-        try {
-            const suggestions: FullRecipe[] = getCategoryRecipes(key);
-            setRecipeSuggestions(suggestions);
-        } finally { setIsSuggestionsLoading(false); }
+        try { setRecipeSuggestions(getCategoryRecipes(key)); } finally { setIsSuggestionsLoading(false); }
     };
 
-    const getCategoryRecipesSync = useCallback((categoryKey: string): FullRecipe[] => {
-        return getCategoryRecipes(categoryKey);
-    }, [getCategoryRecipes]);
-
-    const clearIncomingList = useCallback(() => setIncomingList(null), []);
-
     const handleExploreRecipeClick = useCallback((recipe: string | FullRecipe) => {
-        const recipeName = typeof recipe === 'string' ? recipe : recipe.name;
-        if (!user) {
-            showToast("Faça login para ver esta receita!");
-            setPendingExploreRecipe(recipeName);
-            openModal('auth');
-            return;
-        }
+        const name = typeof recipe === 'string' ? recipe : recipe.name;
+        if (!user) { openModal('auth'); return; }
         if (items.length > 0 || currentMarketName) {
-            setPendingExploreRecipe(recipeName);
+            setPendingExploreRecipe(name);
             openModal('recipeDecision');
         } else {
-            setPendingExploreRecipe(recipeName);
+            setPendingExploreRecipe(name);
             setHomeViewActive(false); 
         }
     }, [user, items.length, currentMarketName]);
 
-    const openProductDetails = (product: Offer) => {
-        setSelectedProduct(product);
-        openModal('productDetails');
-    };
-
     const value = {
         ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme: setThemeState,
-        installPromptEvent, handleInstall, handleDismissInstall, isPWAInstallVisible,
+        installPromptEvent, handleInstall, handleDismissInstall: () => setIsPWAInstallVisible(false), isPWAInstallVisible,
         budget, setBudget, clearBudget, toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
         fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
         editingItemId, startEdit, cancelEdit, duplicateInfo, setDuplicateInfo, groupingMode, setGroupingMode, isOrganizing, toggleGrouping,
-        itemCategories, showStartHerePrompt, authTrigger, setAuthTrigger, incomingList, clearIncomingList,
-        unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, smartNudgeItemName, currentMarketName, setCurrentMarketName,
-        isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
+        itemCategories, showStartHerePrompt, authTrigger, setAuthTrigger, incomingList, clearIncomingList: () => setIncomingList(null),
+        unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, currentMarketName, setCurrentMarketName,
+        isSharedSession, setIsSharedSession, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
-        allRecipesPool, 
-        featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
-        addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
-        getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-        pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline,
-        homeCategories, saveHomeCategories,
-        pendingInventoryItem, setPendingInventoryItem
+        allRecipesPool, featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
+        addRecipeToShoppingList, showPWAInstallPromptIfAvailable: () => setIsPWAInstallVisible(true), searchGlobalRecipes,
+        getCategoryCount: (categoryLabel: string) => 0,
+        getCategoryRecipes, getCategoryRecipesSync: getCategoryRecipes, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
+
+        homeCategories, saveHomeCategories, 
+        pendingInventoryItem, setPendingInventoryItem,
+        smartNudgeItemName, scheduleRules, saveScheduleRules,
+        isSmartNudgeModalOpen: modalStates.isSmartNudgeModalOpen,
+        isAdminScheduleModalOpen: modalStates.isAdminScheduleModalOpen,
+        isPreferencesModalOpen: modalStates.isPreferencesModalOpen,
+        selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

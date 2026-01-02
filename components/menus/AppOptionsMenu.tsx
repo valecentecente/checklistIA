@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 
-// Social Icons Components (Inlined for simplicity in Sidebar)
+// Social Icons Components
 const InstagramIcon: React.FC<{className?: string}> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><rect x="4" y="4" width="16" height="16" rx="4"></rect><circle cx="12" cy="12" r="3"></circle><line x1="16.5" y1="7.5" x2="16.5" y2="7.501"></line></svg>
 );
@@ -16,7 +17,9 @@ const YouTubeIcon: React.FC<{className?: string}> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><rect x="3" y="5" width="18" height="14" rx="4"></rect><path d="M10 9l5 3l-5 3z"></path></svg>
 );
 const XIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
 );
 
 export const AppOptionsMenu: React.FC = () => {
@@ -56,7 +59,7 @@ export const AppOptionsMenu: React.FC = () => {
     return (
         <>
             <div className="fixed inset-0 z-[110] bg-black/20 backdrop-blur-[1px]" onClick={app.toggleAppOptionsMenu}></div>
-            <div className="absolute top-20 right-4 w-72 bg-white dark:bg-surface-dark rounded-xl shadow-xl ring-1 ring-slate-200 dark:ring-border-dark z-[120] animate-fadeIn origin-top-right overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="absolute top-20 right-4 w-72 bg-white dark:bg-surface-dark rounded-xl shadow-xl ring-1 ring-slate-200 dark:ring-border-dark z-[120] animate-fadeIn origin-top-right overflow-hidden flex flex-col max-h-[85vh]">
                 <button 
                     onClick={() => { app.toggleAppOptionsMenu(); if(user) app.openModal('profile'); else app.openModal('auth'); }}
                     className="w-full text-left p-4 border-b border-border-light dark:border-border-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group bg-gray-50 dark:bg-white/5 shrink-0"
@@ -74,11 +77,7 @@ export const AppOptionsMenu: React.FC = () => {
                         <div className="flex-1 min-w-0">
                             <p className="font-bold truncate text-sm text-slate-800 dark:text-slate-100">{user ? (user.displayName || 'Usuário') : 'Entrar / Criar Conta'}</p>
                             {user?.username && (
-                                <p className={`text-xs truncate font-medium ${
-                                    user.role === 'admin_l1' ? 'text-blue-600 dark:text-blue-400 font-bold' :
-                                    user.role === 'admin_l2' ? 'text-emerald-600 dark:text-emerald-400 font-bold' :
-                                    'text-gray-500 dark:text-gray-400'
-                                }`}>
+                                <p className="text-xs truncate font-medium text-gray-500 dark:text-gray-400">
                                     @{user.username}
                                 </p>
                             )}
@@ -107,11 +106,6 @@ export const AppOptionsMenu: React.FC = () => {
                         Aparência
                     </button>
 
-                    <button onClick={handleShareApp} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                        <span className="material-symbols-outlined w-5 h-5 mr-3 text-blue-600 dark:text-blue-400">share</span>
-                        Compartilhar App
-                    </button>
-
                     <button onClick={() => handleOptionClick('feedback')} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                         <span className="material-symbols-outlined w-5 h-5 mr-3 text-green-500">volunteer_activism</span>
                         Avaliar & Apoiar
@@ -122,27 +116,34 @@ export const AppOptionsMenu: React.FC = () => {
                         Sobre e Ajuda
                     </button>
 
+                    {user && (
+                        <>
+                            <div className="h-px bg-border-light dark:bg-border-dark mx-3 my-1"></div>
+                            <button onClick={() => { logout(); app.toggleAppOptionsMenu(); }} className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-bold">
+                                <span className="material-symbols-outlined w-5 h-5 mr-3">logout</span>
+                                Sair
+                            </button>
+                        </>
+                    )}
+
+                    {/* REDES SOCIAIS E COMPARTILHAR NO FINAL */}
                     <div className="mt-2 mb-2">
                         <div className="h-px bg-border-light dark:bg-border-dark mx-3 mb-2"></div>
-                        <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Siga-nos</p>
+                        <p className="px-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">SIGA-NOS</p>
                         <div className="flex justify-evenly px-2 pb-1 items-center">
                             <a href="https://www.instagram.com/checklistiaof/" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-pink-600 transition-colors" title="Instagram"><InstagramIcon className="w-5 h-5" /></a>
                             <a href="https://www.facebook.com/checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-blue-600 transition-colors" title="Facebook"><FacebookIcon className="w-5 h-5" /></a>
                             <a href="https://www.tiktok.com/@checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white transition-colors" title="TikTok"><TikTokIcon className="w-5 h-5" /></a>
                             <a href="https://www.youtube.com/@checklistiaof" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-red-600 transition-colors" title="YouTube"><YouTubeIcon className="w-5 h-5" /></a>
                             <a href="https://x.com/checklistia" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white transition-colors" title="X"><XIcon className="w-4 h-4" /></a>
+                            
+                            <span className="text-gray-300 dark:text-gray-700 select-none">|</span>
+                            
+                            <button onClick={handleShareApp} className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-blue-600 transition-colors" title="Compartilhar App">
+                                <span className="material-symbols-outlined !text-xl">share</span>
+                            </button>
                         </div>
                     </div>
-
-                    {user && (
-                        <>
-                            <div className="h-px bg-border-light dark:bg-border-dark mx-3 my-1"></div>
-                            <button onClick={() => { logout(); app.toggleAppOptionsMenu(); }} className="w-full flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-semibold">
-                                <span className="material-symbols-outlined w-5 h-5 mr-3">logout</span>
-                                Sair
-                            </button>
-                        </>
-                    )}
                 </div>
             </div>
         </>

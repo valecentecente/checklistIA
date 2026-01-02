@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { ShoppingItem } from '../types';
 import { PriceHistoryWidget } from './PriceHistoryWidget';
@@ -26,7 +27,7 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
   const [isWeightBased, setIsWeightBased] = useState(false);
   
   // States para cálculo
-  const [quantity, setQuantity] = useState('');
+  const [quantity, setQuantity] = useState('1');
   const [pricePerUnit, setPricePerUnit] = useState('');
   const [weight, setWeight] = useState('');
   const [priceInput, setPriceInput] = useState(''); 
@@ -45,33 +46,46 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
       calculatedTotal = q * p;
   }
 
+  // Efeito de Reset e Bloqueio de Scroll
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
+      // Limpeza profunda ao fechar
+      setError(null);
+      setQuantity('1');
+      setPricePerUnit('');
+      setWeight('');
+      setPriceInput('');
       document.body.style.overflow = 'auto';
     }
     return () => { document.body.style.overflow = 'auto'; };
   }, [isOpen]);
 
   useEffect(() => {
-    if (item) {
+    if (item && isOpen) {
       setError(null);
       setName(item.name);
       
-      // Detecta se é baseado em peso pela string de detalhes (ex: "500g")
+      // Se o preço for 0 (item novo de receita), garantimos que TUDO comece limpo
+      if (item.calculatedPrice === 0) {
+          setPricePerUnit('');
+          setPriceInput('');
+          setWeight('');
+          setQuantity('1');
+          setIsWeightBased(false); // Default para unidade em itens zerados
+          return;
+      }
+
+      // Se já tiver preço, popula normalmente
       if (item.details && item.details.includes('g') && !item.details.includes('un')) {
         setIsWeightBased(true);
-        
         const weightVal = parseFloat(item.details.replace('g', ''));
         setWeight(isNaN(weightVal) ? '' : weightVal.toString());
         
         if (item.calculatedPrice > 0 && !isNaN(weightVal) && weightVal > 0) {
-            // Reconverte o total salvo para preço por Kg para exibição no campo
             const pricePerKg = (item.calculatedPrice / weightVal) * 1000;
             setPriceInput(pricePerKg.toFixed(2).replace('.', ','));
-        } else {
-            setPriceInput('');
         }
       } else {
         setIsWeightBased(false);
@@ -81,12 +95,22 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
         if (item.calculatedPrice > 0) {
             const pricePerUnitVal = item.calculatedPrice / quantityVal;
             setPricePerUnit(pricePerUnitVal.toFixed(2).replace('.', ','));
-        } else {
-            setPricePerUnit('');
         }
       }
     }
-  }, [item]);
+  }, [item, isOpen]);
+
+  // Função para trocar o modo limpando lixos de memória do modo anterior
+  const handleToggleMode = (toWeight: boolean) => {
+      setIsWeightBased(toWeight);
+      // Se estivermos editando um item sem preço, limpamos tudo ao trocar o modo
+      if (item && item.calculatedPrice === 0) {
+          setPricePerUnit('');
+          setPriceInput('');
+          setWeight('');
+          setQuantity('1');
+      }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +125,6 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
 
     let updatedItem: ShoppingItem = { ...item, name: trimmedName };
     
-    // Verifica se há dados de preço preenchidos
     const hasPriceDetails = isWeightBased 
         ? (weight.trim() !== '' && priceInput.trim() !== '')
         : (pricePerUnit.trim() !== '');
@@ -117,7 +140,6 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
         }
 
         const finalTotal = (priceNum / 1000) * weightNum;
-
         updatedItem.calculatedPrice = finalTotal;
         updatedItem.details = `${weightNum}g`;
         if (finalTotal > 0) updatedItem.isPurchased = true; 
@@ -189,11 +211,11 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
                             <div className="flex h-12 flex-1 items-center justify-center rounded-lg bg-background-light dark:bg-background-dark p-1 border border-border-light dark:border-border-dark">
                                 <label className="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded px-2 has-[:checked]:bg-primary has-[:checked]:shadow-sm has-[:checked]:text-white text-text-primary-light dark:text-text-primary-dark text-sm font-medium leading-normal transition-colors duration-200">
                                     <span className="truncate">Unidade</span>
-                                    <input checked={!isWeightBased} onChange={() => setIsWeightBased(false)} className="invisible w-0" name="calculation_type" type="radio" value="Unidade"/>
+                                    <input checked={!isWeightBased} onChange={() => handleToggleMode(false)} className="invisible w-0" name="calculation_type" type="radio" value="Unidade"/>
                                 </label>
                                 <label className="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded px-2 has-[:checked]:bg-primary has-[:checked]:shadow-sm has-[:checked]:text-white text-text-primary-light dark:text-text-primary-dark text-sm font-medium leading-normal transition-colors duration-200">
                                     <span className="truncate">Peso (kg/g)</span>
-                                    <input checked={isWeightBased} onChange={() => setIsWeightBased(true)} className="invisible w-0" name="calculation_type" type="radio" value="Peso"/>
+                                    <input checked={isWeightBased} onChange={() => handleToggleMode(true)} className="invisible w-0" name="calculation_type" type="radio" value="Peso"/>
                                 </label>
                             </div>
                         </div>
@@ -231,7 +253,7 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({ item, isOpen, onUpda
                                 <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal pb-2">Qtd</p>
                                 <input
                                     className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-primary-light dark:text-text-primary-dark bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 py-3 text-base font-normal leading-normal"
-                                    placeholder="Ex: 2"
+                                    placeholder="Ex: 1"
                                     type="number"
                                     min="1"
                                     inputMode="numeric"

@@ -9,7 +9,7 @@ interface HistoryModalProps {
     onClose: () => void;
     history: PurchaseRecord[];
     onRepeatPurchase: (purchase: PurchaseRecord) => void;
-    onAddItem: (item: HistoricItem) => void;
+    onAddItem: (item: HistoricItem, marketName?: string) => void;
     formatCurrency: (value: number) => string;
 }
 
@@ -42,7 +42,6 @@ const HistoryListItem: React.FC<{
                 </div>
             </button>
             
-            {/* BOTÃO DE LIXEIRA - ADICIONADO CONFORME SETA NA FOTO */}
             <button 
                 onClick={handleDelete}
                 className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-90"
@@ -270,7 +269,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                                     {formatCurrency(item.calculatedPrice)}
                                                 </span>
                                                 <button 
-                                                    onClick={() => onAddItem(item)} 
+                                                    onClick={() => onAddItem(item, selectedPurchase.marketName)} 
                                                     className="p-2 rounded-full text-primary hover:bg-primary/10 transition-colors"
                                                     title="Adicionar apenas este item"
                                                 >
