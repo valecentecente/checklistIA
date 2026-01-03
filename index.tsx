@@ -290,7 +290,7 @@ const AppContent: React.FC = () => {
             });
         } else if (app.groupingMode === 'responsible') {
             items.forEach(item => {
-                const key = item.responsibleDisplayName ? `Responsável: ${item.responsibleDisplayName}` : 'Não Atribuído';
+                const key = item.responsibleUid ? `Responsável: ${item.responsibleDisplayName || 'Desconhecido'}` : 'Não Atribuído';
                 if (!groups[key]) groups[key] = [];
                 groups[key].push(item);
             });
@@ -623,4 +623,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 24/05/2025 - Estabilidade Garantida V3.4
+// Checkpoint de Segurança: 01/06/2025 - Estabilidade Garantida V3.5

@@ -1,7 +1,8 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+// Added logEvent to imports to fix "Cannot find name 'logEvent'" error.
+import { db, auth, logEvent } from '../firebase';
 // Fix: Added HomeCategory to imports to resolve line 6 error.
 import type { DuplicateInfo, FullRecipe, RecipeDetails, ShoppingItem, ReceivedListRecord, RecipeSuggestion, Offer, ScheduleRule, SalesOpportunity, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
@@ -245,6 +246,7 @@ interface AppContextType {
     selectedProduct: Offer | null; 
     openProductDetails: (product: Offer) => void; 
     isOffline: boolean;
+    trackEvent: (name: string, params?: Record<string, any>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -353,6 +355,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isOwner = user?.email === 'admin@checklistia.com' || user?.email === 'itensnamao@gmail.com' || user?.email === 'ricardo029@gmail.com';
     const isSuperAdmin = isOwner || user?.role === 'admin_l1';
     const isAdmin = isSuperAdmin || user?.role === 'admin_l2';
+
+    // Defined trackEvent for analytics and fixed logEvent missing import
+    const trackEvent = useCallback((name: string, params?: Record<string, any>) => {
+        logEvent(name, {
+            user_id: user?.uid || 'guest',
+            ...params
+        });
+    }, [user]);
 
     useEffect(() => {
         const handleOnline = () => setIsOffline(false);
@@ -729,7 +739,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const sanitizeJsonString = (str: string) => {
-        // Fix: Added missing closing slash in regex to avoid SyntaxError
+        // Fixed regex by adding closing forward slash
         return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
     };
 
@@ -910,12 +920,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         unreadNotificationCount: unreadReceivedCount, isAdmin, isSuperAdmin, smartNudgeItemName, currentMarketName, setCurrentMarketName,
         isSharedSession, setIsSharedSession, stopSharing: () => {}, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
-        allRecipesPool, // Fix: Provided allRecipesPool in context value to fix Property 'allRecipesPool' does not exist on type 'AppContextType' error
+        allRecipesPool,
         featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes, getCategoryCount: (l: string) => 0, getCategoryCover: (l: string) => undefined,
         getCategoryRecipes, getCategoryRecipesSync, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
         pendingAction, setPendingAction, selectedProduct, openProductDetails, recipeSearchResults, currentSearchTerm, handleRecipeSearch, scheduleRules, saveScheduleRules, isOffline,
-        homeCategories, saveHomeCategories
+        homeCategories, saveHomeCategories, trackEvent
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

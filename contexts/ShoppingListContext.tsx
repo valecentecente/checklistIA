@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, useCallback, ReactNode, useMemo } from 'react';
 import { 
     collection, 
@@ -70,6 +69,15 @@ const ignorePermissionError = (err: any) => {
         return true;
     }
     return false;
+};
+
+// Utilitário sincronizado para gerar IDs de documentos de receita
+const getRecipeDocId = (name: string) => {
+    return name.trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+        .replace(/[\/\s]+/g, '-') 
+        .replace(/[^a-z0-9-]/g, '') 
+        .slice(0, 80);
 };
 
 const sanitizeForFirestore = (obj: any) => {
@@ -603,7 +611,8 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const toggleFavorite = async (recipe: FullRecipe): Promise<{ success: boolean; action: 'added' | 'removed' }> => {
         if (!user || !db || user.uid.startsWith('offline-user-')) return { success: false, action: 'removed' };
         
-        const recipeId = recipe.name.toLowerCase().trim().replace(/\s+/g, '-');
+        // CORREÇÃO: Usar a função de ID sincronizada para evitar duplicatas
+        const recipeId = getRecipeDocId(recipe.name);
         const favRef = doc(db, `users/${user.uid}/favorites`, recipeId);
         
         try {

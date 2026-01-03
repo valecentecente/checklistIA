@@ -1,7 +1,7 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
+// Added logEvent to imports to fix "Cannot find name 'logEvent'" error.
 import { db, auth, logEvent } from '../firebase';
 import type { DuplicateInfo, FullRecipe, ShoppingItem, ReceivedListRecord, Offer, ScheduleRule, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
@@ -11,28 +11,6 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; 
-
-const LOCAL_AISLE_DICTIONARY: Record<string, string> = {
-    "alface": "🍎 Hortifruti", "tomate": "🍎 Hortifruti", "cebola": "🍎 Hortifruti", "alho": "🍎 Hortifruti", "batata": "🍎 Hortifruti",
-    "maçã": "🍎 Hortifruti", "banana": "🍎 Hortifruti", "laranja": "🍎 Hortifruti", "uva": "🍎 Hortifruti", "limão": "🍎 Hortifruti",
-    "cenoura": "🍎 Hortifruti", "brócolis": "🍎 Hortifruti", "abacate": "🍎 Hortifruti", "melancia": "🍎 Hortifruti", "manga": "🍎 Hortifruti",
-    "carne": "🥩 Açougue", "frango": "🥩 Açougue", "peixe": "🥩 Açougue", "picanha": "🥩 Açougue", "alcatra": "🥩 Açougue",
-    "maminha": "🥩 Açougue", "fraldinha": "🥩 Açougue", "coxa": "🥩 Açougue", "sobrecoxa": "🥩 Açougue", "filé": "🥩 Açougue",
-    "linguiça": "🥩 Açougue", "bacon": "🥩 Açougue", "costela": "🥩 Açougue", "moída": "🥩 Açougue",
-    "leite": "🥛 Laticínios", "queijo": "🥛 Laticínios", "manteiga": "🥛 Laticínios", "iogurte": "🥛 Laticínios", "requeijão": "🥛 Laticínios",
-    "creme de leite": "🥛 Laticínios", "leite condensado": "🥛 Laticínios", "margarina": "🥛 Laticínios", "muçarela": "🥛 Laticínios",
-    "pão": "🍞 Padaria", "baguete": "🍞 Padaria", "bisnaga": "🍞 Padaria", "bolo": "🍞 Padaria", "torta": "🍞 Padaria",
-    "sonho": "🍞 Padaria", "salgado": "🍞 Padaria", "pão de queijo": "🍞 Padaria", "croissant": "🍞 Padaria",
-    "arroz": "🛒 Mercearia", "feijão": "🛒 Mercearia", "macarrão": "🛒 Mercearia", "óleo": "🛒 Mercearia", "azeite": "🛒 Mercearia",
-    "açúcar": "🛒 Mercearia", "sal": "🛒 Mercearia", "café": "🛒 Mercearia", "farinha": "🛒 Mercearia", "molho": "🛒 Mercearia",
-    "biscoito": "🛒 Mercearia", "bolacha": "🛒 Mercearia", "chocolate": "🛒 Mercearia", "pipoca": "🛒 Mercearia", "milho": "🛒 Mercearia",
-    "água": "💧 Bebidas", "suco": "💧 Bebidas", "refrigerante": "💧 Bebidas", "cerveja": "💧 Bebidas", "vinho": "💧 Bebidas",
-    "chá": "💧 Bebidas", "energético": "💧 Bebidas", "vodka": "💧 Bebidas", "whisky": "💧 Bebidas", "coca": "💧 Bebidas",
-    "detergente": "🧼 Limpeza", "sabão": "🧼 Limpeza", "amaciante": "🧼 Limpeza", "desinfetante": "🧼 Limpeza", "agua sanitaria": "🧼 Limpeza",
-    "esponja": "🧼 Limpeza", "veja": "🧼 Limpeza", "lustra moveis": "🧼 Limpeza", "saco de lixo": "🧼 Limpeza",
-    "shampoo": "🧴 Higiene", "condicionador": "🧴 Higiene", "sabonete": "🧴 Higiene", "creme dental": "🧴 Higiene", "pasta de dente": "🧴 Higiene",
-    "desodorante": "🧴 Higiene", "papel higiênico": "🧴 Higiene", "absorvente": "🧴 Higiene", "fio dental": "🧴 Higiene",
-};
 
 const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
@@ -161,6 +139,8 @@ interface AppContextType {
     saveScheduleRules: (rules: ScheduleRule[]) => Promise<void>;
     pendingInventoryItem: { name: string; tags: string } | null;
     setPendingInventoryItem: (item: { name: string; tags: string } | null) => void;
+    factoryActiveTab: 'producao' | 'acervo' | 'leads';
+    setFactoryActiveTab: (tab: 'producao' | 'acervo' | 'leads') => void;
     
     openModal: (modal: string) => void;
     closeModal: (modal: string) => void;
@@ -336,6 +316,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [smartNudgeItemName, setSmartNudgeItemName] = useState<string | null>(null);
     const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([]);
     const [pendingInventoryItem, setPendingInventoryItem] = useState<{ name: string; tags: string } | null>(null);
+    const [factoryActiveTab, setFactoryActiveTab] = useState<'producao' | 'acervo' | 'leads'>('producao');
 
     const [currentMarketName, setCurrentMarketName] = useState<string | null>(null);
     const [isSharedSession, setIsSharedSession] = useState(false);
@@ -363,6 +344,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isAdmin = user?.role === 'admin_l1' || user?.role === 'admin_l2';
     const isSuperAdmin = user?.role === 'admin_l1';
 
+    // Defined trackEvent to handle analytics tracking and fixed logEvent missing import
     const trackEvent = useCallback((name: string, params?: Record<string, any>) => {
         logEvent(name, {
             user_id: user?.uid || 'guest',
@@ -795,6 +777,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         homeCategories, saveHomeCategories, 
         pendingInventoryItem, setPendingInventoryItem,
+        factoryActiveTab, setFactoryActiveTab,
         smartNudgeItemName, scheduleRules, saveScheduleRules,
         isSmartNudgeModalOpen: modalStates.isSmartNudgeModalOpen,
         isAdminScheduleModalOpen: modalStates.isAdminScheduleModalOpen,
@@ -804,6 +787,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         trackEvent
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+};
+
+const LOCAL_AISLE_DICTIONARY: Record<string, string> = {
+    "alface": "🍎 Hortifruti", "tomate": "🍎 Hortifruti", "cebola": "🍎 Hortifruti", "alho": "🍎 Hortifruti", "batata": "🍎 Hortifruti",
+    "maçã": "🍎 Hortifruti", "banana": "🍎 Hortifruti", "laranja": "🍎 Hortifruti", "uva": "🍎 Hortifruti", "limão": "🍎 Hortifruti",
+    "cenoura": "🍎 Hortifruti", "brócolis": "🍎 Hortifruti", "abacate": "🍎 Hortifruti", "melancia": "🍎 Hortifruti", "manga": "🍎 Hortifruti",
+    "carne": "🥩 Açougue", "frango": "🥩 Açougue", "peixe": "🥩 Açougue", "picanha": "🥩 Açougue", "alcatra": "🥩 Açougue",
+    "maminha": "🥩 Açougue", "fraldinha": "🥩 Açougue", "coxa": "🥩 Açougue", "sobrecoxa": "🥩 Açougue", "filé": "🥩 Açougue",
+    "linguiça": "🥩 Açougue", "bacon": "🥩 Açougue", "costela": "🥩 Açougue", "moída": "🥩 Açougue",
+    "leite": "🥛 Laticínios", "queijo": "🥛 Laticínios", "manteiga": "🥛 Laticínios", "iogurte": "🥛 Laticínios", "requeijão": "🥛 Laticínios",
+    "creme de leite": "🥛 Laticínios", "leite condensado": "🥛 Laticínios", "margarina": "🥛 Laticínios", "muçarela": "🥛 Laticínios",
+    "pão": "🍞 Padaria", "baguete": "🍞 Padaria", "bisnaga": "🍞 Padaria", "bolo": "🍞 Padaria", "torta": "🍞 Padaria",
+    "sonho": "🍞 Padaria", "salgado": "🍞 Padaria", "pão de queijo": "🍞 Padaria", "croissant": "🍞 Padaria",
+    "arroz": "🛒 Mercearia", "feijão": "🛒 Mercearia", "macarrão": "🛒 Mercearia", "óleo": "🛒 Mercearia", "azeite": "🛒 Mercearia",
+    "açúcar": "🛒 Mercearia", "sal": "🛒 Mercearia", "café": "🛒 Mercearia", "farinha": "🛒 Mercearia", "molho": "🛒 Mercearia",
+    "biscoito": "🛒 Mercearia", "bolacha": "🛒 Mercearia", "chocolate": "🛒 Mercearia", "pipoca": "🛒 Mercearia", "milho": "🛒 Mercearia",
+    "água": "💧 Bebidas", "suco": "💧 Bebidas", "refrigerante": "💧 Bebidas", "cerveja": "💧 Bebidas", "vinho": "💧 Bebidas",
+    "chá": "💧 Bebidas", "energético": "💧 Bebidas", "vodka": "💧 Bebidas", "whisky": "💧 Bebidas", "coca": "💧 Bebidas",
+    "detergente": "🧼 Limpeza", "sabão": "🧼 Limpeza", "amaciante": "🧼 Limpeza", "desinfetante": "🧼 Limpeza", "agua sanitaria": "🧼 Limpeza",
+    "esponja": "🧼 Limpeza", "veja": "🧼 Limpeza", "lustra moveis": "🧼 Limpeza", "saco de lixo": "🧼 Limpeza",
+    "shampoo": "🧴 Higiene", "condicionador": "🧴 Higiene", "sabonete": "🧴 Higiene", "creme dental": "🧴 Higiene", "pasta de dente": "🧴 Higiene",
+    "desodorante": "🧴 Higiene", "papel higiênico": "🧴 Higiene", "absorvente": "🧴 Higiene", "fio dental": "🧴 Higiene",
 };
 
 export const useApp = (): AppContextType => {

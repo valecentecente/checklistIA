@@ -125,41 +125,42 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[130] bg-black/50 dark:bg-black/60 transition-opacity animate-fadeIn" onClick={handleClose} aria-modal="true" role="dialog">
-        <div className="absolute inset-x-0 bottom-0" onClick={(e) => e.stopPropagation()}>
-            <div className="flex flex-col items-stretch bg-surface-light dark:bg-surface-dark rounded-t-2xl animate-slideUp border-t border-white/10 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
-                <div className="flex h-6 w-full items-center justify-center pt-3">
+    <div className="fixed inset-0 z-[130] bg-black/50 dark:bg-black/60 transition-opacity animate-fadeIn flex items-end sm:items-center sm:justify-center p-0 sm:p-4" onClick={handleClose} aria-modal="true" role="dialog">
+        <div className="relative w-full sm:max-w-2xl sm:bottom-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-stretch bg-surface-light dark:bg-surface-dark rounded-t-2xl sm:rounded-3xl animate-slideUp border-t sm:border border-white/10 shadow-[0_-8px_30px_rgb(0,0,0,0.12)] sm:shadow-2xl overflow-hidden">
+                <div className="flex h-6 w-full items-center justify-center pt-3 sm:hidden">
                     <div className="h-1.5 w-12 rounded-full bg-border-light dark:bg-border-dark opacity-50"></div>
                 </div>
                 
-                <div className="flex items-center justify-between px-6 pt-4 pb-2">
+                <div className="flex items-center justify-between px-6 pt-6 pb-2">
                     <div className="flex flex-col">
-                        <h3 className="text-text-primary-light dark:text-text-primary-dark text-xl font-bold leading-tight">Adicionar à Lista</h3>
-                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest">Soma & Pesagem Inteligente</p>
+                        <h3 className="text-text-primary-light dark:text-text-primary-dark text-xl sm:text-2xl font-bold leading-tight">Adicionar à Lista</h3>
+                        <p className="text-[10px] sm:text-xs text-primary font-bold uppercase tracking-widest">Soma & Pesagem Inteligente</p>
                     </div>
-                    <button onClick={handleClose} disabled={isSubmitting} className="flex items-center justify-center h-10 w-10 rounded-full bg-gray-100 dark:bg-white/10 text-text-secondary-light dark:text-text-secondary-dark transition-colors">
-                        <span className="material-symbols-outlined text-2xl">close</span>
+                    <button onClick={handleClose} disabled={isSubmitting} className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gray-100 dark:bg-white/10 text-text-secondary-light dark:text-text-secondary-dark transition-colors hover:bg-gray-200 dark:hover:bg-white/20">
+                        <span className="material-symbols-outlined text-2xl sm:text-3xl">close</span>
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex flex-col px-6 pt-4 pb-8 gap-5">
+                <form onSubmit={handleSubmit} className="flex flex-col px-6 pt-4 pb-8 gap-5 sm:gap-6">
                     <div>
                         <label className="flex flex-col w-full">
                             <input
-                                className="form-input w-full rounded-xl text-text-primary-light dark:text-text-primary-dark bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 focus:border-primary focus:ring-primary h-14 placeholder:text-gray-400 px-4 py-3 text-lg font-bold shadow-inner"
+                                className="form-input w-full rounded-xl text-text-primary-light dark:text-text-primary-dark bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 focus:border-primary focus:ring-primary h-14 sm:h-16 placeholder:text-gray-400 px-4 py-3 text-lg sm:text-xl font-bold shadow-inner"
                                 placeholder="O que você está levando?"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 disabled={isSubmitting}
+                                autoFocus
                             />
                         </label>
                     </div>
 
-                    <div className="flex flex-col items-center justify-center bg-white dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm transition-all">
-                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Valor Total do Item</span>
+                    <div className="flex flex-col items-center justify-center bg-white dark:bg-black/20 rounded-2xl p-4 sm:p-6 border border-gray-100 dark:border-gray-800 shadow-sm transition-all">
+                         <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Valor Total do Item</span>
                          <div className="flex items-baseline gap-1">
-                            <span className="text-xl font-bold text-primary opacity-70">R$</span>
-                            <span className={`text-4xl font-black tracking-tighter ${calculatedTotal > 0 ? 'text-primary' : 'text-gray-200 dark:text-gray-800'}`}>
+                            <span className="text-xl sm:text-2xl font-bold text-primary opacity-70">R$</span>
+                            <span className={`text-4xl sm:text-5xl font-black tracking-tighter ${calculatedTotal > 0 ? 'text-primary' : 'text-gray-200 dark:text-gray-800'}`}>
                                 {calculatedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                          </div>
@@ -167,12 +168,12 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
                     </div>
 
                     <div className="flex bg-gray-100 dark:bg-black/40 rounded-xl p-1.5 border border-gray-200 dark:border-gray-800">
-                        <button type="button" onClick={() => setIsWeightBased(false)} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${!isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}>
-                            <span className="material-symbols-outlined text-lg">shopping_basket</span>
+                        <button type="button" onClick={() => setIsWeightBased(false)} className={`flex-1 py-3 sm:py-4 rounded-lg text-sm sm:text-base font-bold transition-all flex items-center justify-center gap-2 ${!isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}>
+                            <span className="material-symbols-outlined text-lg sm:text-xl">shopping_basket</span>
                             Unidade
                         </button>
-                        <button type="button" onClick={() => setIsWeightBased(true)} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}>
-                            <span className="material-symbols-outlined text-lg">scale</span>
+                        <button type="button" onClick={() => setIsWeightBased(true)} className={`flex-1 py-3 sm:py-4 rounded-lg text-sm sm:text-base font-bold transition-all flex items-center justify-center gap-2 ${isWeightBased ? 'bg-white dark:bg-zinc-700 text-primary shadow-md' : 'text-gray-500'}`}>
+                            <span className="material-symbols-outlined text-lg sm:text-xl">scale</span>
                             Pesagem (Kg)
                         </button>
                     </div>
@@ -180,41 +181,41 @@ export const AddItemForm: React.FC<AddItemFormProps> = ({ isOpen, onClose, onAdd
                     {isWeightBased ? (
                         <div className="flex gap-4 animate-fadeIn">
                             <div className="flex-1">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-2 mb-1 block">Peso (g)</label>
-                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg" placeholder="0" type="number" inputMode="numeric" value={weight} onChange={(e) => setWeight(e.target.value)} disabled={isSubmitting} />
+                                <label className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase ml-2 mb-1 block">Peso (g)</label>
+                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 sm:h-16 text-center font-bold text-lg sm:text-xl" placeholder="0" type="number" inputMode="numeric" value={weight} onChange={(e) => setWeight(e.target.value)} disabled={isSubmitting} />
                             </div>
                             <div className="flex-[1.5]">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-2 mb-1 block">Preço (R$/Kg)</label>
-                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg text-primary" placeholder="0,00" type="text" inputMode="numeric" value={priceInput} onChange={(e) => setPriceInput(formatPriceInput(e.target.value))} disabled={isSubmitting} />
+                                <label className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase ml-2 mb-1 block">Preço (R$/Kg)</label>
+                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 sm:h-16 text-center font-bold text-lg sm:text-xl text-primary" placeholder="0,00" type="text" inputMode="numeric" value={priceInput} onChange={(e) => setPriceInput(formatPriceInput(e.target.value))} disabled={isSubmitting} />
                             </div>
                         </div>
                     ) : (
                         <div className="flex gap-4 animate-fadeIn">
                             <div className="flex-1">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-2 mb-1 block">Quantidade</label>
-                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg" placeholder="1" type="number" min="1" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={isSubmitting} />
+                                <label className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase ml-2 mb-1 block">Quantidade</label>
+                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 sm:h-16 text-center font-bold text-lg sm:text-xl" placeholder="1" type="number" min="1" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={isSubmitting} />
                             </div>
                             <div className="flex-[1.5]">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-2 mb-1 block">Preço Unitário</label>
-                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 text-center font-bold text-lg text-primary" placeholder="0,00" type="text" inputMode="numeric" value={pricePerUnit} onChange={(e) => setPricePerUnit(formatPriceInput(e.target.value))} disabled={isSubmitting} />
+                                <label className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase ml-2 mb-1 block">Preço Unitário</label>
+                                <input className="form-input w-full rounded-xl bg-gray-50 dark:bg-black/20 border-gray-200 dark:border-gray-700 h-14 sm:h-16 text-center font-bold text-lg sm:text-xl text-primary" placeholder="0,00" type="text" inputMode="numeric" value={pricePerUnit} onChange={(e) => setPricePerUnit(formatPriceInput(e.target.value))} disabled={isSubmitting} />
                             </div>
                         </div>
                     )}
 
-                    {error && <p className="text-xs text-red-500 text-center font-bold">{error}</p>}
+                    {error && <p className="text-sm text-red-500 text-center font-bold animate-bounce">{error}</p>}
                     
                     <div className="grid grid-cols-1 gap-3">
                         <button 
                             type="submit" 
                             disabled={isSubmitting || !name.trim()}
-                            className="flex h-16 w-full items-center justify-center rounded-2xl bg-primary text-white font-black text-xl uppercase italic tracking-tighter shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale gap-3"
+                            className="flex h-16 sm:h-20 w-full items-center justify-center rounded-2xl bg-primary text-white font-black text-xl sm:text-2xl uppercase italic tracking-tighter shadow-xl shadow-primary/20 transition-all hover:scale-[1.01] hover:bg-primary-hover active:scale-95 disabled:opacity-50 disabled:grayscale gap-3"
                         >
                             {isSubmitting ? (
-                                <span className="material-symbols-outlined animate-spin">sync</span>
+                                <span className="material-symbols-outlined animate-spin text-3xl">sync</span>
                             ) : (
                                 <>
-                                    <span className="material-symbols-outlined !text-3xl">add_shopping_cart</span>
-                                    <span>Salvar</span>
+                                    <span className="material-symbols-outlined !text-3xl sm:!text-4xl">add_shopping_cart</span>
+                                    <span>Salvar Item</span>
                                 </>
                             )}
                         </button>

@@ -16,7 +16,7 @@ interface AdminOffersModalProps {
 
 export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onClose }) => {
     const app = useApp();
-    const { showToast, isAdmin, pendingInventoryItem, setPendingInventoryItem } = app;
+    const { showToast, isAdmin, pendingInventoryItem, setPendingInventoryItem, setFactoryActiveTab, openModal } = app;
     const { logAdminAction } = useShoppingList();
     const [activeTab, setActiveTab] = useState<'add' | 'list'>('list');
     const [offers, setOffers] = useState<Offer[]>([]);
@@ -32,7 +32,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
     const [images, setImages] = useState<string[]>(['']);
     const [link, setLink] = useState('');
     const [category, setCategory] = useState('Utensílios');
-    const [store, setStore] = useState('Amazon');
+    const [store, setStore] = useState('Shopee');
     const [discount, setDiscount] = useState('');
     const [tags, setTags] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,7 +100,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         setImages(offer.images && offer.images.length > 0 ? offer.images : [offer.image]);
         setLink(offer.link);
         setCategory(offer.category);
-        setStore(offer.store);
+        setStore(offer.store || 'Shopee');
         setDiscount(offer.discount || '');
         setTags(offer.tags ? offer.tags.join(', ') : '');
         setActiveTab('add');
@@ -126,6 +126,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
         setLink('');
         setDiscount('');
         setTags('');
+        setStore('Shopee');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -149,7 +150,11 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                 showToast("Cadastrado!");
             }
             handleCancelEdit();
-            setActiveTab('list');
+            
+            // Comportamento solicitado: Fechar inventário e abrir fábrica na aba leads
+            onClose(); 
+            setFactoryActiveTab('leads');
+            openModal('contentFactory');
         } catch (error) { 
             showToast("Erro ao salvar."); 
         } finally { setIsSubmitting(false); }
@@ -222,7 +227,7 @@ export const AdminOffersModal: React.FC<AdminOffersModalProps> = ({ isOpen, onCl
                                 </div>
                                 <div className="flex-1">
                                     <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Loja Parceira</label>
-                                    <select className="form-select w-full rounded-xl dark:bg-black/20 dark:text-white h-12 px-4 border-gray-200 dark:border-gray-700 mt-1" value={store} onChange={e => setStore(e.target.value)}><option value="Amazon">Amazon</option><option value="Magalu">Magalu</option><option value="Shopee">Shopee</option><option value="Mercado Livre">Mercado Livre</option></select>
+                                    <select className="form-select w-full rounded-xl dark:bg-black/20 dark:text-white h-12 px-4 border-gray-200 dark:border-gray-700 mt-1" value={store} onChange={e => setStore(e.target.value)}><option value="Shopee">Shopee</option><option value="Amazon">Amazon</option><option value="Magalu">Magalu</option><option value="Mercado Livre">Mercado Livre</option></select>
                                 </div>
                             </div>
                             

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useShoppingList } from '../contexts/ShoppingListContext';
 import { useApp } from '../contexts/AppContext';
@@ -27,7 +26,7 @@ export const FavoriteRecipesModal: React.FC<FavoriteRecipesModalProps> = ({ isOp
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-surface-dark">
                     <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark flex items-center gap-2">
                         <span className="material-symbols-outlined text-red-500 font-variation-FILL-1" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
-                        Receitas Favoritas
+                        Receitas Favoritas {favorites.length > 0 && <span className="text-sm font-black bg-red-50 text-red-500 px-2 py-0.5 rounded-full ml-1 dark:bg-red-900/30">({favorites.length})</span>}
                     </h2>
                     <button onClick={onClose} className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10">
                         <span className="material-symbols-outlined">close</span>
@@ -44,8 +43,8 @@ export const FavoriteRecipesModal: React.FC<FavoriteRecipesModalProps> = ({ isOp
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {favorites.map((recipe, index) => (
-                                <div key={index} className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden group">
+                            {favorites.map((recipe) => (
+                                <div key={recipe.name} className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden group">
                                     <div 
                                         className="h-32 w-full bg-cover bg-center relative cursor-pointer"
                                         style={{ backgroundImage: recipe.imageUrl ? `url(${recipe.imageUrl})` : 'none', backgroundColor: '#eee' }}
@@ -59,13 +58,13 @@ export const FavoriteRecipesModal: React.FC<FavoriteRecipesModalProps> = ({ isOp
                                         {/* Gradient Overlay */}
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60 group-hover:opacity-40 transition-opacity"></div>
                                         
-                                        {/* Remove Button */}
+                                        {/* Favorite Toggle Button */}
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); toggleFavorite(recipe); }}
-                                            className="absolute top-2 right-2 h-8 w-8 bg-black/40 hover:bg-red-500 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"
-                                            title="Remover"
+                                            className="absolute top-2 right-2 h-9 w-9 bg-white/90 dark:bg-black/40 text-red-500 rounded-full flex items-center justify-center backdrop-blur-sm transition-all shadow-md active:scale-90 hover:bg-white"
+                                            title="Remover dos favoritos"
                                         >
-                                            <span className="material-symbols-outlined text-lg">delete</span>
+                                            <span className="material-symbols-outlined text-xl font-variation-FILL-1" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
                                         </button>
                                     </div>
                                     <div 

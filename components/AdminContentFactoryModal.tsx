@@ -45,11 +45,10 @@ const getRecipeDocId = (name: string) => {
 
 export const AdminContentFactoryModal: React.FC = () => {
     const app = useApp();
-    const { isContentFactoryModalOpen, closeModal, showToast, isAdmin, setPendingInventoryItem } = app;
+    const { isContentFactoryModalOpen, closeModal, openModal, showToast, isAdmin, setPendingInventoryItem, factoryActiveTab, setFactoryActiveTab } = app;
     const { user } = useAuth();
     const { offers } = useShoppingList();
     
-    const [activeTab, setActiveTab] = useState<'producao' | 'acervo' | 'leads'>('producao');
     const [searchTerm, setSearchTerm] = useState('');
     const [leadsSearchTerm, setLeadsSearchTerm] = useState('');
     
@@ -393,6 +392,16 @@ export const AdminContentFactoryModal: React.FC = () => {
         } catch (e) { showToast("Erro."); } finally { setIsSaving(false); }
     };
 
+    const handleGerarOferta = (term: string) => {
+        app.setPendingInventoryItem({ 
+            name: term.charAt(0).toUpperCase() + term.slice(1), 
+            tags: term.toLowerCase() 
+        });
+        // Fecha o modal da fábrica e abre o de ofertas para evitar sobreposição
+        closeModal('contentFactory');
+        openModal('admin');
+    };
+
     const toggleCategory = (cat: string) => setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
 
     if (!isContentFactoryModalOpen) return null;
@@ -410,13 +419,13 @@ export const AdminContentFactoryModal: React.FC = () => {
                 </div>
 
                 <div className="flex bg-slate-900 shrink-0 border-b border-white/5 px-4">
-                    <button onClick={() => setActiveTab('producao')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'producao' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-500 hover:text-gray-300'}`}>Produção Lote</button>
-                    <button onClick={() => setActiveTab('acervo')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'acervo' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>Acervo Global ({recipes.length})</button>
-                    <button onClick={() => setActiveTab('leads')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'leads' ? 'text-orange-400 border-b-2 border-orange-400' : 'text-gray-500 hover:text-gray-300'}`}>IA Leads ({recipeLeadsRanking.length})</button>
+                    <button onClick={() => setFactoryActiveTab('producao')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${factoryActiveTab === 'producao' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-500 hover:text-gray-300'}`}>Produção Lote</button>
+                    <button onClick={() => setFactoryActiveTab('acervo')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${factoryActiveTab === 'acervo' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>Acervo Global ({recipes.length})</button>
+                    <button onClick={() => setFactoryActiveTab('leads')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${factoryActiveTab === 'leads' ? 'text-orange-400 border-b-2 border-orange-400' : 'text-gray-500 hover:text-gray-300'}`}>IA Leads ({recipeLeadsRanking.length})</button>
                 </div>
 
                 <div className="flex-1 overflow-hidden flex flex-col relative">
-                    {activeTab === 'producao' && (
+                    {factoryActiveTab === 'producao' && (
                         <div className="flex-1 flex gap-6 p-8 animate-fadeIn overflow-hidden">
                             <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-hide">
                                 
@@ -486,7 +495,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                         </div>
                     )}
 
-                    {activeTab === 'acervo' && (
+                    {factoryActiveTab === 'acervo' && (
                         <div className="flex flex-col h-full animate-fadeIn">
                             <div className="p-6 bg-slate-900 border-b border-white/5 flex gap-4">
                                 <input type="text" placeholder="Filtrar receitas..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 h-12 bg-slate-800 border-0 rounded-xl pl-5 text-white outline-none focus:ring-2 focus:ring-blue-500" />
@@ -508,7 +517,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                         </div>
                     )}
 
-                    {activeTab === 'leads' && (
+                    {factoryActiveTab === 'leads' && (
                         <div className="flex-1 overflow-y-auto p-8 animate-fadeIn scrollbar-hide">
                              <div className="p-6 bg-slate-900 border-b border-white/5 flex flex-col gap-4 mb-6 rounded-3xl">
                                 <div className="relative">
@@ -530,7 +539,7 @@ export const AdminContentFactoryModal: React.FC = () => {
                                         </div>
                                         <div className="flex gap-2">
                                             <button 
-                                                onClick={() => app.setPendingInventoryItem({ name: lead.term.charAt(0).toUpperCase() + lead.term.slice(1), tags: lead.term.toLowerCase() })} 
+                                                onClick={() => handleGerarOferta(lead.term)} 
                                                 className="px-6 h-10 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg"
                                             >
                                                 Gerar Oferta
