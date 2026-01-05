@@ -21,15 +21,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
     const [isLoadingEmail, setIsLoadingEmail] = useState(false);
     const [usernameStatus, setUsernameStatus] = useState<'idle' | 'loading' | 'valid' | 'invalid'>('idle');
     const [showHistoryInvite, setShowHistoryInvite] = useState(false);
+    const [recentEmails, setRecentEmails] = useState<string[]>([]);
 
+    // Carregar lista de e-mails recentes ao abrir o modal
     useEffect(() => {
         if (isOpen) {
             if (authTrigger === 'history') setShowHistoryInvite(true);
-            else { setShowHistoryInvite(false); setMode('login'); }
-            const savedEmail = localStorage.getItem('remembered_email');
-            if (savedEmail) setEmail(savedEmail);
-            setPassword(''); setName(''); setUsername(''); setUsernameStatus('idle');
-            setIsLoadingEmail(false); clearAuthError();
+            else { 
+                setShowHistoryInvite(false); 
+                setMode('login'); 
+            }
+            
+            // Recupera a lista de e-mails do localStorage
+            const saved = localStorage.getItem('recent_emails_list');
+            if (saved) {
+                try {
+                    setRecentEmails(JSON.parse(saved));
+                } catch (e) {
+                    setRecentEmails([]);
+                }
+            }
+            
+            setEmail(''); // Campo inicia VAZIO como solicitado
+            setPassword(''); 
+            setName(''); 
+            setUsername(''); 
+            setUsernameStatus('idle');
+            setIsLoadingEmail(false); 
+            clearAuthError();
         }
     }, [isOpen, authTrigger]);
 
@@ -44,22 +63,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
         return () => clearTimeout(timer);
     }, [username, mode, isOpen]);
 
-    if (!isOpen) return null;
+    const saveEmailToRecents = (emailToSave: string) => {
+        if (!emailToSave || !emailToSave.includes('@')) return;
+        const list = [...recentEmails];
+        const filtered = list.filter(e => e !== emailToSave);
+        const newList = [emailToSave, ...filtered].slice(0, 3); // Guarda os 3 últimos
+        setRecentEmails(newList);
+        localStorage.setItem('recent_emails_list', JSON.stringify(newList));
+    };
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+        
         if (mode === 'forgot') {
             setIsLoadingEmail(true);
-            try { await resetPassword(email); showToast("Link enviado!"); setMode('login'); } 
-            catch { setAuthError("Erro ao enviar."); } finally { setIsLoadingEmail(false); }
+            try { 
+                await resetPassword(email); 
+                showToast("Link enviado!"); 
+                setMode('login'); 
+            } 
+            catch { setAuthError("Erro ao enviar."); } 
+            finally { setIsLoadingEmail(false); }
             return;
         }
+
         if (mode === 'register' && usernameStatus === 'invalid') return;
+
         setIsLoadingEmail(true);
-        if (mode === 'login') await loginWithEmail(email, password);
-        else await registerWithEmail(name, username.trim().toLowerCase(), email, password);
+        
+        if (mode === 'login') {
+            saveEmailToRecents(email);
+            await loginWithEmail(email, password);
+        } else {
+            await registerWithEmail(name, username.trim().toLowerCase(), email, password);
+        }
+        
         setIsLoadingEmail(false);
     };
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4 animate-fadeIn backdrop-blur-sm" onClick={onClose}>
@@ -80,7 +122,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
                         
                         {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-xs font-bold">{error}</div>}
                         
-                        {/* 1. GOOGLE LOGIN (PRIORIDADE) */}
+                        {/* 1. GOOGLE LOGIN */}
                         <button 
                             onClick={onLogin}
                             className="w-full h-14 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center gap-3 shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700 transition-all active:scale-95"
@@ -109,10 +151,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, 
                                     <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} className="form-input rounded-xl dark:bg-black/20 dark:text-white h-12" required />
                                 </>
                             )}
-                            <input type="email" placeholder="E-mail" value={email} onChange={e => setEmail(e.target.value)} className="form-input rounded-xl dark:bg-black/20 dark:text-white h-12" required />
+                            
+                            <div className="flex flex-col gap-1.5">
+                                <input 
+                                    type="email" 
+                                    placeholder="E-mail" 
+                                    value={email} 
+                                    onChange={e => setEmail(e.target.value)} 
+                                    className="form-input rounded-xl dark:bg-black/20 dark:text-white h-12" 
+                                    autoComplete="email"
+                                    required 
+                                />
+                                
+                                {/* OPÇÕES DE E-MAIL RECENTES */}
+                                {mode === 'login' && recentEmails.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 px-1 mt-1">
+                                        {recentEmails.map((recent) => (
+                                            <button 
+                                                key={recent}
+                                                type="button"
+                                                onClick={() => setEmail(recent)}
+                                                className="text-[10px] font-bold bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-full border border-gray-200 dark:border-zinc-700 hover:bg-primary/10 hover:text-primary transition-all"
+                                            >
+                                                {recent}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
                             <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} className="form-input rounded-xl dark:bg-black/20 dark:text-white h-12" required />
                             
-                            {/* 4. BOTÃO ENTRAR (AGORA NO FINAL) */}
+                            {/* 4. BOTÃO ENTRAR */}
                             <button type="submit" disabled={isLoadingEmail} className="h-14 bg-primary text-white rounded-xl font-bold mt-2 shadow-lg hover:bg-primary-hover transition-all active:scale-95">
                                 {isLoadingEmail ? 'Processando...' : (mode === 'login' ? 'Entrar' : 'Criar Minha Conta')}
                             </button>
