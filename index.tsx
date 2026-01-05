@@ -13,6 +13,7 @@ import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
 import { AppModals } from './components/modals/AppModals';
 
 const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
+    // Corrected state initialization for sliderX to fix errors: Cannot find name 'setStatus' and 'setSliderX' used before its declaration.
     const [sliderX, setSliderX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -247,6 +248,12 @@ const AppContent: React.FC = () => {
 
     const purchasedItemsCount = useMemo(() => items.filter(item => item.isPurchased).length, [items]);
     const formattedTotal = useMemo(() => formatCurrency(purchasedTotal), [purchasedTotal, formatCurrency]);
+    
+    const remainingValue = useMemo(() => {
+        return (app.budget || 0) - purchasedTotal;
+    }, [app.budget, purchasedTotal]);
+    const formattedRemaining = useMemo(() => formatCurrency(remainingValue), [remainingValue, formatCurrency]);
+
     const budgetProgress = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.min((purchasedTotal / app.budget) * 100, 100), [purchasedTotal, app.budget]);
     const rawPercentage = useMemo(() => (!app.budget || app.budget === 0) ? 0 : Math.round((purchasedTotal / app.budget) * 100), [purchasedTotal, app.budget]);
 
@@ -564,7 +571,7 @@ const AppContent: React.FC = () => {
                                 <div className="flex items-center justify-between text-slate-800 dark:text-white">
                                     <p className="text-base font-bold font-display uppercase tracking-tight">Resumo Gasto</p>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-black text-sm">{formattedTotal} / {formatCurrency(app.budget)}</span>
+                                        <span className="font-black text-sm">{formattedRemaining} / {formatCurrency(app.budget)}</span>
                                     </div>
                                 </div>
 
@@ -623,4 +630,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 01/06/2025 - Estabilidade Garantida V3.5
+// Checkpoint de Segurança: 15/06/2025 - Estabilidade Garantida V3.7

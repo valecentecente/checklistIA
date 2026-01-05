@@ -1,7 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
-// Added logEvent to imports to fix "Cannot find name 'logEvent'" error.
 import { db, auth, logEvent } from '../firebase';
 import type { DuplicateInfo, FullRecipe, ShoppingItem, ReceivedListRecord, Offer, ScheduleRule, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
@@ -11,6 +10,23 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; 
+
+// Palavras que são ruídos e não devem ser o NOME do produto na lista
+const CULINARY_NOISE = [
+    'gelada', 'gelado', 'filtrada', 'filtrado', 'picada', 'picado', 'moída', 'moído', 
+    'ralada', 'ralado', 'fresca', 'fresco', 'madura', 'maduro', 'opcional', 'a gosto',
+    'bem', 'muito', 'quente', 'morno', 'fria', 'frio', 'picadinho', 'fatiada', 'fatiado',
+    'desnatado', 'integral', 'semi', 'cozido', 'frito', 'assado', 'refogado'
+];
+
+// Termos de Medida que JAMAIS devem ser o nome do item
+const VAGUE_WORDS = [
+    'litro', 'litros', 'pedaco', 'pedaço', 'unidade', 'unidades', 'gramas', 'grama', 'kg', 'ml', 
+    'xicara', 'xícara', 'colher', 'colheres', 'pacote', 'lata', 'caixa', 'copo', 'fatia', 'fatias', 
+    'dose', 'dente', 'dentes', 'maco', 'maço', 'un', 'gr', 'g', 'kg', 'pitada', 'pitadas',
+    'meia', 'meio', 'sopa', 'cha', 'chá', 'sobremesa', 'cafe', 'café', 'rasa', 'cheia', 'transbordando',
+    'fio', 'punhado', 'q.b.', 'gosto', 'gostos', 'cubos', 'tiras', 'rodelas'
+];
 
 const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
@@ -344,7 +360,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isAdmin = user?.role === 'admin_l1' || user?.role === 'admin_l2';
     const isSuperAdmin = user?.role === 'admin_l1';
 
-    // Defined trackEvent to handle analytics tracking and fixed logEvent missing import
     const trackEvent = useCallback((name: string, params?: Record<string, any>) => {
         logEvent(name, {
             user_id: user?.uid || 'guest',
@@ -545,6 +560,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return outcome === 'accepted';
     };
 
+    // Fix: Added showPWAInstallPromptIfAvailable definition to resolve scope error.
+    const showPWAInstallPromptIfAvailable = () => { if (installPromptEvent) setIsPWAInstallVisible(true); };
+
     const setBudget = (b: number) => { 
         setBudgetState(b); 
         closeModal('budget'); 
@@ -628,7 +646,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         trackEvent('generate_recipe_ia', { recipe_name: recipeName });
         try {
             const ai = new GoogleGenAI({ apiKey });
-            const prompt = `Gere receita brasileira completa JSON para: "${recipeName}". REGRAS: ingredients min 5, tags (Momento, Perfil, Técnica), suggestedLeads (utensílios).`;
+            const prompt = `Você é o Chef IA de alto nível. Gere receita brasileira completa JSON para: "${recipeName}". 
+            REGRAS OBRIGATÓRIAS DE EXTRAÇÃO PARA O CAMPO 'simplifiedName':
+            1. O campo 'simplifiedName' deve ser o SUBSTANTIVO do produto real (ex: 'Sal', 'Água', 'Margarina', 'Azeite'). 
+            2. NUNCA use palavras de medição ou quantidade como: 'Pitada', 'Meia', 'Sopa', 'Colher', 'Chá', 'Copo', 'Punhado', 'Gosto', 'Xícara' etc.
+            3. Se for '2 colheres de sopa de margarina', simplifiedName é 'Margarina'.
+            4. Se for 'meia xícara de água', simplifiedName é 'Água'.
+            5. O campo 'detailedName' deve conter a descrição completa.`;
+            
             const textRes = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview', 
                 contents: prompt,
@@ -649,8 +674,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
         recipe.ingredients.forEach((ing) => {
-            if (!findDuplicate(ing.simplifiedName, items)) {
-                itemsToAdd.push({ name: ing.simplifiedName, calculatedPrice: 0, details: ing.detailedName, recipeName: recipe.name, iNew: true, isPurchased: false });
+            let nameToFix = (ing.simplifiedName || '').trim();
+            const detailed = (ing.detailedName || '').toLowerCase();
+
+            // 1. Limpeza Radical de Medidas no início do nome
+            // Remove tudo entre parênteses: "Limão (taiti)" -> "Limão "
+            nameToFix = nameToFix.replace(/\(.*\)/g, '').trim();
+            
+            // Pega apenas a primeira opção se houver "ou": "Rapadura ou Açúcar" -> "Rapadura"
+            nameToFix = nameToFix.split(/ ou /i)[0].trim();
+
+            // 2. FILTRO DE BLINDAGEM: Se o nome simplificado é uma unidade de medida, ignoramos ele e tentamos extrair do detalhado
+            const isVague = VAGUE_WORDS.some(v => nameToFix.toLowerCase() === v) || nameToFix.length <= 2 || /^\d+$/.test(nameToFix);
+
+            if (isVague) {
+                // Tentamos achar uma palavra decente no detalhado
+                const cleanDetailed = detailed.replace(/\(.*\)/g, '').split(/ de /i);
+                // Normalmente o produto vem depois do "de": "1 colher de margarina" -> ["1 colher", "margarina"]
+                if (cleanDetailed.length > 1) {
+                    nameToFix = cleanDetailed[cleanDetailed.length - 1].split(' ')[0]; // Pega a primeira palavra após o último "de"
+                } else {
+                    // Fallback de emergência: pega a primeira palavra longa que não seja número/unidade
+                    const parts = detailed.split(' ');
+                    const found = parts.find(p => p.length > 3 && !VAGUE_WORDS.includes(p.replace(/[^a-z]/g, '')) && !/^\d+$/.test(p.replace(/\D/g, '')));
+                    if (found) nameToFix = found;
+                    else nameToFix = ing.detailedName; 
+                }
+            }
+
+            // 3. Remoção final de Adjetivos "Ruídos" (gelada, filtrada...)
+            const nameParts = nameToFix.split(' ');
+            const filteredParts = nameParts.filter(p => !CULINARY_NOISE.includes(p.toLowerCase().replace(/[^a-z]/g, '')) && !VAGUE_WORDS.includes(p.toLowerCase()));
+            
+            if (filteredParts.length > 0) {
+                nameToFix = filteredParts.join(' ');
+            }
+
+            // 4. Sanitização final
+            const finalName = nameToFix.charAt(0).toUpperCase() + nameToFix.slice(1).toLowerCase().replace(/[^a-zA-Záéíóúâêîôûãõç\s]/g, '').trim();
+
+            // Se ainda assim for algo bizarro (tipo apenas "De"), usamos o nome detalhado como última esperança
+            const validatedName = finalName.length < 3 ? ing.detailedName : finalName;
+
+            if (!findDuplicate(validatedName, items)) {
+                itemsToAdd.push({ 
+                    name: validatedName, 
+                    calculatedPrice: 0, 
+                    details: ing.detailedName, 
+                    recipeName: recipe.name, 
+                    isNew: true, 
+                    isPurchased: false 
+                });
             }
         });
         if (itemsToAdd.length > 0) {
@@ -673,16 +747,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const newCategoryMap = { ...itemCategories };
             const itemsToCategorizeViaIA: typeof items = [];
 
-            // ETAPA 1: Tentar dicionário local primeiro (Instantâneo)
             items.forEach(item => {
-                if (newCategoryMap[item.id]) return; // Já categorizado
-
+                if (newCategoryMap[item.id]) return; 
                 const cleanName = item.name.toLowerCase().trim();
-                // Tenta busca exata ou contida no dicionário
                 const dictMatch = Object.keys(LOCAL_AISLE_DICTIONARY).find(key => 
                     cleanName === key || cleanName.includes(key)
                 );
-
                 if (dictMatch) {
                     newCategoryMap[item.id] = LOCAL_AISLE_DICTIONARY[dictMatch];
                 } else {
@@ -690,7 +760,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             });
 
-            // Se o dicionário resolveu tudo, encerra aqui
             if (itemsToCategorizeViaIA.length === 0) {
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
@@ -698,7 +767,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 return;
             }
 
-            // ETAPA 2: Usar IA apenas para o que sobrou
             setIsOrganizing(true);
             try {
                 if (!apiKey) throw new Error("API Key missing");
@@ -726,8 +794,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setGroupingMode('aisle');
                 showToast("Lista organizada!");
             } catch (error: any) { 
-                console.error("Erro organização:", error);
-                // Mesmo com erro na IA, aplica o que o dicionário local conseguiu
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
                 showToast("Organização parcial concluída."); 
@@ -771,7 +837,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isSharedSession, setIsSharedSession, historyActiveTab, setHistoryActiveTab: setHistoryActiveTabState,
         isHomeViewActive, setHomeViewActive, isFocusMode, setFocusMode,
         allRecipesPool, featuredRecipes, recipeSuggestions, isSuggestionsLoading, currentTheme, fetchThemeSuggestions, handleExploreRecipeClick, pendingExploreRecipe, setPendingExploreRecipe, totalRecipeCount,
-        addRecipeToShoppingList, showPWAInstallPromptIfAvailable: () => setIsPWAInstallVisible(true), searchGlobalRecipes,
+        addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes,
         getCategoryCount: (categoryLabel: string) => 0,
         getCategoryRecipes, getCategoryRecipesSync: getCategoryRecipes, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, deleteDoc, updateDoc, where, addDoc } from 'firebase/firestore';
@@ -69,7 +70,6 @@ export const AdminContentFactoryModal: React.FC = () => {
     const [ignoredLeads, setIgnoredLeads] = useState<string[]>([]);
     const logEndRef = useRef<HTMLDivElement>(null);
 
-    // Fix: Calculate brokenCount using useMemo
     const brokenCount = useMemo(() => recipes.filter(r => r.isBroken).length, [recipes]);
 
     // Editor
@@ -397,7 +397,6 @@ export const AdminContentFactoryModal: React.FC = () => {
             name: term.charAt(0).toUpperCase() + term.slice(1), 
             tags: term.toLowerCase() 
         });
-        // Fecha o modal da fábrica e abre o de ofertas para evitar sobreposição
         closeModal('contentFactory');
         openModal('admin');
     };

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext';
@@ -156,7 +157,7 @@ export const RecipeSelectionModal: React.FC = () => {
                                 <div className="absolute top-0 left-0 w-full p-10 pt-16">
                                     {isFromCache && (
                                         <div className="mb-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 w-fit animate-fadeIn">
-                                            <span className="material-symbols-outlined text-[14px] text-orange-400">photo_camera</span>
+                                            <span className="material-symbols-outlined text-[14px] text-orange-400">image</span>
                                             <span className="text-[8px] font-black uppercase tracking-widest leading-none pt-[1px]">
                                                 <span className="text-white">Checklist</span><span className="text-blue-500">IA</span>
                                             </span>

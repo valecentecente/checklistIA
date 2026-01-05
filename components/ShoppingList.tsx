@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { ShoppingItem } from '../types';
 import { ShoppingListItem } from './ShoppingListItem';
@@ -48,19 +47,16 @@ const ShoppingListGroup: React.FC<{
                 onClick={() => setIsOpen(!isOpen)}
             >
                 {isHistoryGroup ? (
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600/60 dark:text-blue-400/60 mb-1">
-                                Registro Anterior
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600/60 dark:text-blue-400/60">
+                                HISTÓRICO
                             </p>
-                            <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-blue-500 text-lg">history</span>
-                                <h3 className="text-lg font-bold text-blue-900 dark:text-blue-200 leading-tight truncate font-display">
-                                    {historyMarketName}
-                                </h3>
-                            </div>
+                            <span className={`material-symbols-outlined text-blue-900/40 dark:text-blue-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
                         </div>
-                        <span className={`material-symbols-outlined text-blue-900/40 dark:text-blue-300/40 transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                        <h3 className="text-xl font-bold text-blue-900 dark:text-blue-200 leading-tight truncate font-display">
+                            {historyMarketName}
+                        </h3>
                     </div>
                 ) : isResponsibleGroup || isOthersGroup ? (
                     <div className="flex items-center justify-between gap-4">

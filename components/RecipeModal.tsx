@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { FullRecipe } from '../types';
 import { useApp } from '../contexts/AppContext';
@@ -125,7 +126,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
 
   return (
     <div className="fixed inset-0 flex h-[100dvh] w-full flex-col justify-center items-center bg-black/80 z-[999] animate-fadeIn backdrop-blur-md p-0 sm:p-4" onClick={onClose}>
-        {/* Container Centralizado e "Mais Fino" no Desktop */}
         <div className="flex flex-col items-stretch bg-[#F7F7F7] dark:bg-[#1a1a1a] rounded-t-[2.5rem] sm:rounded-[3rem] w-full max-w-sm max-h-[96dvh] sm:mb-4 animate-slideUp overflow-hidden relative shadow-[0_35px_60px_-15px_rgba(0,0,0,0.9)] border border-white/5" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex-shrink-0 absolute top-0 left-0 right-0 z-[100] flex justify-center pt-4 pb-1 pointer-events-none">
@@ -162,7 +162,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                      <div className="absolute top-6 left-6 z-[110] flex flex-col gap-2 items-start pointer-events-none">
                          {imageUrl && isFromCache && !isRecipeLoading && (
                              <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/80 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 shadow-xl">
-                                 <span className="material-symbols-outlined text-[14px] text-orange-400">photo_camera</span>
+                                 <span className="material-symbols-outlined text-[14px] text-orange-400">image</span>
                                  <span className="text-[10px] font-black uppercase tracking-[0.1em] leading-none pt-[1px]">
                                     <span className="text-white">Checklist</span><span className="text-blue-500 ml-0.5">IA</span>
                                  </span>

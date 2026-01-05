@@ -11,12 +11,11 @@ interface ShoppingListItemProps {
 export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDelete, onEdit, onTogglePurchased }) => {
   
   const handleTextClick = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent label from toggling checkbox
+    e.preventDefault(); 
     onEdit(item.id);
   };
 
   const handleCheckboxChange = () => {
-    // If price is 0, open edit modal instead of toggling.
     if (item.calculatedPrice === 0 && !item.isPurchased) {
       onEdit(item.id);
     } else {
@@ -30,10 +29,7 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
     : 'text-text-light dark:text-text-dark'
   }`;
 
-  // Filter out the legacy text "Pendente (clique para editar)" and empty strings
   const showDetails = item.details && item.details.trim() !== '' && item.details !== 'Pendente (clique para editar)';
-
-  // CORREÇÃO: Forçando Number no calculatedPrice para a lógica de cor
   const itemPrice = parseFloat(String(item.calculatedPrice)) || 0;
 
   return (
@@ -48,9 +44,8 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
         <p className={textClasses}>
             {item.name}
         </p>
-         {/* DETALHES: Oculto em mobile (hidden) e visível apenas em desktop (lg:block). */}
          {showDetails && (
-             <p className={`hidden lg:block text-[11px] mt-0.5 font-medium transition-colors ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-500 dark:text-gray-400'}`}>
+             <p className={`text-[11px] mt-0.5 font-medium transition-colors ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-500 dark:text-gray-400 opacity-80'}`}>
                 {item.details}
              </p>
          )}
