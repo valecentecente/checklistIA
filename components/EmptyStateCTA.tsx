@@ -170,7 +170,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 .animate-smooth-diagonal { animation: smooth-diagonal 20s linear infinite; }
             `}</style>
             
-            {/* Status Line - Ajuste de altura e margem para não cortar */}
+            {/* Status Line */}
             <div className="px-1 py-1 flex items-center justify-start shrink-0">
                 <div className="flex items-center gap-3">
                     <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
@@ -222,7 +222,8 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                     
                                     <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/95"></div>
                                     
-                                    <div className="absolute inset-0 p-7 lg:p-9 pt-10 lg:pt-14 flex flex-col items-start justify-between z-30">
+                                    {/* AJUSTE: Aumentado pb de 7 para 24 no mobile para subir o conteúdo acima do rodapé */}
+                                    <div className="absolute inset-0 px-7 pt-10 pb-24 lg:p-9 lg:pt-14 flex flex-col items-start justify-between z-30">
                                         <div className="flex flex-col items-start w-full">
                                             <div className="flex items-center gap-2.5 mb-3 lg:mb-5">
                                                 <span className="bg-white text-black text-[8px] lg:text-[9px] font-black px-3 py-1 rounded-sm uppercase tracking-widest">
