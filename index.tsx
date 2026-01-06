@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -560,7 +559,7 @@ const AppContent: React.FC = () => {
                                 {purchasedItemsCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-green-600 text-white text-[8px] font-bold rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">{purchasedItemsCount}</span>}
                             </button>
                             
-                            <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-all active:scale-95">
+                            <button onClick={() => app.setFocusMode(!app.isFocusMode)} className="lg:hidden h-9 w-9 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300 transition-all active:scale-95">
                                 <span className="material-symbols-outlined text-xl">{app.isFocusMode ? 'close_fullscreen' : 'open_in_full'}</span>
                             </button>
                         </div>
@@ -633,4 +632,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 24/05/2024 - Estabilidade Garantida V3.8
+// Checkpoint de Segurança: 24/05/2024 - Estabilidade Garantida V3.9
