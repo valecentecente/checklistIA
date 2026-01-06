@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -369,12 +368,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [user]);
 
-    // Restaurada lógica de categorias especiais e filtros de imagem
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
         const pool = allRecipesPool.length > 0 ? allRecipesPool : globalRecipeCache;
         if (pool.length === 0) return [] as FullRecipe[];
 
-        // Filtramos para garantir que receitas tenham imagem nos locais que exigem (como arcade)
         const validWithImage = pool.filter(r => !!r.imageUrl);
 
         if (categoryKey === 'top10') {
@@ -719,7 +716,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         getCategoryRecipes, getCategoryRecipesSync: getCategoryRecipes, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
         homeCategories, saveHomeCategories, pendingInventoryItem, setPendingInventoryItem, factoryActiveTab, setFactoryActiveTab,
         scheduleRules, saveScheduleRules, selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline,
-        trackEvent, refreshRecipesBySlot
+        trackEvent, refreshRecipesBySlot,
+        pendingAction, setPendingAction
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
