@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -303,7 +304,9 @@ const AppContent: React.FC = () => {
             });
         } else {
             items.forEach(item => {
-                const key = item.recipeName ? `Receita: ${item.recipeName}` : 'Outros Itens';
+                const key = item.recipeName 
+                    ? (item.recipeName.startsWith('Histórico: ') ? item.recipeName : `Receita: ${item.recipeName}`) 
+                    : 'Outros Itens';
                 if (!groups[key]) groups[key] = [];
                 groups[key].push(item);
             });
@@ -587,7 +590,7 @@ const AppContent: React.FC = () => {
                                         <div className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${budgetStatus.bg} ${budgetStatus.pulse ? 'animate-pulse' : ''}`} style={{ width: `${budgetProgress}%` }}></div>
                                     </div>
                                     <div className="shrink-0 min-w-[50px] text-right">
-                                        <span className={`text-2xl font-black italic tracking-tighter leading-none transition-colors duration-300 ${budgetStatus.color} ${budgetStatus.pulse ? 'animate-pulse' : ''}`}>
+                                        <span className={`text-2xl font-black italic tracking-tighter italic leading-none transition-colors duration-300 ${budgetStatus.color} ${budgetStatus.pulse ? 'animate-pulse' : ''}`}>
                                             {rawPercentage}%
                                         </span>
                                     </div>
@@ -630,4 +633,4 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
-// Checkpoint de Segurança: 15/06/2025 - Estabilidade Garantida V3.7
+// Checkpoint de Segurança: 24/05/2024 - Estabilidade Garantida V3.8

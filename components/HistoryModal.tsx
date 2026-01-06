@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import type { PurchaseRecord, HistoricItem, AuthorMetadata, ReceivedListRecord } from '../types';
 import { useShoppingList } from '../contexts/ShoppingListContext';
@@ -268,13 +267,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, his
                                                 <span className="font-semibold text-text-primary-light dark:text-text-primary-dark whitespace-nowrap">
                                                     {formatCurrency(item.calculatedPrice)}
                                                 </span>
-                                                <button 
-                                                    onClick={() => onAddItem(item, selectedPurchase.marketName)} 
-                                                    className="p-2 rounded-full text-primary hover:bg-primary/10 transition-colors"
-                                                    title="Adicionar apenas este item"
-                                                >
-                                                    <span className="material-symbols-outlined">add_circle</span>
-                                                </button>
                                             </div>
                                         </div>
                                     ))}
