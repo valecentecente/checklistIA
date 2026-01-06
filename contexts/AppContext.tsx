@@ -1,7 +1,8 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react';
-import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
-import { db, auth, logEvent } from '../firebase';
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getCountFromServer, where, onSnapshot, updateDoc } from 'firebase/firestore';
+import { db, logEvent } from '../firebase';
 import type { DuplicateInfo, FullRecipe, ShoppingItem, ReceivedListRecord, Offer, ScheduleRule, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
@@ -10,40 +11,6 @@ export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
 const RECIPE_CACHE_KEY = 'checklistia_global_recipes_v1';
 const RECIPE_CACHE_TTL = 1000 * 60 * 60 * 12; 
-
-// Palavras que são ruídos e não devem ser o NOME do produto na lista
-const CULINARY_NOISE = [
-    'gelada', 'gelado', 'filtrada', 'filtrado', 'picada', 'picado', 'moída', 'moído', 
-    'ralada', 'ralado', 'fresca', 'fresco', 'madura', 'maduro', 'opcional', 'a gosto',
-    'bem', 'muito', 'quente', 'morno', 'fria', 'frio', 'picadinho', 'fatiada', 'fatiado',
-    'desnatado', 'integral', 'semi', 'cozido', 'frito', 'assado', 'refogado'
-];
-
-// Termos de Medida que JAMAIS devem ser o nome do item
-const VAGUE_WORDS = [
-    'litro', 'litros', 'pedaco', 'pedaço', 'unidade', 'unidades', 'gramas', 'grama', 'kg', 'ml', 
-    'xicara', 'xícara', 'colher', 'colheres', 'pacote', 'lata', 'caixa', 'copo', 'fatia', 'fatias', 
-    'dose', 'dente', 'dentes', 'maco', 'maço', 'un', 'gr', 'g', 'kg', 'pitada', 'pitadas',
-    'meia', 'meio', 'sopa', 'cha', 'chá', 'sobremesa', 'cafe', 'café', 'rasa', 'cheia', 'transbordando',
-    'fio', 'punhado', 'q.b.', 'gosto', 'gostos', 'cubos', 'tiras', 'rodelas'
-];
-
-const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-};
-
-const getRecipeDocId = (name: string) => {
-    return name.trim().toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-        .replace(/[\/\s]+/g, '-') 
-        .replace(/[^a-z0-9-]/g, '') 
-        .slice(0, 80);
-};
 
 const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [] as FullRecipe[];
@@ -262,6 +229,8 @@ interface AppContextType {
     openProductDetails: (product: Offer) => void; 
     isOffline: boolean;
     trackEvent: (name: string, params?: Record<string, any>) => void;
+    
+    refreshRecipesBySlot: (tags: string[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -343,6 +312,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [authTrigger, setAuthTrigger] = useState<string | null>(null);
     
     const [allRecipesPool, setAllRecipesPool] = useState<FullRecipe[]>([]);
+    const featuredRecipes = useMemo(() => allRecipesPool.slice(0, 10), [allRecipesPool]);
     const [recipeSuggestions, setRecipeSuggestions] = useState<FullRecipe[]>([]);
     const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
     const [currentTheme, setCurrentTheme] = useState<string | null>(null);
@@ -399,38 +369,62 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [user]);
 
+    // Restaurada lógica de categorias especiais e filtros de imagem
     const getCategoryRecipes = useCallback((categoryKey: string): FullRecipe[] => {
-        const pool = globalRecipeCache;
+        const pool = allRecipesPool.length > 0 ? allRecipesPool : globalRecipeCache;
         if (pool.length === 0) return [] as FullRecipe[];
+
+        // Filtramos para garantir que receitas tenham imagem nos locais que exigem (como arcade)
+        const validWithImage = pool.filter(r => !!r.imageUrl);
+
+        if (categoryKey === 'top10') {
+            return validWithImage.slice(0, 15);
+        }
+        if (categoryKey === 'random') {
+            return [...validWithImage].sort(() => Math.random() - 0.5).slice(0, 15);
+        }
+
         return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
-    }, [globalRecipeCache]);
+    }, [allRecipesPool, globalRecipeCache]);
+
+    const refreshRecipesBySlot = useCallback(async (tags: string[]) => {
+        if (!db) return;
+        try {
+            const q = query(
+                collection(db, 'global_recipes'), 
+                where('tags', 'array-contains-any', tags.slice(0, 10)), 
+                orderBy('createdAt', 'desc'), 
+                limit(100)
+            );
+            const snap = await getDocs(q);
+            const fetched = mapToFullRecipeArray(snap.docs.map(d => d.data()));
+            
+            if (fetched.length > 0) {
+                setAllRecipesPool(fetched);
+            } else {
+                const qFallback = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
+                const snapFallback = await getDocs(qFallback);
+                setAllRecipesPool(mapToFullRecipeArray(snapFallback.docs.map(d => d.data())));
+            }
+        } catch (error) {
+            console.warn("[AppContext] Slot refresh error:", error);
+        }
+    }, []);
 
     useEffect(() => {
         if (!db) return;
-        const loadData = async () => {
-            const cachedString = localStorage.getItem(RECIPE_CACHE_KEY);
-            if (cachedString) {
-                try {
-                    const cache = JSON.parse(cachedString);
-                    setAllRecipesPool(mapToFullRecipeArray(cache.pool));
-                    setGlobalRecipeCache(mapToFullRecipeArray(cache.cache));
-                    setTotalRecipeCount(cache.count || 0);
-                    if ((Date.now() - (cache?.timestamp || 0)) < RECIPE_CACHE_TTL) return; 
-                } catch (e) { localStorage.removeItem(RECIPE_CACHE_KEY); }
-            }
+        const loadInitial = async () => {
             try {
                 const qFetch = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(30));
                 const snap = await getDocs(qFetch);
                 const fetched = mapToFullRecipeArray(snap.docs.map(d => d.data()));
-                setAllRecipesPool(shuffleArray(fetched));
+                setAllRecipesPool(fetched);
                 setGlobalRecipeCache(fetched);
                 const countSnap = await getCountFromServer(collection(db, 'global_recipes'));
-                const count = countSnap.data().count;
-                setTotalRecipeCount(count);
-                localStorage.setItem(RECIPE_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), pool: fetched, cache: fetched, count }));
+                setTotalRecipeCount(countSnap.data().count);
             } catch (error) {}
         };
-        loadData();
+        loadInitial();
     }, []);
 
     useEffect(() => {
@@ -468,10 +462,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await setDoc(doc(db, 'settings', 'recipe_schedule'), { rules, updatedAt: serverTimestamp() });
         showToast("Grade de horários atualizada!");
     };
-
-    const featuredRecipes = useMemo((): FullRecipe[] => {
-        return allRecipesPool.slice(0, 10);
-    }, [allRecipesPool]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -560,7 +550,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return outcome === 'accepted';
     };
 
-    // Fix: Added showPWAInstallPromptIfAvailable definition to resolve scope error.
     const showPWAInstallPromptIfAvailable = () => { if (installPromptEvent) setIsPWAInstallVisible(true); };
 
     const setBudget = (b: number) => { 
@@ -576,7 +565,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     const getCachedRecipe = (name: string): FullRecipe | undefined => {
         const target = name.trim().toLowerCase();
-        const allCaches = [fullRecipes, favorites, featuredRecipes, recipeSuggestions, recipeSearchResults, globalRecipeCache];
+        const allCaches = [fullRecipes, favorites, globalRecipeCache];
         for (const cache of allCaches) {
             if (Array.isArray(cache)) {
                 const found = cache.find(r => r.name.toLowerCase() === target);
@@ -590,9 +579,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const getRandomCachedRecipe = useCallback((): FullRecipe | null => {
-        if (globalRecipeCache.length === 0) return null;
-        return globalRecipeCache[Math.floor(Math.random() * globalRecipeCache.length)];
-    }, [globalRecipeCache]);
+        const pool = allRecipesPool.length > 0 ? allRecipesPool : globalRecipeCache;
+        if (pool.length === 0) return null;
+        return pool[Math.floor(Math.random() * pool.length)];
+    }, [allRecipesPool, globalRecipeCache]);
 
     const showRecipe = (input: string | FullRecipe) => { 
         let r = typeof input === 'string' ? getCachedRecipe(input) : input;
@@ -609,10 +599,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleRecipeImageGenerated = (recipeName: string, imageUrl: string, source: 'cache' | 'genai') => {
         setFullRecipes(prev => ({...prev, [recipeName]: {...prev[recipeName], imageUrl, imageSource: source}}));
         setSelectedRecipe(prev => (prev?.name === recipeName ? {...prev, imageUrl, imageSource: source} : prev));
-        if (db) {
-            const docId = getRecipeDocId(recipeName);
-            updateDoc(doc(db, 'global_recipes', docId), { imageUrl, imageSource: source, updatedAt: serverTimestamp() });
-        }
     };
 
     const searchGlobalRecipes = useCallback(async (queryStr: string): Promise<FullRecipe[]> => {
@@ -636,35 +622,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } finally { setIsSearchingAcervo(false); }
     };
 
-    const sanitizeJsonString = (str: string) => {
-        return str.replace(/```json/gi, '').replace(/```/gi, '').trim();
-    };
-
     const fetchRecipeDetails = useCallback(async (recipeName: string, imageBase64?: string, autoAdd: boolean = true) => {
         if (isOffline) { showToast("IA offline."); return; }
         setIsRecipeLoading(true);
         trackEvent('generate_recipe_ia', { recipe_name: recipeName });
         try {
             const ai = new GoogleGenAI({ apiKey });
-            const prompt = `Você é o Chef IA de alto nível. Gere receita brasileira completa JSON para: "${recipeName}". 
-            REGRAS OBRIGATÓRIAS DE EXTRAÇÃO PARA O CAMPO 'simplifiedName':
-            1. O campo 'simplifiedName' deve ser o SUBSTANTIVO do produto real (ex: 'Sal', 'Água', 'Margarina', 'Azeite'). 
-            2. NUNCA use palavras de medição ou quantidade como: 'Pitada', 'Meia', 'Sopa', 'Colher', 'Chá', 'Copo', 'Punhado', 'Gosto', 'Xícara' etc.
-            3. Se for '2 colheres de sopa de margarina', simplifiedName é 'Margarina'.
-            4. Se for 'meia xícara de água', simplifiedName é 'Água'.
-            5. O campo 'detailedName' deve conter a descrição completa.`;
-            
+            const prompt = `Gere receita brasileira completa JSON para: "${recipeName}". Formato padrão ChecklistIA.`;
             const textRes = await callGenAIWithRetry(() => ai.models.generateContent({
                 model: 'gemini-3-flash-preview', 
                 contents: prompt,
                 config: { responseMimeType: "application/json" }
             }));
             const details = JSON.parse(textRes.text?.replace(/```json/gi, '').replace(/```/gi, '').trim() || "{}");
-            const fullData: FullRecipe = { 
-                ...details, 
-                keywords: generateKeywords(details.name || recipeName),
-                createdAt: serverTimestamp() 
-            };
+            const fullData: FullRecipe = { ...details, keywords: generateKeywords(details.name || recipeName), createdAt: serverTimestamp() };
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             if (autoAdd) await addRecipeToShoppingList(fullData);
@@ -674,57 +645,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
         recipe.ingredients.forEach((ing) => {
-            let nameToFix = (ing.simplifiedName || '').trim();
-            const detailed = (ing.detailedName || '').toLowerCase();
-
-            // 1. Limpeza Radical de Medidas no início do nome
-            // Remove tudo entre parênteses: "Limão (taiti)" -> "Limão "
-            nameToFix = nameToFix.replace(/\(.*\)/g, '').trim();
-            
-            // Pega apenas a primeira opção se houver "ou": "Rapadura ou Açúcar" -> "Rapadura"
-            nameToFix = nameToFix.split(/ ou /i)[0].trim();
-
-            // 2. FILTRO DE BLINDAGEM: Se o nome simplificado é uma unidade de medida, ignoramos ele e tentamos extrair do detalhado
-            const isVague = VAGUE_WORDS.some(v => nameToFix.toLowerCase() === v) || nameToFix.length <= 2 || /^\d+$/.test(nameToFix);
-
-            if (isVague) {
-                // Tentamos achar uma palavra decente no detalhado
-                const cleanDetailed = detailed.replace(/\(.*\)/g, '').split(/ de /i);
-                // Normalmente o produto vem depois do "de": "1 colher de margarina" -> ["1 colher", "margarina"]
-                if (cleanDetailed.length > 1) {
-                    nameToFix = cleanDetailed[cleanDetailed.length - 1].split(' ')[0]; // Pega a primeira palavra após o último "de"
-                } else {
-                    // Fallback de emergência: pega a primeira palavra longa que não seja número/unidade
-                    const parts = detailed.split(' ');
-                    const found = parts.find(p => p.length > 3 && !VAGUE_WORDS.includes(p.replace(/[^a-z]/g, '')) && !/^\d+$/.test(p.replace(/\D/g, '')));
-                    if (found) nameToFix = found;
-                    else nameToFix = ing.detailedName; 
-                }
-            }
-
-            // 3. Remoção final de Adjetivos "Ruídos" (gelada, filtrada...)
-            const nameParts = nameToFix.split(' ');
-            const filteredParts = nameParts.filter(p => !CULINARY_NOISE.includes(p.toLowerCase().replace(/[^a-z]/g, '')) && !VAGUE_WORDS.includes(p.toLowerCase()));
-            
-            if (filteredParts.length > 0) {
-                nameToFix = filteredParts.join(' ');
-            }
-
-            // 4. Sanitização final
-            const finalName = nameToFix.charAt(0).toUpperCase() + nameToFix.slice(1).toLowerCase().replace(/[^a-zA-Záéíóúâêîôûãõç\s]/g, '').trim();
-
-            // Se ainda assim for algo bizarro (tipo apenas "De"), usamos o nome detalhado como última esperança
-            const validatedName = finalName.length < 3 ? ing.detailedName : finalName;
-
-            if (!findDuplicate(validatedName, items)) {
-                itemsToAdd.push({ 
-                    name: validatedName, 
-                    calculatedPrice: 0, 
-                    details: ing.detailedName, 
-                    recipeName: recipe.name, 
-                    isNew: true, 
-                    isPurchased: false 
-                });
+            if (!findDuplicate(ing.simplifiedName, items)) {
+                itemsToAdd.push({ name: ing.simplifiedName, calculatedPrice: 0, details: ing.detailedName, recipeName: recipe.name, isNew: true, isPurchased: false });
             }
         });
         if (itemsToAdd.length > 0) {
@@ -736,73 +658,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const toggleGrouping = useCallback(async () => {
         if (isOffline) { showToast("Organização por corredores requer internet."); return; }
-        
         if (groupingMode === 'recipe') {
-            trackEvent('organize_list_aisle');
-            if (items.length === 0) {
-                showToast("Adicione itens à lista para organizar!");
-                return;
-            }
-
-            const newCategoryMap = { ...itemCategories };
-            const itemsToCategorizeViaIA: typeof items = [];
-
-            items.forEach(item => {
-                if (newCategoryMap[item.id]) return; 
-                const cleanName = item.name.toLowerCase().trim();
-                const dictMatch = Object.keys(LOCAL_AISLE_DICTIONARY).find(key => 
-                    cleanName === key || cleanName.includes(key)
-                );
-                if (dictMatch) {
-                    newCategoryMap[item.id] = LOCAL_AISLE_DICTIONARY[dictMatch];
-                } else {
-                    itemsToCategorizeViaIA.push(item);
-                }
-            });
-
-            if (itemsToCategorizeViaIA.length === 0) {
-                setItemCategories(newCategoryMap);
-                setGroupingMode('aisle');
-                showToast("Lista organizada!");
-                return;
-            }
-
             setIsOrganizing(true);
             try {
                 if (!apiKey) throw new Error("API Key missing");
                 const ai = new GoogleGenAI({ apiKey });
                 const categories = [ "🍎 Hortifruti", "🥩 Açougue", "🥛 Laticínios", "🍞 Padaria", "🛒 Mercearia", "💧 Bebidas", "🧼 Limpeza", "🧴 Higiene", "❓ Outros" ];
-                
                 const response: GenerateContentResponse = await callGenAIWithRetry(() => ai.models.generateContent({
                     model: 'gemini-3-flash-preview',
-                    contents: `Categorize estes itens: [${itemsToCategorizeViaIA.map(i => `"${i.name}"`).join(', ')}]. Categorias permitidas: ${categories.join(', ')}. Retorne um JSON array de objetos: [{"itemName": "nome_exato_do_item", "category": "categoria_escolhida"}].`,
+                    contents: `Categorize estes itens: [${items.map(i => `"${i.name}"`).join(', ')}]. Categorias: ${categories.join(', ')}. Return JSON array.`,
                     config: { responseMimeType: "application/json" }
                 }));
-
-                const jsonStr = sanitizeJsonString(response.text || "[]");
+                const jsonStr = (response.text || "[]").replace(/```json/gi, '').replace(/```/gi, '').trim();
                 const categorizedItems = JSON.parse(jsonStr) as any[];
-                
+                const newCategoryMap = { ...itemCategories };
                 categorizedItems.forEach(ci => {
-                    const itemNameLower = ci.itemName?.toLowerCase().trim();
-                    const item = itemsToCategorizeViaIA.find(i => i.name.toLowerCase().trim() === itemNameLower);
-                    if (item) {
-                        newCategoryMap[item.id] = ci.category;
-                    }
+                    const item = items.find(i => i.name.toLowerCase() === ci.itemName.toLowerCase());
+                    if (item) newCategoryMap[item.id] = ci.category;
                 });
-
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
-                showToast("Lista organizada!");
-            } catch (error: any) { 
-                setItemCategories(newCategoryMap);
-                setGroupingMode('aisle');
-                showToast("Organização parcial concluída."); 
-            } finally { 
-                setIsOrganizing(false); 
-            }
-        } else { 
-            setGroupingMode('recipe'); 
-        }
+            } catch (error: any) { showToast("Erro ao organizar."); } finally { setIsOrganizing(false); }
+        } else { setGroupingMode('recipe'); }
     }, [groupingMode, items, itemCategories, apiKey, isOffline]);
 
     const fetchThemeSuggestions = async (key: string) => {
@@ -840,41 +717,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addRecipeToShoppingList, showPWAInstallPromptIfAvailable, searchGlobalRecipes,
         getCategoryCount: (categoryLabel: string) => 0,
         getCategoryRecipes, getCategoryRecipesSync: getCategoryRecipes, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
-
-        homeCategories, saveHomeCategories, 
-        pendingInventoryItem, setPendingInventoryItem,
-        factoryActiveTab, setFactoryActiveTab,
-        smartNudgeItemName, scheduleRules, saveScheduleRules,
-        isSmartNudgeModalOpen: modalStates.isSmartNudgeModalOpen,
-        isAdminScheduleModalOpen: modalStates.isAdminScheduleModalOpen,
-        isPreferencesModalOpen: modalStates.isPreferencesModalOpen,
-        isAdminDashboardModalOpen: modalStates.isAdminDashboardModalOpen,
-        selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline,
-        trackEvent
+        homeCategories, saveHomeCategories, pendingInventoryItem, setPendingInventoryItem, factoryActiveTab, setFactoryActiveTab,
+        scheduleRules, saveScheduleRules, selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline,
+        trackEvent, refreshRecipesBySlot
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-};
-
-const LOCAL_AISLE_DICTIONARY: Record<string, string> = {
-    "alface": "🍎 Hortifruti", "tomate": "🍎 Hortifruti", "cebola": "🍎 Hortifruti", "alho": "🍎 Hortifruti", "batata": "🍎 Hortifruti",
-    "maçã": "🍎 Hortifruti", "banana": "🍎 Hortifruti", "laranja": "🍎 Hortifruti", "uva": "🍎 Hortifruti", "limão": "🍎 Hortifruti",
-    "cenoura": "🍎 Hortifruti", "brócolis": "🍎 Hortifruti", "abacate": "🍎 Hortifruti", "melancia": "🍎 Hortifruti", "manga": "🍎 Hortifruti",
-    "carne": "🥩 Açougue", "frango": "🥩 Açougue", "peixe": "🥩 Açougue", "picanha": "🥩 Açougue", "alcatra": "🥩 Açougue",
-    "maminha": "🥩 Açougue", "fraldinha": "🥩 Açougue", "coxa": "🥩 Açougue", "sobrecoxa": "🥩 Açougue", "filé": "🥩 Açougue",
-    "linguiça": "🥩 Açougue", "bacon": "🥩 Açougue", "costela": "🥩 Açougue", "moída": "🥩 Açougue",
-    "leite": "🥛 Laticínios", "queijo": "🥛 Laticínios", "manteiga": "🥛 Laticínios", "iogurte": "🥛 Laticínios", "requeijão": "🥛 Laticínios",
-    "creme de leite": "🥛 Laticínios", "leite condensado": "🥛 Laticínios", "margarina": "🥛 Laticínios", "muçarela": "🥛 Laticínios",
-    "pão": "🍞 Padaria", "baguete": "🍞 Padaria", "bisnaga": "🍞 Padaria", "bolo": "🍞 Padaria", "torta": "🍞 Padaria",
-    "sonho": "🍞 Padaria", "salgado": "🍞 Padaria", "pão de queijo": "🍞 Padaria", "croissant": "🍞 Padaria",
-    "arroz": "🛒 Mercearia", "feijão": "🛒 Mercearia", "macarrão": "🛒 Mercearia", "óleo": "🛒 Mercearia", "azeite": "🛒 Mercearia",
-    "açúcar": "🛒 Mercearia", "sal": "🛒 Mercearia", "café": "🛒 Mercearia", "farinha": "🛒 Mercearia", "molho": "🛒 Mercearia",
-    "biscoito": "🛒 Mercearia", "bolacha": "🛒 Mercearia", "chocolate": "🛒 Mercearia", "pipoca": "🛒 Mercearia", "milho": "🛒 Mercearia",
-    "água": "💧 Bebidas", "suco": "💧 Bebidas", "refrigerante": "💧 Bebidas", "cerveja": "💧 Bebidas", "vinho": "💧 Bebidas",
-    "chá": "💧 Bebidas", "energético": "💧 Bebidas", "vodka": "💧 Bebidas", "whisky": "💧 Bebidas", "coca": "💧 Bebidas",
-    "detergente": "🧼 Limpeza", "sabão": "🧼 Limpeza", "amaciante": "🧼 Limpeza", "desinfetante": "🧼 Limpeza", "agua sanitaria": "🧼 Limpeza",
-    "esponja": "🧼 Limpeza", "veja": "🧼 Limpeza", "lustra moveis": "🧼 Limpeza", "saco de lixo": "🧼 Limpeza",
-    "shampoo": "🧴 Higiene", "condicionador": "🧴 Higiene", "sabonete": "🧴 Higiene", "creme dental": "🧴 Higiene", "pasta de dente": "🧴 Higiene",
-    "desodorante": "🧴 Higiene", "papel higiênico": "🧴 Higiene", "absorvente": "🧴 Higiene", "fio dental": "🧴 Higiene",
 };
 
 export const useApp = (): AppContextType => {
