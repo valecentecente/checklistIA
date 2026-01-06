@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,7 +16,6 @@ const MemoryGame: React.FC<{ recipes: FullRecipe[], onExit: () => void }> = ({ r
     const [isNewRecord, setIsNewRecord] = useState(false);
 
     const initGame = useCallback(() => {
-        // Garantimos que apenas receitas com foto entrem no jogo
         const pool = recipes.filter(r => !!r.imageUrl).slice(0, 8);
         if (pool.length < 2) { onExit(); return; }
 
@@ -431,13 +429,11 @@ export const ArcadeModal: React.FC = () => {
     const { user } = useAuth();
     const [selectedGame, setSelectedGame] = useState<'memory' | 'speed' | 'slide' | null>(null);
 
-    // Ajustada a seleção do pool para ser mais resiliente
     const assetPool = useMemo(() => {
         let pool = getCategoryRecipesSync('top10');
         if (pool.length < 8) {
             pool = getCategoryRecipesSync('random');
         }
-        // Fallback final: Se ainda estiver vazio, pega do pool global
         if (pool.length === 0) {
             pool = allRecipesPool.filter(r => !!r.imageUrl);
         }
@@ -475,81 +471,81 @@ export const ArcadeModal: React.FC = () => {
 
     return (
         <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center animate-fadeIn">
-            <div className="w-full h-full sm:h-[80vh] sm:w-[420px] sm:rounded-[3rem] overflow-hidden bg-[#0a0a0a] relative shadow-2xl border border-white/10 flex flex-col">
+            <div className="w-full h-full sm:h-[85vh] sm:w-[420px] sm:rounded-[3rem] overflow-hidden bg-[#0a0a0a] relative shadow-2xl border border-white/10 flex flex-col">
                 
                 {selectedGame ? renderGame() : (
-                    <div className="h-full flex flex-col p-8 overflow-y-auto scrollbar-hide">
-                        <div className="flex justify-between items-start mb-10 shrink-0">
+                    <div className="h-full flex flex-col p-5 sm:p-8 overflow-y-auto scrollbar-hide">
+                        <div className="flex justify-between items-start mb-6 sm:mb-10 shrink-0">
                             <div>
-                                <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 uppercase italic tracking-tighter leading-none mb-2">
+                                <h2 className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 uppercase italic tracking-tighter leading-none mb-1 sm:mb-2">
                                     Checklist Arcade
                                 </h2>
-                                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em]">Minha Arena de Recordes</p>
+                                <p className="text-[9px] sm:text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em]">Arena de Recordes</p>
                             </div>
-                            <button onClick={() => closeModal('arcade')} className="bg-white/5 p-3 rounded-2xl hover:bg-red-500/20 text-zinc-500 hover:text-red-500 transition-all border border-white/5">
-                                <span className="material-symbols-outlined">close</span>
+                            <button onClick={() => closeModal('arcade')} className="bg-white/5 p-2.5 sm:p-3 rounded-2xl hover:bg-red-500/20 text-zinc-500 hover:text-red-500 transition-all border border-white/5">
+                                <span className="material-symbols-outlined text-xl">close</span>
                             </button>
                         </div>
 
-                        <div className="grid gap-4 flex-1 content-start">
+                        <div className="grid gap-2.5 sm:gap-4 flex-1 content-start">
                             {/* Card 1: Memory */}
-                            <button onClick={() => handleGameClick('memory')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
+                            <button onClick={() => handleGameClick('memory')} className="group relative h-28 sm:h-36 w-full rounded-[1.8rem] sm:rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-600 to-blue-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
-                                <div className="absolute right-4 top-4 bg-white/20 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                <div className="absolute right-3 top-3 sm:right-4 sm:top-4 bg-white/20 text-white text-[7px] sm:text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
                                     🏆 Recorde: {arcadeStats['memory'] || '--'}
                                 </div>
                                 <div className="absolute right-0 bottom-0 p-2 opacity-10 rotate-12 group-hover:rotate-0 transition-transform">
-                                    <span className="material-symbols-outlined text-8xl font-black">dashboard</span>
+                                    <span className="material-symbols-outlined text-6xl sm:text-8xl font-black">dashboard</span>
                                 </div>
-                                <div className="absolute inset-0 p-6 flex flex-col justify-end items-start text-white text-left">
-                                    <h3 className="font-black text-xl leading-none uppercase italic tracking-tight">Chef Memory</h3>
-                                    <p className="text-cyan-200 text-[10px] font-bold mt-1 uppercase tracking-widest">Encontre os pares do acervo</p>
+                                <div className="absolute inset-0 p-5 sm:p-6 flex flex-col justify-end items-start text-white text-left">
+                                    <h3 className="font-black text-lg sm:text-xl leading-none uppercase italic tracking-tight">Chef Memory</h3>
+                                    <p className="text-cyan-200 text-[8px] sm:text-[10px] font-bold mt-1 uppercase tracking-widest">Pares do Acervo</p>
                                 </div>
                             </button>
 
                             {/* Card 2: Visual Speed */}
-                            <button onClick={() => handleGameClick('speed')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
+                            <button onClick={() => handleGameClick('speed')} className="group relative h-28 sm:h-36 w-full rounded-[1.8rem] sm:rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-orange-600 to-red-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
-                                <div className="absolute right-4 top-4 bg-white/20 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                <div className="absolute right-3 top-3 sm:right-4 sm:top-4 bg-white/20 text-white text-[7px] sm:text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
                                     🏆 Recorde: {arcadeStats['speed'] || '--'}
                                 </div>
                                 {!user && (
                                     <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
-                                        <span className="material-symbols-outlined text-white/50 text-4xl">lock</span>
+                                        <span className="material-symbols-outlined text-white/50 text-3xl">lock</span>
                                     </div>
                                 )}
                                 <div className="absolute right-0 bottom-0 p-2 opacity-10 -rotate-12 group-hover:rotate-0 transition-transform">
-                                    <span className="material-symbols-outlined text-8xl font-black">visibility</span>
+                                    <span className="material-symbols-outlined text-6xl sm:text-8xl font-black">visibility</span>
                                 </div>
-                                <div className="absolute inset-0 p-6 flex flex-col justify-end items-start text-white text-left">
-                                    <h3 className="font-black text-xl leading-none uppercase italic tracking-tight">Visual Speed</h3>
-                                    <p className="text-orange-200 text-[10px] font-bold mt-1 uppercase tracking-widest">Qual é o prato desfocado?</p>
+                                <div className="absolute inset-0 p-5 sm:p-6 flex flex-col justify-end items-start text-white text-left">
+                                    <h3 className="font-black text-lg sm:text-xl leading-none uppercase italic tracking-tight">Visual Speed</h3>
+                                    <p className="text-orange-200 text-[8px] sm:text-[10px] font-bold mt-1 uppercase tracking-widest">Prato Desfocado</p>
                                 </div>
                             </button>
 
                             {/* Card 3: Slide Chef */}
-                            <button onClick={() => handleGameClick('slide')} className="group relative h-36 w-full rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
+                            <button onClick={() => handleGameClick('slide')} className="group relative h-28 sm:h-36 w-full rounded-[1.8rem] sm:rounded-[2rem] overflow-hidden transition-all active:scale-95 border border-white/5">
                                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-teal-800 opacity-80 group-hover:opacity-100 transition-opacity"></div>
-                                <div className="absolute right-4 top-4 bg-white/20 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                <div className="absolute right-3 top-3 sm:right-4 sm:top-4 bg-white/20 text-white text-[7px] sm:text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
                                     🏆 Recorde: {arcadeStats['slide'] || '--'}
                                 </div>
                                 {!user && (
                                     <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
-                                        <span className="material-symbols-outlined text-white/50 text-4xl">lock</span>
+                                        <span className="material-symbols-outlined text-white/50 text-3xl">lock</span>
                                     </div>
                                 )}
                                 <div className="absolute right-0 bottom-0 p-2 opacity-10 rotate-45 group-hover:rotate-0 transition-transform">
-                                    <span className="material-symbols-outlined text-8xl font-black">grid_view</span>
+                                    <span className="material-symbols-outlined text-6xl sm:text-8xl font-black">grid_view</span>
                                 </div>
-                                <div className="absolute inset-0 p-6 flex flex-col justify-end items-start text-white text-left">
-                                    <h3 className="font-black text-xl leading-none uppercase italic tracking-tight">Slide Chef</h3>
-                                    <p className="text-emerald-200 text-[10px] font-bold mt-1 uppercase tracking-widest">Monte o quebra-cabeça gourmet</p>
+                                <div className="absolute inset-0 p-5 sm:p-6 flex flex-col justify-end items-start text-white text-left">
+                                    <h3 className="font-black text-lg sm:text-xl leading-none uppercase italic tracking-tight">Slide Chef</h3>
+                                    <p className="text-emerald-200 text-[8px] sm:text-[10px] font-bold mt-1 uppercase tracking-widest">Quebra-cabeça Gourmet</p>
                                 </div>
                             </button>
                         </div>
 
-                        <div className="mt-8 pt-6 border-t border-white/5 text-center shrink-0">
-                            <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em]">Supere seus próprios limites</p>
+                        <div className="mt-4 sm:mt-8 pt-4 sm:pt-6 border-t border-white/5 text-center shrink-0">
+                            <p className="text-[8px] sm:text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em]">Supere seus próprios limites</p>
                         </div>
                     </div>
                 )}

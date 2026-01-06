@@ -15,10 +15,15 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     if (!Array.isArray(data)) return [] as FullRecipe[];
     return data.map((r: any): FullRecipe => ({
         name: String(r.name || 'Receita'),
-        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => ({
-            simplifiedName: String(i.simplifiedName || ''),
-            detailedName: String(i.detailedName || '')
-        })) : [] as { simplifiedName: string; detailedName: string; }[],
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => {
+            // Se o ingrediente já for uma string, preserva como objeto mapeado
+            if (typeof i === 'string') return { simplifiedName: i, detailedName: i };
+            // Se for objeto, tenta capturar qualquer campo de texto disponível
+            return {
+                simplifiedName: String(i.simplifiedName || i.name || i.item || ''),
+                detailedName: String(i.detailedName || i.display || i.name || i.item || '')
+            };
+        }) : [] as { simplifiedName: string; detailedName: string; }[],
         instructions: Array.isArray(r.instructions) ? r.instructions.map(String) : [] as string[],
         imageQuery: String(r.imageQuery || r.name || ''),
         servings: String(r.servings || '2 porções'),

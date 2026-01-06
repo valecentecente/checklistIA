@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { FullRecipe } from '../types';
 import { useApp } from '../contexts/AppContext';
@@ -77,7 +76,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
     return (
         <div className="flex gap-0.5 items-center">
             {[1, 2, 3].map(i => (
-                <span key={i} className={`material-symbols-outlined text-[18px] ${i <= active ? 'text-text-main dark:text-white font-variation-FILL-1' : 'text-gray-200 dark:text-white/10'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                <span key={i} className={`material-symbols-outlined text-[18px] ${i <= active ? 'text-primary font-variation-FILL-1' : 'text-gray-200 dark:text-white/10'}`} style={i <= active ? { fontVariationSettings: "'FILL' 1" } : {}}>
                     schedule
                 </span>
             ))}
@@ -109,10 +108,18 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
       await fetchRecipeDetails(recipe.name, undefined, false);
   };
 
+  const getIngredientText = (ing: any) => {
+      if (typeof ing === 'string') return ing;
+      if (typeof ing === 'object' && ing !== null) {
+          return ing.detailedName || ing.display || ing.name || ing.simplifiedName || 'Ingrediente';
+      }
+      return 'Ingrediente';
+  };
+
   const relatedOffers = useMemo(() => {
       if (!offers || offers.length === 0) return [];
       const leads = (recipe.suggestedLeads || []).map(l => l.toLowerCase().trim()).filter(l => l !== 'nenhum');
-      const fullText = (recipe.name + ' ' + safeIngredients.map((i: any) => i.simplifiedName || i).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
+      const fullText = (recipe.name + ' ' + safeIngredients.map((i: any) => getIngredientText(i)).join(' ') + ' ' + safeInstructions.join(' ')).toLowerCase();
       return offers.filter(offer => {
           const offerName = offer.name.toLowerCase();
           const offerTags = (offer.tags || []).map(t => t.toLowerCase().trim());
@@ -163,7 +170,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                          {imageUrl && isFromCache && !isRecipeLoading && (
                              <div className="animate-fadeIn flex items-center gap-1.5 select-none bg-black/80 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 shadow-xl">
                                  <span className="material-symbols-outlined text-[14px] text-orange-400">image</span>
-                                 <span className="text-[10px] font-black uppercase tracking-[0.1em] leading-none pt-[1px]">
+                                 <span className="text-[10px] font-black uppercase tracking-[0.1em] font-sans leading-none pt-[1px]">
                                     <span className="text-white">Checklist</span><span className="text-blue-500 ml-0.5">IA</span>
                                  </span>
                              </div>
@@ -189,7 +196,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                 </div>
 
                 <div className="relative px-6 -mt-12 z-20">
-                     <h1 className="text-text-main dark:text-gray-50 tracking-tight text-[32px] font-black leading-[0.9] font-display uppercase italic drop-shadow-md pr-12">{recipe.name}</h1>
+                     <h1 className="text-text-primary-light dark:text-gray-50 tracking-tight text-[32px] font-black leading-[0.9] font-display uppercase italic drop-shadow-md pr-12">{recipe.name}</h1>
                 </div>
                 
                 <div className="flex gap-2 p-6 pt-5 flex-wrap items-center">
@@ -218,8 +225,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                             {safeIngredients.length > 0 ? safeIngredients.map((ingredient: any, idx) => (
                                 <div key={idx} className="flex items-start gap-3 animate-fadeIn group">
                                     <span className="material-symbols-outlined text-primary text-lg mt-0.5 opacity-40 group-hover:opacity-100 transition-opacity">radio_button_checked</span>
-                                    <span className="text-text-main dark:text-gray-200 text-sm font-bold leading-relaxed">
-                                        {typeof ingredient === 'string' ? ingredient : (ingredient.detailedName || ingredient.simplifiedName)}
+                                    <span className="text-text-primary-light dark:text-gray-200 text-sm font-bold leading-relaxed">
+                                        {getIngredientText(ingredient)}
                                     </span>
                                 </div>
                             )) : (
@@ -258,7 +265,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ recipe, onClose }) => 
                             {safeInstructions.map((step, index) => (
                                 <div key={index} className="flex gap-4 animate-fadeIn">
                                     <div className="flex items-center justify-center h-8 w-8 rounded-xl bg-primary text-white font-black text-sm shrink-0 shadow-lg shadow-primary/20">{index + 1}</div>
-                                    <p className="text-text-secondary dark:text-gray-300 text-sm font-medium leading-relaxed pt-1">{step}</p>
+                                    <p className="text-text-secondary-light dark:text-gray-300 text-sm font-medium leading-relaxed pt-1">{step}</p>
                                 </div>
                             ))}
                         </div>
