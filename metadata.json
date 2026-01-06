@@ -1,6 +1,6 @@
 {
-  "name": "ChecklistIA (V2.4.0 Checkpoint)",
-  "description": "Versão estável pré-refatoração. Inclui: Sistema RBAC completo, Fábrica de Conteúdo Integrada, Arcade Mode e Gerenciamento de Acervo.",
-  "version": "2.4.0",
+  "name": "ChecklistIA (V2.5.0 Blindado)",
+  "description": "Cópia de Segurança Blindada. Inclui: Sistema RBAC completo, Fábrica de Conteúdo v5.2, Controle de Integridade de Acervo, Arcade Mode e Gestão de Inventário.",
+  "version": "2.5.0",
   "requestFramePermissions": []
 }

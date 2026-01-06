@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ShoppingList } from './components/ShoppingList';
@@ -14,7 +13,6 @@ import { AppOptionsMenu } from './components/menus/AppOptionsMenu';
 import { AppModals } from './components/modals/AppModals';
 
 const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ total, onFinish }) => {
-    // Corrected state initialization for sliderX to fix errors: Cannot find name 'setStatus' and 'setSliderX' used before its declaration.
     const [sliderX, setSliderX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -634,4 +632,4 @@ if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
 
-// Checkpoint de Segurança: 14/05/2025 - Estabilidade Garantida V2.5.1
+// Checkpoint de Segurança: 22/05/2025 - Estabilidade Garantida V2.5.0
