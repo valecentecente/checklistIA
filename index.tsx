@@ -59,7 +59,7 @@ const SlideToFinish: React.FC<{ total: string; onFinish: () => void; }> = ({ tot
     }, [isDragging, handleInteractionMove, handleInteractionEnd]);
 
     return (
-        <div className="fixed bottom-20 lg:bottom-24 left-1/2 -translate-x-1/2 z-[120] animate-fadeIn" ref={containerRef}>
+        <div className="fixed bottom-20 lg:bottom-24 left-1/2 -translate-x-1/2 z-[50] animate-fadeIn" ref={containerRef}>
             <div className="relative h-14 w-60 rounded-full bg-white/95 dark:bg-surface-dark border border-primary/40 dark:border-primary/60 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-md flex items-center p-1.5 overflow-hidden">
                 <div ref={sliderRef} onMouseDown={handleInteractionStart} onTouchStart={handleInteractionStart} className="absolute h-11 w-20 bg-primary rounded-full flex items-center justify-center text-white cursor-grab active:cursor-grabbing z-10 select-none shadow-md" style={{ transform: `translateX(${sliderX}px)` }}>
                     <span className="font-bold text-xs">{total}</span>
@@ -479,7 +479,8 @@ const AppContent: React.FC = () => {
             <WebSidebarLeft />
             <div className="relative w-full lg:flex-1 h-full flex flex-col bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden transform-gpu">
                 
-                <div className={`sticky top-0 z-[115] w-full flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden opacity-0 invisible' : 'h-auto opacity-100 visible'} bg-white/40 dark:bg-black/30 backdrop-blur-2xl border-b border-white/10 dark:border-white/5 shadow-lg`}>
+                {/* --- APP HEADER (FIXED PART) --- */}
+                <div className={`flex-shrink-0 transition-all duration-300 lg:hidden ${app.isFocusMode ? 'h-0 overflow-hidden' : 'h-auto'} bg-white/40 dark:bg-black/30 backdrop-blur-2xl border-b border-white/10 dark:border-white/5 shadow-lg z-[115]`}>
                     <header className="flex h-20 items-center justify-between gap-4 p-4">
                         <div className="flex items-center gap-3">
                             <div onClick={() => app.setHomeViewActive(true)} className="h-10 w-10 shrink-0 rounded-full shadow-md overflow-hidden bg-white/90 flex items-center justify-center cursor-pointer">
@@ -514,8 +515,9 @@ const AppContent: React.FC = () => {
                     </header>
                 </div>
 
+                {/* --- SESSION BAR (FIXED PART) --- */}
                 {showSessionBar && (
-                    <div className={`sticky top-0 z-[112] w-full flex-shrink-0 bg-white/80 dark:bg-black/80 backdrop-blur-2xl border-b border-white/10 px-4 flex items-center justify-between shadow-sm transition-all duration-300 ${app.isFocusMode ? 'py-2 h-12' : 'py-3 h-auto'}`}>
+                    <div className={`flex-shrink-0 bg-white/80 dark:bg-black/80 backdrop-blur-2xl border-b border-white/10 px-4 flex items-center justify-between shadow-sm z-[112] transition-all duration-300 ${app.isFocusMode ? 'py-2 h-12' : 'py-3 h-auto'}`}>
                         <div className="flex flex-col flex-1 min-w-0">
                             {!app.isFocusMode && <span className="text-[9px] uppercase font-black text-gray-500/80 tracking-widest mb-0.5">Local de Compra</span>}
                             
@@ -565,8 +567,9 @@ const AppContent: React.FC = () => {
                     </div>
                 )}
 
-                <main className={`flex-1 ${showHomeView ? 'lg:overflow-y-auto overflow-hidden' : 'overflow-y-auto'} p-4 pb-40 scrollbar-hide relative w-full transition-all duration-300`} style={globalPatternStyle}>
-                    <div className="flex flex-col gap-4 relative z-10">
+                {/* --- MAIN CONTENT (SCROLLABLE PART) --- */}
+                <main className={`flex-1 ${showHomeView ? 'overflow-hidden lg:overflow-y-auto overscroll-none' : 'overflow-y-auto p-4 pb-40'} scrollbar-hide relative w-full transition-all duration-300 z-10`} style={globalPatternStyle}>
+                    <div className={`flex flex-col relative z-10 ${showHomeView ? 'h-full' : 'gap-4'}`}>
                         {app.budget !== null && !showHomeView && (
                             <div className="flex flex-col gap-3 rounded-2xl bg-white dark:bg-white/5 p-5 border border-gray-100 dark:border-white/10 shadow-sm animate-fadeIn">
                                 <div className="flex items-center justify-between text-slate-800 dark:text-white">
@@ -595,7 +598,13 @@ const AppContent: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        {showHomeView ? <EmptyStateCTA onShowRecipeAssistant={() => app.openModal('recipeAssistant')} onShowBudget={() => app.openModal('budget')} /> : <ShoppingList groupedItems={groupedItems} onDeleteItem={deleteItem} onDeleteGroup={deleteRecipeGroup} onStartEdit={app.startEdit} onShowRecipe={app.showRecipe} onTogglePurchased={toggleItemPurchased} />}
+                        {showHomeView ? (
+                            <div className="h-full flex flex-col p-4">
+                                <EmptyStateCTA onShowRecipeAssistant={() => app.openModal('recipeAssistant')} onShowBudget={() => app.openModal('budget')} />
+                            </div>
+                        ) : (
+                            <ShoppingList groupedItems={groupedItems} onDeleteItem={deleteItem} onDeleteGroup={deleteRecipeGroup} onStartEdit={app.startEdit} onShowRecipe={app.showRecipe} onTogglePurchased={toggleItemPurchased} />
+                        )}
                     </div>
                 </main>
 
@@ -632,4 +641,4 @@ if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
 
-// Checkpoint de Segurança: 22/05/2025 - Estabilidade Garantida V2.5.0
+// Checkpoint de Segurança: 23/05/2025 - Estabilidade Garantida V2.5.5

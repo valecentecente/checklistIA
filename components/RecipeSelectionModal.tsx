@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useShoppingList } from '../contexts/ShoppingListContext';
@@ -45,7 +44,8 @@ export const RecipeSelectionModal: React.FC = () => {
     if (!isRecipeSelectionModalOpen) return null;
 
     const handleSelect = (recipe: FullRecipe) => {
-        showRecipe(recipe.name);
+        // CORREÇÃO: Passa o objeto completo 'recipe' em vez de apenas o nome string
+        showRecipe(recipe);
         closeModal('recipeSelection');
     };
 

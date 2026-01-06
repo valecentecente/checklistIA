@@ -63,7 +63,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
             return { recipe, score };
         });
 
-        // Limitamos a exibição no banner para 15 itens apenas, para não sobrecarregar o DOM no mobile
         return scoredRecipes
             .sort((a, b) => b.score - a.score)
             .slice(0, 15)
@@ -128,7 +127,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
     };
 
     return (
-        <div className="flex flex-col gap-5 animate-fadeIn">
+        <div className="flex flex-col gap-3 h-full animate-fadeIn overflow-hidden">
             <style>{`
                 @keyframes smooth-zoom-in {
                     0% { transform: scale(1); }
@@ -171,20 +170,22 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 .animate-smooth-diagonal { animation: smooth-diagonal 20s linear infinite; }
             `}</style>
             
-            <div className="px-1 flex items-center justify-start mt-2">
-                <div className="flex items-center gap-2 overflow-hidden">
-                    <div className="relative flex h-2 w-2 shrink-0">
+            {/* Status Line - Ajuste de altura e margem para não cortar */}
+            <div className="px-1 py-1 flex items-center justify-start shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500 shadow-[0_0_10px_rgba(34,197,94,1)]"></span>
                     </div>
-                    <h3 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] sm:tracking-[0.4em] whitespace-nowrap truncate">
+                    <h3 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] whitespace-nowrap truncate leading-none">
                         {timeBasedLabel}
                     </h3>
                 </div>
             </div>
 
+            {/* Banner */}
             <div 
-                className="relative w-full h-[68dvh] lg:h-[540px] group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]"
+                className="relative w-full flex-1 min-h-0 group/banner overflow-hidden rounded-[2.5rem] lg:rounded-[3rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-[#0a0a0a]"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
@@ -193,7 +194,6 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                     <div className="relative w-full h-full">
                         {displayRecipes.map((recipe, index) => {
                             const isActive = index === activeIndex;
-                            // PERFORMANCE: Somente renderiza o DOM se for o slide atual ou os vizinhos imediatos
                             const isNear = Math.abs(index - activeIndex) <= 1 || 
                                           (activeIndex === 0 && index === displayRecipes.length - 1) ||
                                           (activeIndex === displayRecipes.length - 1 && index === 0);
@@ -208,12 +208,10 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                                     onClick={() => showRecipe(recipe)}
                                     className={`absolute inset-0 w-full h-full cursor-pointer transition-opacity duration-[1000ms] ease-in-out ${isActive ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-10 pointer-events-none'}`}
                                 >
-                                    {/* Placeholder enquanto a foto carrega */}
                                     {!imageIsLoaded && (
                                         <div className="absolute inset-0 shimmer-placeholder"></div>
                                     )}
 
-                                    {/* Imagem Real com Carregamento Preguiçoso Nativo */}
                                     <img 
                                         src={recipe.imageUrl} 
                                         alt={recipe.name}
@@ -288,7 +286,7 @@ export const EmptyStateCTA: React.FC<EmptyStateCTAProps> = ({ onShowRecipeAssist
                 </div>
             </div>
 
-            <div className="hidden lg:grid grid-cols-2 gap-3 lg:gap-4">
+            <div className="hidden lg:grid grid-cols-2 gap-3 lg:gap-4 shrink-0">
                 <button onClick={() => openModal('calculator')} className="group flex flex-col items-center gap-2 p-5 lg:p-7 rounded-[2rem] lg:rounded-[2.5rem] bg-white dark:bg-[#18181b] border border-gray-100 dark:border-white/5 text-center active:scale-95 transition-all shadow-sm">
                     <div className="h-9 w-9 lg:h-12 lg:w-12 rounded-[1rem] lg:rounded-[1.2rem] bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 group-hover:rotate-12 transition-transform duration-300">
                         <span className="material-symbols-outlined text-xl lg:text-2xl">calculate</span>
