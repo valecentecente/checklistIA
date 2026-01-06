@@ -86,6 +86,16 @@ export const AdminContentFactoryModal: React.FC = () => {
 
     const apiKey = process.env.API_KEY as string;
 
+    const checkRecipeIntegrity = (r: FullRecipe): boolean => {
+        const hasPhoto = !!(r.imageUrl && r.imageUrl.length > 50);
+        const hasIngredients = !!(r.ingredients && r.ingredients.length > 0);
+        const hasInstructions = !!(r.instructions && r.instructions.length > 0);
+        const hasTags = !!(r.tags && r.tags.length > 0);
+        const hasLeads = !!(r.suggestedLeads && r.suggestedLeads.length > 0 && r.suggestedLeads[0] !== 'nenhum');
+
+        return hasPhoto && hasIngredients && hasInstructions && hasTags && hasLeads;
+    };
+
     // Monitorar termos ignorados
     useEffect(() => {
         if (!isContentFactoryModalOpen || !db || !isAdmin) return;
@@ -96,6 +106,27 @@ export const AdminContentFactoryModal: React.FC = () => {
             console.warn("[Factory] Ignored leads failed:", error.message);
         });
         return () => unsubscribe();
+    }, [isContentFactoryModalOpen, isAdmin]);
+
+    useEffect(() => {
+        if (!isContentFactoryModalOpen || !db || !isAdmin) return;
+        setIsLoadingAcervo(true);
+        const qRecipes = query(collection(db, 'global_recipes'), limit(2000));
+        const unsubRecipes = onSnapshot(qRecipes, (snap) => {
+            const data = snap.docs.map(d => {
+                const rData = d.data() as FullRecipe;
+                return { ...rData, id: d.id, isBroken: !checkRecipeIntegrity(rData) } as RecipeWithId;
+            });
+            // ORDENAÇÃO PRIORITÁRIA: Incompletas SEMPRE no topo
+            data.sort((a,b) => {
+                if (a.isBroken && !b.isBroken) return -1;
+                if (!a.isBroken && b.isBroken) return 1;
+                return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+            });
+            setRecipes(data);
+            setIsLoadingAcervo(false);
+        });
+        return () => unsubRecipes();
     }, [isContentFactoryModalOpen, isAdmin]);
 
     // Ranking de Leads
@@ -143,10 +174,6 @@ export const AdminContentFactoryModal: React.FC = () => {
         }
     };
 
-    const checkRecipeIntegrity = (r: FullRecipe): boolean => {
-        return !!(r.imageUrl && r.imageUrl.length > 50 && r.ingredients?.length > 0 && r.instructions?.length > 0 && r.tags?.length > 0 && r.suggestedLeads?.length > 0);
-    };
-
     const addLog = (text: string, type: FactoryLog['type'] = 'info') => {
         setLogs(prev => [...prev, { text, type }]);
     };
@@ -175,26 +202,6 @@ export const AdminContentFactoryModal: React.FC = () => {
     };
 
     useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
-
-    useEffect(() => {
-        if (!isContentFactoryModalOpen || !db || !isAdmin) return;
-        setIsLoadingAcervo(true);
-        const qRecipes = query(collection(db, 'global_recipes'), limit(2000));
-        const unsubRecipes = onSnapshot(qRecipes, (snap) => {
-            const data = snap.docs.map(d => {
-                const rData = d.data() as FullRecipe;
-                return { ...rData, id: d.id, isBroken: !checkRecipeIntegrity(rData) } as RecipeWithId;
-            });
-            data.sort((a,b) => {
-                if (a.isBroken && !b.isBroken) return 1;
-                if (!a.isBroken && b.isBroken) return -1;
-                return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
-            });
-            setRecipes(data);
-            setIsLoadingAcervo(false);
-        });
-        return () => unsubRecipes();
-    }, [isContentFactoryModalOpen, isAdmin]);
 
     const runBatchProduction = async () => {
         const manualList = manualTitles.split(/[\n,]/).map(t => t.trim()).filter(t => t);
@@ -498,18 +505,24 @@ export const AdminContentFactoryModal: React.FC = () => {
                         <div className="flex flex-col h-full animate-fadeIn">
                             <div className="p-6 bg-slate-900 border-b border-white/5 flex gap-4">
                                 <input type="text" placeholder="Filtrar receitas..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 h-12 bg-slate-800 border-0 rounded-xl pl-5 text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                                <div className="px-4 bg-red-500/10 rounded-xl flex items-center gap-2 border border-red-500/20"><span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Incompletas: {brokenCount}</span></div>
+                                <div className="px-4 bg-red-600 text-white rounded-xl flex items-center gap-2 border border-red-500 animate-pulse"><span className="text-[10px] font-black uppercase tracking-widest">Prioridade Crítica: {brokenCount}</span></div>
                             </div>
                             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6 scrollbar-hide">
                                 {isLoadingAcervo ? (
                                     <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 opacity-50"><div className="h-10 w-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div><p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Carregando...</p></div>
                                 ) : recipes.filter(r => r.name?.toLowerCase().includes(searchTerm.toLowerCase())).map(r => (
-                                    <div key={r.id} onClick={() => handleOpenEditor(r)} className={`rounded-3xl border overflow-hidden cursor-pointer group transition-all min-h-[180px] flex flex-col relative ${r.isBroken ? 'bg-red-900/20 border-red-500 shadow-red-900/20 grayscale' : 'bg-slate-800 border-white/5 hover:border-blue-500/50'}`}>
+                                    <div key={r.id} onClick={() => handleOpenEditor(r)} className={`rounded-3xl border-2 overflow-hidden cursor-pointer group transition-all min-h-[180px] flex flex-col relative ${r.isBroken ? 'bg-red-500/20 border-red-600 shadow-[0_0_20px_rgba(220,38,38,0.2)]' : 'bg-slate-800 border-white/5 hover:border-blue-500/50'}`}>
                                         <div className="aspect-square w-full bg-slate-900 shrink-0 overflow-hidden relative">
-                                            <img src={r.imageUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                                            {r.isBroken && <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase">Pendente</div>}
+                                            {r.imageUrl ? (
+                                                <img src={r.imageUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-slate-950 text-slate-700">
+                                                    <span className="material-symbols-outlined text-4xl">no_photography</span>
+                                                </div>
+                                            )}
+                                            {r.isBroken && <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-lg">INCOMPLETA</div>}
                                         </div>
-                                        <div className="p-4 flex-1 flex items-center"><h3 className={`font-black uppercase text-[10px] truncate ${r.isBroken ? 'text-red-300' : 'text-white'}`}>{r.name}</h3></div>
+                                        <div className="p-4 flex-1 flex items-center"><h3 className={`font-black uppercase text-[10px] truncate ${r.isBroken ? 'text-red-200' : 'text-white'}`}>{r.name}</h3></div>
                                     </div>
                                 ))}
                             </div>
@@ -575,7 +588,13 @@ export const AdminContentFactoryModal: React.FC = () => {
                                 <div className="space-y-6">
                                     <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full h-16 bg-slate-900 border-white/10 border-2 rounded-2xl px-6 text-white font-black text-2xl uppercase italic tracking-tighter" />
                                     <div className="relative w-full aspect-[16/10] rounded-[2rem] overflow-hidden group border border-white/10">
-                                        <img src={editImage} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                        {editImage ? (
+                                            <img src={editImage} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center bg-slate-900 text-slate-700">
+                                                <span className="material-symbols-outlined text-6xl">no_photography</span>
+                                            </div>
+                                        )}
                                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                             <button onClick={handleRegenerateImage} disabled={isRegeneratingImage} className="h-12 px-6 rounded-xl bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-2xl active:scale-95 disabled:opacity-50">{isRegeneratingImage ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">photo_camera</span>} REFAZER FOTO</button>
                                         </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, limit, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -23,14 +24,14 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
     const [editingRecipe, setEditingRecipe] = useState<RecipeWithId | null>(null);
 
     const checkRecipeIntegrity = (r: FullRecipe): boolean => {
-        return !!(
-            r.imageUrl && 
-            r.imageUrl.length > 50 &&
-            r.ingredients && r.ingredients.length > 0 &&
-            r.instructions && r.instructions.length > 0 &&
-            r.tags && r.tags.length > 0 &&
-            r.suggestedLeads && r.suggestedLeads.length > 0
-        );
+        // Nova lógica: Todos os campos devem existir e ter conteúdo
+        const hasPhoto = !!(r.imageUrl && r.imageUrl.length > 50);
+        const hasIngredients = !!(r.ingredients && r.ingredients.length > 0);
+        const hasInstructions = !!(r.instructions && r.instructions.length > 0);
+        const hasTags = !!(r.tags && r.tags.length > 0);
+        const hasLeads = !!(r.suggestedLeads && r.suggestedLeads.length > 0 && r.suggestedLeads[0] !== 'nenhum');
+
+        return hasPhoto && hasIngredients && hasInstructions && hasTags && hasLeads;
     };
 
     useEffect(() => {
@@ -60,10 +61,10 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                     }
                 });
                 
-                // ORDENAÇÃO: Saudáveis primeiro (por data), Quebradas por último
+                // ORDENAÇÃO: Quebradas SEMPRE primeiro, saudáveis depois por data
                 loadedRecipes.sort((a, b) => {
-                    if (a.isBroken && !b.isBroken) return 1;
-                    if (!a.isBroken && b.isBroken) return -1;
+                    if (a.isBroken && !b.isBroken) return -1;
+                    if (!a.isBroken && b.isBroken) return 1;
                     
                     const dateA = a.createdAt?.seconds || 0;
                     const dateB = b.createdAt?.seconds || 0;
@@ -127,7 +128,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             <div className="flex items-center gap-3 mt-1">
                                 <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total: {recipes.length}</span>
                                 <span className="h-1 w-1 rounded-full bg-slate-600"></span>
-                                <span className="text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Para Ajustar: {brokenCount}</span>
+                                <span className="text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Ajuste Obrigatório: {brokenCount}</span>
                             </div>
                         </div>
                     </div>
@@ -147,13 +148,12 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             className="w-full h-14 bg-slate-800 border-white/5 rounded-2xl pl-12 pr-4 text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         />
                     </div>
-                    {/* Botão de Filtro Rápido (Opcional, mas útil) */}
                     <button 
                         onClick={() => setSearchTerm(searchTerm === 'incompleta' ? '' : 'incompleta')}
                         className={`px-6 h-14 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all border shrink-0 flex items-center gap-2 ${searchTerm === 'incompleta' ? 'bg-red-600 text-white border-red-500' : 'bg-slate-800 text-red-500 border-red-500/30'}`}
                     >
-                        <span className="material-symbols-outlined text-base">emergency_home</span>
-                        Ver Pendências
+                        <span className="material-symbols-outlined text-base">warning</span>
+                        Pendentes Primeiro
                     </button>
                 </div>
 
@@ -179,24 +179,24 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                             {processedRecipes.map((recipe) => (
                                 <div 
                                     key={recipe.id} 
-                                    className={`rounded-3xl overflow-hidden border transition-all flex flex-col relative shadow-xl min-h-[220px] group ${
+                                    className={`rounded-3xl overflow-hidden border-2 transition-all flex flex-col relative shadow-xl min-h-[220px] group ${
                                         recipe.isBroken 
-                                        ? 'bg-red-500/5 border-red-500/40 hover:border-red-500/70 shadow-red-900/10' 
+                                        ? 'bg-red-500/10 border-red-600 shadow-red-900/20' 
                                         : 'bg-slate-800 border-white/5 hover:border-blue-500/50'
                                     }`}
                                 >
                                     <div className="aspect-square w-full bg-slate-900 relative overflow-hidden shrink-0">
                                         {recipe.imageUrl ? (
-                                            <img src={recipe.imageUrl} className={`absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${recipe.isBroken ? 'grayscale' : ''}`} />
+                                            <img src={recipe.imageUrl} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                                         ) : (
-                                            <div className="absolute inset-0 flex items-center justify-center text-slate-700">
+                                            <div className="absolute inset-0 flex items-center justify-center text-slate-700 bg-slate-900">
                                                 <span className="material-symbols-outlined text-4xl">no_photography</span>
                                             </div>
                                         )}
                                         
                                         {recipe.isBroken && (
-                                            <div className="absolute top-2 left-2 z-10 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter shadow-lg">
-                                                Incompleta
+                                            <div className="absolute top-2 left-2 z-10 bg-red-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-tighter shadow-lg animate-pulse">
+                                                PENDENTE
                                             </div>
                                         )}
 
@@ -206,14 +206,14 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                                         </div>
                                     </div>
                                     <div className="p-4 flex-1 flex flex-col justify-between">
-                                        <h3 className={`font-black uppercase text-[11px] truncate mb-2 ${recipe.isBroken ? 'text-red-200' : 'text-white'}`}>
+                                        <h3 className={`font-black uppercase text-[11px] truncate mb-2 ${recipe.isBroken ? 'text-red-400' : 'text-white'}`}>
                                             {recipe.name}
                                         </h3>
                                         <div className="flex items-center justify-between">
-                                            <span className={`text-[9px] font-black uppercase ${recipe.isBroken ? 'text-red-400' : 'text-slate-500'}`}>
-                                                {recipe.difficulty}
+                                            <span className={`text-[9px] font-black uppercase ${recipe.isBroken ? 'text-red-500' : 'text-slate-500'}`}>
+                                                {recipe.difficulty || 'MÉDIO'}
                                             </span>
-                                            <span className={`text-[9px] font-black ${recipe.isBroken ? 'text-red-400' : 'text-blue-400'}`}>
+                                            <span className={`text-[9px] font-black ${recipe.isBroken ? 'text-red-500' : 'text-blue-400'}`}>
                                                 {recipe.prepTimeInMinutes}M
                                             </span>
                                         </div>
@@ -225,7 +225,7 @@ export const AdminRecipesModal: React.FC<{ isOpen: boolean; onClose: () => void;
                 </div>
 
                 <div className="p-4 bg-slate-900 border-t border-white/5 flex justify-between items-center px-8 shrink-0">
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em]">ChecklistIA Health Monitor v3.1</p>
+                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em]">ChecklistIA Content Monitor v5.2</p>
                 </div>
             </div>
         </div>
