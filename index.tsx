@@ -102,6 +102,7 @@ const AppContent: React.FC = () => {
         window.addEventListener('orientationchange', checkOrientation);
         return () => {
             window.removeEventListener('resize', checkOrientation);
+            // Fix: removed incorrect handleInteractionEnd which was not defined in this scope
             window.removeEventListener('orientationchange', checkOrientation);
         };
     }, []);
@@ -641,4 +642,4 @@ if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
 
-// Checkpoint de Segurança: 24/05/2025 - Estabilidade Garantida V2.6.0
+// Checkpoint de Segurança: 24/05/2025 - Estabilidade Garantida V2.6.1
