@@ -641,4 +641,4 @@ if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
 
-// Checkpoint de Segurança: 23/05/2025 - Estabilidade Garantida V2.5.5
+// Checkpoint de Segurança: 24/05/2025 - Estabilidade Garantida V2.6.0
