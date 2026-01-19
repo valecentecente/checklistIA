@@ -5,6 +5,7 @@ import type { ShoppingItem } from './types';
 import { EmptyStateCTA } from './components/EmptyStateCTA';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AudioProvider } from './contexts/AudioContext';
 import { ShoppingListProvider, useShoppingList } from './contexts/ShoppingListContext';
 import { Logo } from './components/Logo';
 import { WebSidebarLeft } from './components/layout/WebSidebarLeft';
@@ -650,9 +651,10 @@ const AppContent: React.FC = () => {
     );
 };
 
+// Fix: Removed concatenated backup file contents that were causing TypeScript errors
 const rootElement = document.getElementById('root');
 if (rootElement) {
-    ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
+    ReactDOM.createRoot(rootElement).render(<AudioProvider><AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider></AudioProvider>);
 }
 
-// Checkpoint de Segurança: 02/06/2025 - Estabilidade Garantida V2.6.4
+// Checkpoint de Segurança: 02/06/2025 - Estabilidade Garantida V2.6.4 (Cleaned)

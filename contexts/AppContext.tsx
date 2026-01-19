@@ -5,6 +5,7 @@ import { db, logEvent } from '../firebase';
 import type { DuplicateInfo, FullRecipe, ShoppingItem, ReceivedListRecord, Offer, ScheduleRule, HomeCategory } from '../types';
 import { useShoppingList } from './ShoppingListContext';
 import { useAuth } from './AuthContext';
+import { useAudio } from './AudioContext';
 
 export type Theme = 'light' | 'dark' | 'christmas' | 'newyear';
 
@@ -232,8 +233,6 @@ interface AppContextType {
     isOffline: boolean;
     trackEvent: (name: string, params?: Record<string, any>) => void;
     
-    refreshRecipesBySlot: (tags: string[]) => Promise<void>;
-
     isAZSorted: boolean;
     toggleAZSort: () => void;
 }
@@ -275,6 +274,7 @@ export const generateKeywords = (text: string): string[] => {
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { items, findDuplicate, addIngredientsBatch, unreadReceivedCount, favorites } = useShoppingList();
     const { user } = useAuth();
+    const { playSystemSound } = useAudio();
 
     const [modalStates, setModalStates] = useState(INITIAL_MODAL_STATES);
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -392,30 +392,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return pool.filter(r => r.tags?.some(t => t.toLowerCase() === categoryKey.toLowerCase()));
     }, [allRecipesPool, globalRecipeCache]);
 
-    const refreshRecipesBySlot = useCallback(async (tags: string[]) => {
-        if (!db) return;
-        try {
-            const q = query(
-                collection(db, 'global_recipes'), 
-                where('tags', 'array-contains-any', tags.slice(0, 10)), 
-                orderBy('createdAt', 'desc'), 
-                limit(100)
-            );
-            const snap = await getDocs(q);
-            const fetched = mapToFullRecipeArray(snap.docs.map(d => d.data()));
-            
-            if (fetched.length > 0) {
-                setAllRecipesPool(fetched);
-            } else {
-                const qFallback = query(collection(db, 'global_recipes'), orderBy('createdAt', 'desc'), limit(100));
-                const snapFallback = await getDocs(qFallback);
-                setAllRecipesPool(mapToFullRecipeArray(snapFallback.docs.map(d => d.data())));
-            }
-        } catch (error) {
-            console.warn("[AppContext] Slot refresh error:", error);
-        }
-    }, []);
-
     useEffect(() => {
         if (!db) return;
         const loadInitial = async () => {
@@ -508,6 +484,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         setModalStates(prev => ({...prev, [modalKey]: true}));
         trackEvent('modal_open', { modal });
+        playSystemSound('click');
     };
 
     const closeModal = (modal: string) => {
@@ -536,13 +513,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (modal === 'adminDashboard') modalKey = 'isAdminDashboardModalOpen';
 
         setModalStates(prev => ({ ...prev, [modalKey]: false }));
+        playSystemSound('click');
     }
-    const toggleAppOptionsMenu = () => setModalStates(prev => ({ ...prev, isAppOptionsMenuOpen: !prev.isAppOptionsMenuOpen }));
-    const toggleOptionsMenu = () => setModalStates(prev => ({ ...prev, isOptionsMenuOpen: !prev.isOptionsMenuOpen }));
+    const toggleAppOptionsMenu = () => {
+        setModalStates(prev => ({ ...prev, isAppOptionsMenuOpen: !prev.isAppOptionsMenuOpen }));
+        playSystemSound('click');
+    };
+    const toggleOptionsMenu = () => {
+        setModalStates(prev => ({ ...prev, isOptionsMenuOpen: !prev.isOptionsMenuOpen }));
+        playSystemSound('click');
+    };
 
     const setTheme = (newTheme: Theme) => {
         setThemeState(newTheme);
         trackEvent('change_theme', { theme: newTheme });
+        playSystemSound('click');
     };
 
     const handleInstall = async () => {
@@ -561,8 +546,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setBudgetState(b); 
         closeModal('budget'); 
         trackEvent('set_budget', { amount: b });
+        playSystemSound('success');
     };
-    const clearBudget = () => { setBudgetState(null); closeModal('budget'); };
+    const clearBudget = () => { 
+        setBudgetState(null); 
+        closeModal('budget'); 
+        playSystemSound('remove');
+    };
     const showToast = (msg: string) => setToastMessage(msg);
     const showCartTooltip = () => setIsCartTooltipVisible(true);
     const startEdit = (id: string) => setEditingItemId(id);
@@ -595,6 +585,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (!fullRecipes[r.name]) setFullRecipes(prev => ({...prev, [r!.name]: r!}));
             setSelectedRecipe(r);
             trackEvent('view_recipe', { recipe_name: r.name });
+            playSystemSound('click');
         } else { showToast("Receita em manutenção."); }
     };
 
@@ -644,8 +635,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setFullRecipes(prev => ({...prev, [fullData.name]: fullData}));
             setSelectedRecipe(fullData);
             if (autoAdd) await addRecipeToShoppingList(fullData);
+            playSystemSound('success');
         } catch (e) { setRecipeError("O Chef falhou."); } finally { setIsRecipeLoading(false); }
-    }, [apiKey, isOffline]); 
+    }, [apiKey, isOffline, playSystemSound]); 
 
     const addRecipeToShoppingList = async (recipe: FullRecipe) => {
         const itemsToAdd: any[] = [];
@@ -658,6 +650,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             await addIngredientsBatch(itemsToAdd);
             showToast(`${itemsToAdd.length} itens adicionados!`);
             trackEvent('add_recipe_to_list', { recipe_name: recipe.name, item_count: itemsToAdd.length });
+            playSystemSound('success');
         }
     };
 
@@ -683,9 +676,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 });
                 setItemCategories(newCategoryMap);
                 setGroupingMode('aisle');
+                playSystemSound('success');
             } catch (error: any) { showToast("Erro ao organizar."); } finally { setIsOrganizing(false); }
-        } else { setGroupingMode('recipe'); }
-    }, [groupingMode, items, itemCategories, apiKey, isOffline]);
+        } else { 
+            setGroupingMode('recipe'); 
+            playSystemSound('click');
+        }
+    }, [groupingMode, items, itemCategories, apiKey, isOffline, playSystemSound]);
 
     const fetchThemeSuggestions = async (key: string) => {
         setCurrentTheme(key);
@@ -715,10 +712,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } else {
             showToast("Ordem de adição restaurada");
         }
-    }, [isAZSorted]);
+        playSystemSound('click');
+    }, [isAZSorted, playSystemSound]);
 
     const value = {
-        ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme,
+        ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme: setThemeState,
         installPromptEvent, handleInstall, handleDismissInstall: () => setIsPWAInstallVisible(false), isPWAInstallVisible,
         budget, setBudget, clearBudget, toastMessage, showToast, isCartTooltipVisible, showCartTooltip,
         fullRecipes, setFullRecipes, selectedRecipe, setSelectedRecipe, isRecipeLoading, isSearchingAcervo, recipeError, fetchRecipeDetails, handleRecipeImageGenerated, showRecipe, closeRecipe, resetRecipeState,
@@ -733,7 +731,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         getCategoryRecipes, getCategoryRecipesSync: getCategoryRecipes, getCachedRecipe, getRandomCachedRecipe, generateKeywords, 
         homeCategories, saveHomeCategories, pendingInventoryItem, setPendingInventoryItem, factoryActiveTab, setFactoryActiveTab,
         scheduleRules, saveScheduleRules, selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline,
-        trackEvent, refreshRecipesBySlot,
+        trackEvent, 
         pendingAction, setPendingAction,
         isAZSorted, toggleAZSort
     };

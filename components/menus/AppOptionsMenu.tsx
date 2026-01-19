@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAudio } from '../../contexts/AudioContext';
 
 // Social Icons Components
 const InstagramIcon: React.FC<{className?: string}> = ({ className }) => (
@@ -25,6 +25,7 @@ const XIcon: React.FC<{className?: string}> = ({ className }) => (
 export const AppOptionsMenu: React.FC = () => {
     const app = useApp();
     const { user, logout } = useAuth();
+    const { isSoundEnabled, toggleSound } = useAudio();
 
     if (!app.isAppOptionsMenuOpen) return null;
 
@@ -100,6 +101,16 @@ export const AppOptionsMenu: React.FC = () => {
                     </button>
 
                     <div className="h-px bg-border-light dark:bg-border-dark mx-3 my-1"></div>
+
+                    <div className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer" onClick={toggleSound}>
+                        <div className="flex items-center">
+                            <span className="material-symbols-outlined w-5 h-5 mr-3 text-blue-500">{isSoundEnabled ? 'volume_up' : 'volume_off'}</span>
+                            Sons do Sistema
+                        </div>
+                        <div className={`w-8 h-4 rounded-full relative transition-colors ${isSoundEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                            <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${isSoundEnabled ? 'left-4.5' : 'left-0.5'}`} style={{ left: isSoundEnabled ? '18px' : '2px' }}></div>
+                        </div>
+                    </div>
 
                     <button onClick={() => handleOptionClick('theme')} className="w-full flex items-center px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                         <span className="material-symbols-outlined w-5 h-5 mr-3 text-purple-500">palette</span>

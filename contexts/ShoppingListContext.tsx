@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, logEvent } from '../firebase';
 import { useAuth } from './AuthContext';
+import { useAudio } from './AudioContext';
 import type { ShoppingItem, PurchaseRecord, HistoricItem, ReceivedListRecord, AuthorMetadata, FullRecipe, Offer, Review, User, ActivityLog } from '../types';
 
 interface ShoppingListContextType {
@@ -71,7 +72,6 @@ const ignorePermissionError = (err: any) => {
     return false;
 };
 
-// Utilitário sincronizado para gerar IDs de documentos de receita
 const getRecipeDocId = (name: string) => {
     return name.trim().toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
@@ -92,6 +92,7 @@ const sanitizeForFirestore = (obj: any) => {
 
 export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user } = useAuth();
+    const { playSystemSound } = useAudio();
     const [items, setItems] = useState<ShoppingItem[]>([]);
     const [history, setHistory] = useState<PurchaseRecord[]>([]);
     const [receivedHistory, setReceivedHistory] = useState<ReceivedListRecord[]>([]);
@@ -262,6 +263,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const isPurchased = item.isPurchased ?? (numericPrice > 0);
         
         logEvent('add_item', { item_name: item.name, has_price: numericPrice > 0 });
+        playSystemSound('success');
 
         if (!user || user.uid.startsWith('offline-user-')) {
             const newItem = {
@@ -288,6 +290,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const addIngredientsBatch = async (newItems: any[]) => {
+        playSystemSound('success');
         if (!user || user.uid.startsWith('offline-user-')) {
             const added = newItems.map((item, idx) => {
                 const numericPrice = parseFloat(String(item.calculatedPrice)) || 0;
@@ -322,6 +325,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const deleteItem = async (id: string) => {
+        playSystemSound('remove');
         if (!user || user.uid.startsWith('offline-user-')) {
             setItems(items.filter(i => i.id !== id));
             return;
@@ -337,6 +341,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             calculatedPrice: numericPrice,
             displayPrice: formatCurrency(numericPrice)
         };
+        playSystemSound('click');
         if (!user || user.uid.startsWith('offline-user-')) {
             setItems(items.map(i => i.id === item.id ? updated : i));
             return;
@@ -347,6 +352,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const deleteRecipeGroup = async (recipeName: string) => {
+        playSystemSound('remove');
         const toDelete = items.filter(i => i.recipeName === recipeName);
         if (!user || user.uid.startsWith('offline-user-')) {
             setItems(items.filter(i => i.recipeName !== recipeName));
@@ -364,6 +370,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         const item = items.find(i => i.id === id);
         if (!item) return;
         const newState = !item.isPurchased;
+        playSystemSound('click');
         if (!user || user.uid.startsWith('offline-user-')) {
             setItems(items.map(i => i.id === id ? { ...i, isPurchased: newState } : i));
             return;
@@ -396,6 +403,8 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             }))
         };
 
+        playSystemSound('login');
+
         if (!user || user.uid.startsWith('offline-user-')) {
             setHistory([{ id: Date.now().toString(), ...record }, ...history]);
             setItems([]);
@@ -416,6 +425,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const deleteHistoryRecord = async (id: string) => {
+        playSystemSound('remove');
         if (!user || user.uid.startsWith('offline-user-')) {
             setHistory(history.filter(h => h.id !== id));
             return;
@@ -425,6 +435,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const finishWithoutSaving = async () => {
+        playSystemSound('remove');
         logEvent('purchase_abandoned', { item_count: items.length });
         if (!user || user.uid.startsWith('offline-user-')) {
             setItems([]);
@@ -611,7 +622,6 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
     const toggleFavorite = async (recipe: FullRecipe): Promise<{ success: boolean; action: 'added' | 'removed' }> => {
         if (!user || !db || user.uid.startsWith('offline-user-')) return { success: false, action: 'removed' };
         
-        // CORREÇÃO: Usar a função de ID sincronizada para evitar duplicatas
         const recipeId = getRecipeDocId(recipe.name);
         const favRef = doc(db, `users/${user.uid}/favorites`, recipeId);
         
@@ -620,6 +630,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             if (snap.exists()) {
                 await deleteDoc(favRef);
                 logEvent('recipe_unfavorited', { recipe_name: recipe.name });
+                playSystemSound('remove');
                 return { success: true, action: 'removed' };
             } else {
                 const sanitizedRecipe = sanitizeForFirestore(recipe);
@@ -628,6 +639,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
                     savedAt: serverTimestamp()
                 });
                 logEvent('recipe_favorited', { recipe_name: recipe.name });
+                playSystemSound('success');
                 return { success: true, action: 'added' };
             }
         } catch (e) {
@@ -650,12 +662,14 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             if (snap.exists()) {
                 await deleteDoc(ref);
                 logEvent('offer_unsaved', { offer_name: offer.name });
+                playSystemSound('remove');
             } else {
                 await setDoc(ref, {
                     ...offer,
                     savedAt: serverTimestamp()
                 });
                 logEvent('offer_saved', { offer_name: offer.name });
+                playSystemSound('success');
             }
         } catch (e) {
             if (!ignorePermissionError(e)) console.error(e);
@@ -679,6 +693,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
             };
             await addDoc(collection(db, 'reviews'), reviewData);
             logEvent('offer_review_added', { offer_id: offerId, rating });
+            playSystemSound('success');
         } catch (e) {
             if (!ignorePermissionError(e)) console.error(e);
         }
@@ -688,6 +703,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (!db) return;
         try {
             await deleteDoc(doc(db, 'reviews', reviewId));
+            playSystemSound('remove');
         } catch (e) {
             if (!ignorePermissionError(e)) console.error(e);
         }
@@ -754,6 +770,7 @@ export const ShoppingListProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (isRecord) {
             setArcadeStats(prev => ({ ...prev, [gameId]: score }));
             logEvent('arcade_new_record', { game_id: gameId, score });
+            playSystemSound('login');
             if (user && !user.uid.startsWith('offline-user-')) {
                 try {
                     await setDoc(doc(db!, `users/${user.uid}/stats`, gameId), {
