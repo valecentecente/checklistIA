@@ -56,20 +56,18 @@ export const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ item, onDele
             {item.displayPrice}
         </span>
         
-        {item.isPurchased && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDelete(item.id);
-              }}
-              className="flex items-center justify-center h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full transition-colors"
-              aria-label={`Remover ${item.name}`}
-            >
-              <span className="material-symbols-outlined !text-base">delete</span>
-            </button>
-        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete(item.id);
+          }}
+          className="flex items-center justify-center h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full transition-all active:scale-90"
+          aria-label={`Remover ${item.name}`}
+        >
+          <span className="material-symbols-outlined !text-lg">delete</span>
+        </button>
       </div>
     </label>
   );

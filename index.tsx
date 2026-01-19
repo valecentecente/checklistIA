@@ -102,7 +102,6 @@ const AppContent: React.FC = () => {
         window.addEventListener('orientationchange', checkOrientation);
         return () => {
             window.removeEventListener('resize', checkOrientation);
-            // Fix: removed incorrect handleInteractionEnd which was not defined in this scope
             window.removeEventListener('orientationchange', checkOrientation);
         };
     }, []);
@@ -310,12 +309,28 @@ const AppContent: React.FC = () => {
                 groups[key].push(item);
             });
         }
-        Object.values(groups).forEach(g => g.sort((a,b) => Number(a.isPurchased) - Number(b.isPurchased)));
+
+        // Aplicar ordenação inteligente dentro dos grupos
+        Object.values(groups).forEach(g => {
+            g.sort((a, b) => {
+                // Prioridade 1: Comprados no final
+                if (a.isPurchased !== b.isPurchased) {
+                    return Number(a.isPurchased) - Number(b.isPurchased);
+                }
+                // Prioridade 2: Ordem Alfabética (se ativo)
+                if (app.isAZSorted) {
+                    return a.name.localeCompare(b.name, 'pt-BR');
+                }
+                // Prioridade 3: Fallback (padrão Firebase/Adição)
+                return 0;
+            });
+        });
+
         const sortedEntries = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
         const sortedGroups: Record<string, ShoppingItem[]> = {};
         for (const [key, value] of sortedEntries) sortedGroups[key] = value;
         return sortedGroups;
-    }, [items, app.groupingMode, app.itemCategories]);
+    }, [items, app.groupingMode, app.itemCategories, app.isAZSorted]);
 
     const handleSavePurchase = useCallback(async (marketName: string) => {
         const finalMarketName = marketName || app.currentMarketName; 
@@ -542,15 +557,13 @@ const AppContent: React.FC = () => {
                             )}
                         </div>
                         <div className="flex items-center justify-end pl-2 gap-2">
-                            {app.isOffline ? (
-                                <div className="h-9 w-9 flex items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 animate-pulse" title="Modo Offline Ativo (Cache)">
-                                    <span className="material-symbols-outlined text-xl">cloud_off</span>
-                                </div>
-                            ) : (
-                                <div className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/10 text-blue-400 opacity-40" title="Sincronizado com a Nuvem">
-                                    <span className="material-symbols-outlined text-xl">cloud_done</span>
-                                </div>
-                            )}
+                            <button 
+                                onClick={app.toggleAZSort} 
+                                className={`h-9 w-9 flex items-center justify-center rounded-full transition-all active:scale-90 ${app.isAZSorted ? 'bg-primary text-white shadow-md' : 'bg-black/5 dark:bg-white/10 text-gray-400 dark:text-gray-500'}`}
+                                title={app.isAZSorted ? "Desativar Ordenação A-Z" : "Ativar Ordenação A-Z"}
+                            >
+                                <span className="material-symbols-outlined text-xl">sort_by_alpha</span>
+                            </button>
 
                             <button onClick={handleBudgetClick} className={`h-9 w-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${budgetStatus.piggy}`} title="Definir Orçamento">
                                 <span className={`material-symbols-outlined text-xl ${app.budget !== null ? 'font-variation-FILL-1' : ''}`} style={ app.budget !== null ? { fontVariationSettings: "'FILL' 1" } : {} }>savings</span>
@@ -642,4 +655,4 @@ if (rootElement) {
     ReactDOM.createRoot(rootElement).render(<AuthProvider><ShoppingListProvider><AppProvider><AppContent /></AppProvider></ShoppingListProvider></AuthProvider>);
 }
 
-// Checkpoint de Segurança: 24/05/2025 - Estabilidade Garantida V2.6.1
+// Checkpoint de Segurança: 02/06/2025 - Estabilidade Garantida V2.6.4

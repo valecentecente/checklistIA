@@ -16,9 +16,7 @@ const mapToFullRecipeArray = (data: any): FullRecipe[] => {
     return data.map((r: any): FullRecipe => ({
         name: String(r.name || 'Receita'),
         ingredients: Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => {
-            // Se o ingrediente já for uma string, preserva como objeto mapeado
             if (typeof i === 'string') return { simplifiedName: i, detailedName: i };
-            // Se for objeto, tenta capturar qualquer campo de texto disponível
             return {
                 simplifiedName: String(i.simplifiedName || i.name || i.item || ''),
                 detailedName: String(i.detailedName || i.display || i.name || i.item || '')
@@ -235,6 +233,9 @@ interface AppContextType {
     trackEvent: (name: string, params?: Record<string, any>) => void;
     
     refreshRecipesBySlot: (tags: string[]) => Promise<void>;
+
+    isAZSorted: boolean;
+    toggleAZSort: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -329,6 +330,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const [recipeSearchResults, setRecipeSearchResults] = useState<FullRecipe[]>([]);
     const [currentSearchTerm, setCurrentSearchTerm] = useState('');
+
+    const [isAZSorted, setIsAZSorted] = useState(false);
 
     const apiKey = process.env.API_KEY as string;
     const isAdmin = user?.role === 'admin_l1' || user?.role === 'admin_l2';
@@ -705,6 +708,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [user, items.length, currentMarketName]);
 
+    const toggleAZSort = useCallback(() => {
+        setIsAZSorted(prev => !prev);
+        if (!isAZSorted) {
+            showToast("Ordenado de A-Z");
+        } else {
+            showToast("Ordem de adição restaurada");
+        }
+    }, [isAZSorted]);
+
     const value = {
         ...modalStates, openModal, closeModal, toggleAppOptionsMenu, toggleOptionsMenu, theme, setTheme,
         installPromptEvent, handleInstall, handleDismissInstall: () => setIsPWAInstallVisible(false), isPWAInstallVisible,
@@ -722,7 +734,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         homeCategories, saveHomeCategories, pendingInventoryItem, setPendingInventoryItem, factoryActiveTab, setFactoryActiveTab,
         scheduleRules, saveScheduleRules, selectedProduct: selectedProduct, openProductDetails: (p: Offer) => { setSelectedProduct(p); openModal('productDetails'); }, recipeSearchResults, currentSearchTerm, handleRecipeSearch, isOffline,
         trackEvent, refreshRecipesBySlot,
-        pendingAction, setPendingAction
+        pendingAction, setPendingAction,
+        isAZSorted, toggleAZSort
     };
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
